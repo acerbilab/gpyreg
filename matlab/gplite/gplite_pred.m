@@ -84,15 +84,7 @@ for s = 1:Ns
     else
         fmu(:,s) = mstar;
     end
-    
-    % Integrated mean function contribution to predicted mean
-    if gp.intmeanfun
-        betabar = gp.post(s).intmean.betabar';
-        Hs = gplite_intmeanfun(Xstar,gp.intmeanfun);  
-        R_mat = Hs - gp.post(s).intmean.HKinv*Ks_mat;        
-        fmu(:,s) = fmu(:,s) + R_mat'*betabar;        
-    end
-    
+        
     ymu(:,s) = fmu(:,s);                     % observed function mean
     if nargout > 1
         if N > 0
@@ -106,17 +98,7 @@ for s = 1:Ns
         else
             fs2(:,s) = kss;
         end
-        
-        % Integrated mean function contribution to predicted variance
-        if gp.intmeanfun
-            Tplus_inv = gp.post(s).intmean.Tplusinv;
-            plus_idx = (gp.intmeanfun_var > 0);    % Non-delta parameters
-            %C_int = R'*T*R;
-            % Reduced-rank R if some basis function parameters are fixed
-            if any(~plus_idx); R_mat = R_mat(plus_idx,:); end
-            fs2(:,s) = fs2(:,s) + sum(R_mat.*(Tplus_inv*R_mat),1)';        
-        end
-        
+                
         fs2(:,s) = max(fs2(:,s),0);          % remove numerical noise i.e. negative variances        
         ys2(:,s) = fs2(:,s) + sn2_star*sn2_mult;           % observed variance
 

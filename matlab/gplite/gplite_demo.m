@@ -2,11 +2,12 @@
 
 % Create example data in 1D
 N = 31;
-X = linspace(-5,5,N)';
-s2 = 0.00*0.1*exp(0.5*X);
+%X = linspace(-5,5,N)';
+X = -5 + rand(N,1)*10;
+s2 = 0.05*exp(0.5*X);
 y = sin(X) + sqrt(s2).*randn(size(X));
 y(y<0) = -abs(3*y(y<0)).^2;
-s2 = [];
+% s2 = [];
 
 %idx = N+1:N+3;
 %X(idx) = linspace(6,7,numel(idx))';
@@ -16,14 +17,14 @@ s2 = [];
 hyp0 = [];          % Starting hyperparameter vector for optimization
 Ns = 10;             % Number of hyperparameter samples
 covfun = [3 3];     % GP covariance function
-meanfun = 4;        % GP mean function
+meanfun = 4;        % GP mean function (4 = negative quadratic)
 noisefun = [1 0 0]; % Constant plus user-provided noise
 hprior = [];        % Prior over hyperparameters
 options = [];       % Additional options
 
 % Output warping function
-outwarpfun = @outwarp_negpow;
-%outwarpfun = [];
+%outwarpfun = @outwarp_negpow;
+outwarpfun = [];
 options.OutwarpFun = outwarpfun;
 
 % Set prior over noise hyperparameters
@@ -31,7 +32,7 @@ gp = gplite_post([],X,y,covfun,meanfun,noisefun,s2,[],outwarpfun);
 hprior = gplite_hypprior(gp);
 
 hprior.mu(gp.Ncov+1) = log(1e-3);
-hprior.sigma(gp.Ncov+1) = 0.5;
+hprior.sigma(gp.Ncov+1) = 1;
 
 if gp.Nnoise > 1
     hprior.LB(gp.Ncov+2) = log(5);
