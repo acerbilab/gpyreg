@@ -1,13 +1,49 @@
 import numpy as np
 from scipy.spatial.distance import pdist, cdist, squareform
 
+class SquaredExponential:
+    def __init__(self):
+        pass
+        
+    def hyperparameter_count(self, d):
+        return d + 1
+    
+    def compute(self, hyp, X, X_star = None, compute_grad = False):
+       N, D = X.shape
+       cov_N = self.hyperparameter_count(D)
+       hyp_N = hyp.size
+
+       assert(hyp_N == cov_N)
+       assert(hyp.ndim == 1)
+       
+       ell = np.exp(hyp[0:D])
+       sf2 = np.exp(2*hyp[D])
+       
+       tmp = None
+       if X_star is None:
+           tmp = sq_dist(np.diag(1 / ell) @ X.T)
+       elif isinstance(X_star, str):
+           tmp = np.zeros((X.shape[0], 1))
+       else:
+           tmp = sq_dist(np.diag(1 / ell) @ X.T, np.diag(1 / ell) @ X_star.T)
+           
+       K = sf2 * np.exp(-tmp/2)
+       
+       if compute_grad:
+           assert(False)
+
+       return K
+
 class Matern:
     def __init__(self, degree):
         self.degree = degree
         
-    def compute(self, hyp, X, X_star = None, compute_grad=False):
+    def hyperparameter_count(self, d):
+        return d + 1
+        
+    def compute(self, hyp, X, X_star = None, compute_grad = False):
        N, D = X.shape
-       cov_N = D + 1
+       cov_N = self.hyperparameter_count(D)
        hyp_N = hyp.size
 
        assert(hyp_N == cov_N)
@@ -30,25 +66,23 @@ class Matern:
            assert(False)
 
        if X_star is None:
-           # tmp = squareform(pdist(np.reshape(np.diag(np.sqrt(self.degree) / ell) @ X.T, (-1, 1))))
-           tmp = np.sqrt(sq_dist(np.reshape(np.diag(np.sqrt(self.degree) / ell) @ X.T, (1, -1))))
+           # tmp = squareform(pdist(np.diag(np.sqrt(self.degree) / ell) @ X.T))
+           tmp = np.sqrt(sq_dist(np.diag(np.sqrt(self.degree) / ell) @ X.T))
        elif isinstance(X_star, str):
            tmp = np.zeros((X.shape[0], 1))
        else:
-           a = np.reshape(np.diag(np.sqrt(self.degree) / ell) @ X.T, (1, -1))
-           b = np.reshape(np.diag(np.sqrt(self.degree) / ell) @ X_star.T, (1, -1))
-           #tmp = squareform(cdist(a, b))
+           a = np.diag(np.sqrt(self.degree) / ell) @ X.T
+           b = np.diag(np.sqrt(self.degree) / ell) @ X_star.T
+           # tmp = squareform(cdist(a, b))
            tmp = np.sqrt(sq_dist(a, b))
            
-       # TODO: is the first multiplication right in NumPy?
        K = sf2 * f(tmp) * np.exp(-tmp)
        
        if compute_grad:
            assert(False)
         
        return K
-
-# Might not be necessary?      
+    
 def sq_dist(a, b=None):
     D, n = a.shape
     d = m = None
@@ -58,7 +92,7 @@ def sq_dist(a, b=None):
     # For that reason, we subtract the mean from the data beforehand to stabilise the computations.
     # This is OK because the squared error is independent of the mean.
     if b is None:
-        mu = np.mean(a, 1)
+        mu = np.reshape(np.mean(a, 1), (-1, 1))
         a = a - mu
         b = a
         m = n
@@ -66,7 +100,7 @@ def sq_dist(a, b=None):
         d, m = b.shape
         assert(d == D)
         
-        mu = (m/(n+m))*np.mean(b, 1) + (n/(n+m))*np.mean(a, 1)
+        mu = np.reshape((m/(n+m))*np.mean(b, 1) + (n/(n+m))*np.mean(a, 1), (-1, 1))
         a = a - mu
         b = b - mu
     
