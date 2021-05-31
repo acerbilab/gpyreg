@@ -1,7 +1,7 @@
 import numpy as np
 import scipy as sp
 
-from gpyreg.sobol import i4_sobol_generate
+from gpyreg.doe_lhs import lhs
 
 def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
     N0 = 1
@@ -13,17 +13,9 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
     
     if N > N0:
        # First test hyperparameters on a space-filling initial design
-       S = None
-       
-       if n_vars <= 40: # Sobol generator handles up to 40 variables
-           max_seed = 997
-           seed = 477 # np.random.default_rng().integers(1, max_seed)
-           S = i4_sobol_generate(n_vars, N - N0 + 1, seed).T[1:, :]
-           # np.random.shuffle(S.T) # Randomly permute columns
-           
-       if S is None: # just use random sampling
-           S = np.random.random_sample((N-N0, nvars))
-           
+       S = lhs(n_vars, samples = N - N0, criterion = 'maximin')
+       # np.random.shuffle(S.T) # Randomly permute columns
+
        sX = np.zeros((N-N0, n_vars))
        
        for i in range(0, n_vars):
