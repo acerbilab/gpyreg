@@ -46,14 +46,11 @@ gp_train = {'n_samples' : 10}
 
 # Train the GP
 gp.fit(
+    hyp = np.loadtxt('hyp2.txt', delimiter=',', usecols=range(10)),
     x = x_data,
     y = y_data,
     options = gp_train
 )
-
-# Remove when training works
-hyp = np.loadtxt('hyp2.txt', delimiter=',', usecols=range(10))
-gp.update(hyp, x_data, y_data)
 
 # Create test point regular grid (400-by-D) points
 xx, yy = np.meshgrid(np.linspace(-5, 5, 20), np.linspace(-5, 5, 20))

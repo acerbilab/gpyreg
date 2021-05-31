@@ -24,7 +24,26 @@ gp = gpr.GP(
     s2 = s2
 )
 
-gp.update(hyp, X, y)
+# Define the priors of the GP hyperparameters (supported priors
+# are 'gaussian', 'studentt', 'smoothbox', 'smoothbox_studentt')
+gp_priors = {
+    'noise_log_scale' : 
+    ('gaussian', (np.log(1e-3), 1.0)),
+}
+
+# Assign the hyperparameter priors to the gp model
+gp.set_priors(gp_priors)
+
+# Define the GP training options.
+gp_train = {'n_samples' : 10}
+
+# Train the GP
+gp.fit(
+    hyp = hyp,
+    x = X,
+    y = y,
+    options = gp_train
+)
 
 x_star = np.reshape(np.linspace(-15, 15, 200), (-1, 1))
 ymu, ys2, fmu, fs2 = gp.predict(x_star)

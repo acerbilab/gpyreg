@@ -2,6 +2,8 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt 
 
+from gpyreg.f_min_fill import f_min_fill
+
 class GP:
     def __init__(self, D, covariance, mean, noise, s2 = None):
         self.D = D
@@ -10,8 +12,19 @@ class GP:
         self.noise = noise
         self.s2 = s2
                
-    def set_priors(self, gp_priors):
-        pass
+    def set_priors(self, priors):
+        cov_N = self.covariance.hyperparameter_count(self.D) 
+        mean_N = self.mean.hyperparameter_count(self.D) 
+        noise_N = self.noise.hyperparameter_count()
+        hyp_N = cov_N + mean_N + noise_N
+        self.hprior = HyperPrior(np.full((hyp_N,), np.nan), 
+                                 np.full((hyp_N,), np.nan),
+                                 np.full((hyp_N,), np.nan),
+                                 np.full((hyp_N,), np.nan),
+                                 np.full((hyp_N,), np.nan))
+                                 
+        self.hprior.mu[cov_N] = priors['noise_log_scale'][1][0]
+        self.hprior.sigma[cov_N] = priors['noise_log_scale'][1][1]
          
     def update(self, hyp, X, y, compute_posterior=True):
         self.X = X
@@ -22,9 +35,145 @@ class GP:
             self.post = np.empty((s_N,), dtype=Posterior)
             for i in range(0, s_N):
                 self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
+                
+    def fit(self, hyp, x, y, options):
+        ## Default options
+        init_N = 2**10
+        df_base = 7
+       
+        s_N = options['n_samples']
+        cov_N = self.covariance.hyperparameter_count(self.D) 
+        mean_N = self.mean.hyperparameter_count(self.D) 
+        noise_N = self.noise.hyperparameter_count()
+        hyp_N = cov_N + mean_N + noise_N
+        hyp0 = np.zeros((hyp_N,))
         
-    def fit(self, x, y, options):
-        pass
+        LB = self.hprior.LB
+        UB = self.hprior.UB
+        
+        ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
+        
+        cov_info = self.covariance.get_info(x, y)
+        mean_info = self.mean.get_info(x, y)
+        noise_info = self.noise.get_info(x, y)
+        
+        self.hprior.df[np.isnan(self.hprior.df)] = df_base
+        
+        # Set covariance/noise/mean function hyperparameter lower bounds.
+        LB_cov = cov_info.LB[np.isnan(LB[0:cov_N])]
+        LB_noise = noise_info.LB[np.isnan(LB[cov_N:cov_N+noise_N])]
+        LB_mean = mean_info.LB[np.isnan(LB[cov_N+noise_N:cov_N+noise_N+mean_N])]
+        
+        # Set covariance/noise/mean function hyperparameter upper bounds.
+        UB_cov = cov_info.UB[np.isnan(UB[0:cov_N])]
+        UB_noise = noise_info.UB[np.isnan(UB[cov_N:cov_N+noise_N])]
+        UB_mean = mean_info.UB[np.isnan(UB[cov_N+noise_N:cov_N+noise_N+mean_N])]
+        
+        # Create lower and upper bounds
+        LB = np.concatenate([LB_cov, LB_noise, LB_mean])
+        UB = np.concatenate([UB_cov, UB_noise, UB_mean])
+        UB = np.maximum(LB, UB)
+        
+        # Plausible bounds for generation of starting points
+        PLB = np.concatenate([cov_info.PLB, noise_info.PLB, mean_info.PLB])
+        PUB = np.concatenate([cov_info.PUB, noise_info.PUB, mean_info.PUB])
+        PLB = np.minimum(np.maximum(PLB, LB), UB)
+        PUB = np.maximum(np.minimum(PUB, UB), LB)
+        
+        ## Hyperparameter optimization
+        
+        # Initialize GP
+        self.update(hyp, x, y)
+        
+        gp_objective_f = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
+        
+        X, y = f_min_fill(gp_objective_f, hyp0, LB, UB, PLB, PUB, self.hprior)
+        print(X[0, :])
+        print(y[0])
+            
+        # Perform optimization from most promising NOPTS hyperparameter vectors.
+        
+        ## Sample from best hyperparameter vector using slice sampling
+        
+        # Recompute GP with finalized hyperparameters.
+        self.update(hyp, self.X, self.y)
+        
+    def compute_log_priors(self, hyp, compute_grad):
+        hyp_N = np.size(hyp)
+        
+        lp = 0
+        dlp = None 
+        if compute_grad:
+            dlp = np.zeros(hyp.shape)
+        
+        mu = self.hprior.mu
+        sigma = np.abs(self.hprior.sigma)
+        df = self.hprior.df
+
+        u_idx = (~np.isfinite(mu)) | (~np.isfinite(sigma))
+        g_idx = ~u_idx & (df == 0 | ~np.isfinite(df)) & np.isfinite(sigma)
+        t_idx = ~u_idx & (df > 0) & np.isfinite(df)
+        
+        # Quadratic form
+        z2 = np.zeros(hyp.shape)
+        z2[g_idx | t_idx] = ((hyp[g_idx | t_idx] - mu[g_idx | t_idx]) / sigma[t_idx | t_idx])**2
+        
+        # Gaussian prior
+        if np.any(g_idx):
+            lp -= 0.5 * (np.sum(np.log(2*np.pi*sigma[g_idx]**2))+ z2[g_idx])
+            if compute_grad:
+                dlp[g_idx] = -(hyp[g_idx] - mu[g_idx]) / sigma[g_idx]**2
+         
+        # Student's t prior
+        if np.any(t_idx):
+            lp += np.sum(sp.special.gammaln(0.5*(df[t_idx]+1)) - sp.special.gammaln(0.5*df[t_idx]))
+            lp += np.sum(-0.5*np.log(np.pi*df[t_idx]) - np.log(sigma[t_idx]) - 0.5*(df[t_idx]+1) * np.log1p(z2[t_idx] / df[t_idx]))
+            if compute_grad:
+                dlp[t_idx] = -(df[t_idx]+1) / df[t_idx] / (1+z2[t_idx] / df[t_idx]) * (hyp[t_idx] - mu[t_idx]) / sigma[t_idx]**2
+     
+        if compute_grad:
+            return lp, dlp
+        else:
+            return lp
+        
+    def compute_nlZ(self, hyp, compute_grad, compute_prior):
+        nlZ = dnlZ = None
+        if compute_grad:
+            nlZ, dnlZ = self.__core_computation(hyp, 1, compute_grad)
+        else:
+            nlZ = self.__core_computation(hyp, 1, compute_grad)
+                    
+        if compute_prior:
+            if compute_grad:
+                P, dP = self.compute_log_priors(hyp, compute_grad)
+                nlZ -= P
+                dnlZ -= dP
+            else:
+                P = self.compute_log_priors(hyp, compute_grad)
+                nlZ -= P
+                
+        if compute_grad:
+            return nlZ, dnlZ
+        else:
+            return nlZ
+        
+    def __gp_obj_fun(self, hyp, compute_grad, swap_sign):
+        nlZ = dnlZ = None
+        if compute_grad:
+            nlZ, dnlZ = self.compute_nlZ(hyp, compute_grad, self.hprior is not None)
+        else:
+            nlZ = self.compute_nlZ(hyp, compute_grad, self.hprior is not None) 
+
+        # Swap sign of negative log marginal likelihood (e.g. for sampling)
+        if swap_sign:
+            nlZ *= -1
+            if compute_grad:
+                dnlZ *= -1
+                
+        if compute_grad:
+            return nlZ, dnlZ
+        else:
+            return nlZ
         
     def predict(self, x_star, y_star = None, s2_star = None, add_noise=False):
         N, D = self.X.shape
@@ -281,12 +430,24 @@ class GP:
         
         # Negative log marginal likelihood computation
         if compute_nlZ:
-            assert(False)
+            hyp_N = np.size(hyp)
+            nlZ = np.dot((self.y - m).T, alpha/2) + np.sum(np.log(np.diag(L))) + N * np.log(2*np.pi*sl)/2
             
             if compute_nlZ_grad:
                 assert(False)
+                return nlZ[0, 0], dnlZ[0, 0]
+                
+            return nlZ[0, 0]
      
         return Posterior(hyp, alpha, np.ones((N, 1)) / np.sqrt(np.min(sn2)*sn2_mult), pL, sn2_mult, L_chol)
+        
+class HyperPrior:
+    def __init__(self, mu = None, sigma = None, df = None, LB = None, UB = None):
+        self.mu = mu
+        self.sigma = sigma
+        self.df = df
+        self.LB = LB
+        self.UB = UB
                 
 class Posterior:
     def __init__(self, hyp = None, alpha = None, sW = None, L = None, sn2_mult = None, Lchol = None):
