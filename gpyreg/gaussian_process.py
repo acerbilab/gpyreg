@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt 
@@ -38,8 +40,9 @@ class GP:
                 
     def fit(self, hyp, x, y, options):
         ## Default options
-        init_N = 2**10
-        df_base = 7
+        opts_N = 3 # Hyperparameter optimization runs
+        init_N = 2**10 # Initial design size for hyperparameter optimization
+        df_base = 7 # Default degrees of freedom for Student's t prior
        
         s_N = options['n_samples']
         cov_N = self.covariance.hyperparameter_count(self.D) 
@@ -85,14 +88,55 @@ class GP:
         # Initialize GP
         self.update(hyp, x, y)
         
-        gp_objective_f = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
+        gp_objective_f_1 = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
         
-        X, y = f_min_fill(gp_objective_f, hyp0, LB, UB, PLB, PUB, self.hprior)
-        print(X[0, :])
-        print(y[0])
+        # First evaluate GP log posterior on an informed space-filling design.
+        X0, y0 = f_min_fill(gp_objective_f_1, hyp0, LB, UB, PLB, PUB, self.hprior)
+        hyp = X0[0:opts_N, :].T
+        widths_default = np.std(X0, axis=0, ddof=1)
+        
+        # Extract a good low-noise starting point for the 2nd optimization.
+        if noise_N > 0 and opts_N > 1 and init_N > opts_N:
+            xx = X0[opts_N:, :]
+            noise_y = y0[opts_N:]
+            noise_params = xx[:, cov_N]
+        
+            # Order by noise parameter magnitude.
+            order = np.argsort(noise_params)
+            xx = xx[order, :]
+            noise_y = noise_y[order]
+            # Take the best amongst bottom 20% vectors. 
+            idx_best = np.argmin(noise_y[0:math.ceil(0.2*np.size(noise_y))])
+            hyp[:, 1] = xx[idx_best, :]
             
-        # Perform optimization from most promising NOPTS hyperparameter vectors.
+        # Fix zero widths.
+        idx0 = widths_default == 0
+        if np.any(idx0):
+            if np.shape(hyp)[1] > 1:
+                std_hyp = np.std(hyp, axis=1, ddof=1)
+                widths_default[idx0] = std_hyp[idx0]
+                idx0 = widths_default == 0
+                
+            if np.any(idx0):
+                widths_default[idx0] = np.minimum(1, UB[idx0] - LB[idx0])
         
+        # Check that hyperparameters are within bounds.
+        eps_LB = np.reshape(LB, (-1, 1)) + np.spacing(np.reshape(LB, (-1, 1)))
+        eps_UB = np.reshape(UB, (-1, 1)) - np.spacing(np.reshape(UB, (-1, 1)))
+        hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
+
+        # Perform optimization from most promising NOPTS hyperparameter vectors.
+        gp_objective_f_2 = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)
+        nll = np.full((opts_N,), np.inf)
+        
+        for i in range(0, opts_N):
+            res = sp.optimize.minimize(fun=gp_objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
+            hyp[:, i] = res.x
+            nll[i] = res.fun
+        
+        # Take the best hyperparameter vector.
+        hyp_start = hyp[:, np.argmin(nll)]
+            
         ## Sample from best hyperparameter vector using slice sampling
         
         # Recompute GP with finalized hyperparameters.
