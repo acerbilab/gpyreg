@@ -80,8 +80,12 @@ class GaussianNoise:
         assert(hyp_N == noise_N)
         assert(hyp.ndim == 1)
         
+        dsn2 = None
         if compute_grad:
-            assert(False)
+            if any(x > 0 for x in self.parameters[1:]):
+                dsn2 = np.zeros((N, noise_N))
+            else:
+                dsn2 = np.zeros((1, noise_N))
             
         i = 0
         sn2 = 0
@@ -89,22 +93,32 @@ class GaussianNoise:
             sn2 = np.spacing(1.0)
         else:
             sn2 = np.exp(2*hyp[i])
+            if compute_grad:
+                dsn2[:, i] = 2 * sn2
             i += 1
             
         if self.parameters[1] == 1:
             sn2 += s2
         elif self.parameters[1] == 2:
             sn2 += np.exp(hyp[i]) * s2
+            if compute_grad:
+                dsn2[:, i] = np.exp(hyp[i]) * s2
             i += 1
             
         if self.parameters[2] == 1:
             if y is not None:
                 y_tresh = hyp[i]
-                w2 = np.ewxp(2*hyp[i+1])
+                w2 = np.exp(2*hyp[i+1])
                 zz = np.maximum(0, y_tresh - y)
                 
                 sn2 += w2 @ zz ** 2
+                if compute_grad:
+                    dsn2[:, i] = 2 *  w2 * (y_tresh - y) * (zz > 0)
+                    dsn2[:, i+1] = 2 * w2 * zz**2
             i += 2
+        
+        if compute_grad:
+            return sn2, dsn2
         
         return sn2   
         

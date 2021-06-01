@@ -69,7 +69,7 @@ class Matern:
            f = lambda t : 1 + t * (1+ t / 3)
            df = lambda t : (1+t)/3
        else:
-           assert(False)
+           assert(False) 
 
        if X_star is None:
            # tmp = squareform(pdist(np.diag(np.sqrt(self.degree) / ell) @ X.T))
@@ -83,10 +83,15 @@ class Matern:
            tmp = np.sqrt(sq_dist(a, b))
            
        K = sf2 * f(tmp) * np.exp(-tmp)
-       
+
        if compute_grad:
-           assert(False)
-        
+           dK = np.zeros((N, N, cov_N))
+           for i in range(0, D):
+               Ki = sq_dist(np.reshape((np.sqrt(self.degree) / ell[i]) * X[:, i], (1, -1)))
+               dK[:, :, i] = sf2 * (df(tmp) * np.exp(-tmp)) * Ki
+           dK[:, :, D] = 2 * K
+           return K, dK
+
        return K
     
 def sq_dist(a, b=None):

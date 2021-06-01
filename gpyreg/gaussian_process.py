@@ -126,16 +126,22 @@ class GP:
         hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
         # Perform optimization from most promising NOPTS hyperparameter vectors.
+        gradient = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)[1]
         gp_objective_f_2 = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((opts_N,), np.inf)
         
+        # for i in range(0, 1024):
+        #    res = sp.optimize.check_grad(gp_objective_f_1, gradient, x0=X0.T[:, i])
+   
         for i in range(0, opts_N):
-            res = sp.optimize.minimize(fun=gp_objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
+            # res = sp.optimize.minimize(fun=gp_objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
+            res = sp.optimize.minimize(fun=gp_objective_f_2, x0=hyp[:, i], jac=True, bounds=list(zip(LB, UB)))
             hyp[:, i] = res.x
             nll[i] = res.fun
         
         # Take the best hyperparameter vector.
         hyp_start = hyp[:, np.argmin(nll)]
+        # print(nll)
             
         ## Sample from best hyperparameter vector using slice sampling
         
@@ -213,7 +219,7 @@ class GP:
             nlZ *= -1
             if compute_grad:
                 dnlZ *= -1
-                
+        
         if compute_grad:
             return nlZ, dnlZ
         else:
@@ -426,15 +432,21 @@ class GP:
         
     def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
         N, d = self.X.shape
-
         cov_N = self.covariance.hyperparameter_count(d)
         mean_N = self.mean.hyperparameter_count(d)
         noise_N = self.noise.hyperparameter_count()
-        sn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2)
+        sn2 = m = K = dsn2 = dm = dK = None
+        if compute_nlZ_grad:
+            sn2, dsn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2, compute_grad=True)
+            m, dm = self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], self.X, compute_grad=True)
+            m = np.reshape(m, (-1, 1))
+            K, dK = self.covariance.compute(hyp[0:cov_N], self.X, compute_grad=True)   
+        else:
+            sn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2)
+            m = np.reshape(self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], self.X), (-1, 1))
+            K = self.covariance.compute(hyp[0:cov_N], self.X)   
         sn2_mult = 1 # Effective noise variance multiplier 
-        m = np.reshape(self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], self.X), (-1, 1))
-        K = self.covariance.compute(hyp[0:cov_N], self.X)
-
+        
         L_chol = np.min(sn2) >= 1e-6
         L = sl = pL = None
         if L_chol:
@@ -478,8 +490,28 @@ class GP:
             nlZ = np.dot((self.y - m).T, alpha/2) + np.sum(np.log(np.diag(L))) + N * np.log(2*np.pi*sl)/2
             
             if compute_nlZ_grad:
-                assert(False)
-                return nlZ[0, 0], dnlZ[0, 0]
+                dnlZ = np.zeros(hyp.shape)
+                Q = np.linalg.solve(L, np.linalg.solve(L.T, np.eye(N))) / sl - np.dot(alpha, alpha.T)
+         
+                # Gradient of covariance hyperparameters.
+                for i in range(0, cov_N):
+                    dnlZ[i] = np.sum(np.sum(Q * dK[:, :, i])) / 2
+                    
+                # Gradient of GP likelihood
+                if np.isscalar(sn2):
+                    tr_Q = np.trace(Q)
+                    for i in range(0, noise_N):
+                        dnlZ[cov_N+i] = 0.5 * sn2_mult * np.dot(dsn2[i], tr_Q)
+                else:
+                    dg_Q = np.diag(Q)
+                    for i in range(0, noise_N):
+                        dnlZ[cov_N+i] = 0.5 * sn2_mult * np.sum(dsn2[:, i] * dg_Q)
+               
+                # Gradient of mean function.
+                if mean_N > 0:
+                    dnlZ[cov_N + noise_N:] = np.dot(-dm.T, alpha)[:, 0]
+                    
+                return nlZ[0, 0], dnlZ
                 
             return nlZ[0, 0]
      

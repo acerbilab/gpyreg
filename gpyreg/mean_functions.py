@@ -62,9 +62,14 @@ class NegativeQuadratic:
         omega = np.exp(hyp[(1+D):(1+2*D)])
         z_2 = ((X - x_m) / omega)**2
         m = m_0 - 0.5 * np.sum(z_2, 1)
-
+        dm = None
+        
         if compute_grad:
-            assert(False)
+            dm = np.zeros((N, mean_N))
+            dm[:, 0] = np.ones((N,))
+            dm[:, 1:D+1] = ((X - x_m) / omega**2)
+            dm[:, D+1:] = z_2
+            return m, dm
             
         return m
         
@@ -90,7 +95,7 @@ class MeanInfo:
         elif idx == 1:
             self.LB[0] = np.min(y) - 0.5 * h
             self.UB[0] = np.max(y) + 0.5 * h
-            print(y)
+            # TODO: Quantile behaviour in MATLAB and Python is slightly different.
             self.PLB[0] = np.quantile(y, 0.1)
             self.PUB[0] = np.quantile(y, 0.9)
             self.x0[0] = np.median(y)
