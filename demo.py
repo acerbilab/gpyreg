@@ -12,9 +12,6 @@ s2 = 0.05 * np.exp(0.5 * X)
 y = np.sin(X) + np.sqrt(s2) * norm.ppf(np.random.random_sample(X.shape))
 y[y < 0] = -np.abs(3 * y[y < 0])**2
 
-# Load hyperparameters from file
-hyp = np.loadtxt('hyp.txt', delimiter=',', usecols=range(10)) 
-
 # Define the GP model
 gp = gpr.GP(
     D = D,
@@ -39,7 +36,6 @@ gp_train = {'n_samples' : 10}
 
 # Train the GP
 gp.fit(
-    hyp = hyp,
     x = X,
     y = y,
     options = gp_train

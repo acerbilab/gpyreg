@@ -35,7 +35,7 @@ class ConstantMean:
         m = m0 * np.ones((N, 1))
         
         if compute_grad:
-            assert(False)
+            return m, np.ones((N, 1))
             
         return m
 

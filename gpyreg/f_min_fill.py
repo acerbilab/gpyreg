@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import scipy as sp
 
@@ -44,12 +46,14 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
                S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
                sX[:, i] = sp.stats.t.ppf(S_scaled, df) * sigma + mu
 
+    t_s = time.time()
     X = np.concatenate([[x0], sX])
     y = np.full((N,), np.inf)
     for i in range(0, N):
         y[i] = f(X[i, :])
-        
+     
     order = np.argsort(y)
+    #print(time.time() - t_s)
     
     return X[order, :], y[order]
       

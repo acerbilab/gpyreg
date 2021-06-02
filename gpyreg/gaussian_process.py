@@ -1,10 +1,12 @@
 import math
+import time
 
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt 
 
 from gpyreg.f_min_fill import f_min_fill
+from gpyreg.slice_sample import slice_sample
 
 class GP:
     def __init__(self, D, covariance, mean, noise, s2 = None):
@@ -24,7 +26,9 @@ class GP:
                                  np.full((hyp_N,), np.nan),
                                  np.full((hyp_N,), np.nan),
                                  np.full((hyp_N,), np.nan))
-                                 
+        
+        # mu and sigma with df is t, without df gaussian
+        # what is smoothbox? or smoothbox_studentt?                   
         self.hprior.mu[cov_N] = priors['noise_log_scale'][1][0]
         self.hprior.sigma[cov_N] = priors['noise_log_scale'][1][1]
          
@@ -38,10 +42,12 @@ class GP:
             for i in range(0, s_N):
                 self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
                 
-    def fit(self, hyp, x, y, options):
+    def fit(self, x, y, options):
         ## Default options
         opts_N = 3 # Hyperparameter optimization runs
         init_N = 2**10 # Initial design size for hyperparameter optimization
+        thin = 5
+        burn_in = None
         df_base = 7 # Default degrees of freedom for Student's t prior
        
         s_N = options['n_samples']
@@ -86,12 +92,13 @@ class GP:
         ## Hyperparameter optimization
         
         # Initialize GP
-        self.update(hyp, x, y)
+        self.update(np.reshape(hyp0, (-1, 1)), x, y)
         
-        gp_objective_f_1 = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
+        objective_f_1 = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
         
         # First evaluate GP log posterior on an informed space-filling design.
-        X0, y0 = f_min_fill(gp_objective_f_1, hyp0, LB, UB, PLB, PUB, self.hprior)
+        t1_s = time.time()
+        X0, y0 = f_min_fill(objective_f_1, hyp0, LB, UB, PLB, PUB, self.hprior)
         hyp = X0[0:opts_N, :].T
         widths_default = np.std(X0, axis=0, ddof=1)
         
@@ -119,6 +126,8 @@ class GP:
                 
             if np.any(idx0):
                 widths_default[idx0] = np.minimum(1, UB[idx0] - LB[idx0])
+                
+        t1 = time.time() - t1_s
         
         # Check that hyperparameters are within bounds.
         eps_LB = np.reshape(LB, (-1, 1)) + np.spacing(np.reshape(LB, (-1, 1)))
@@ -127,23 +136,43 @@ class GP:
 
         # Perform optimization from most promising NOPTS hyperparameter vectors.
         gradient = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)[1]
-        gp_objective_f_2 = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)
+        objective_f_2 = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((opts_N,), np.inf)
-        
+
         # for i in range(0, 1024):
-        #    res = sp.optimize.check_grad(gp_objective_f_1, gradient, x0=X0.T[:, i])
-   
+        #    res = sp.optimize.check_grad(objective_f_1, gradient, x0=X0.T[:, i])
+        t2_s = time.time()
         for i in range(0, opts_N):
-            # res = sp.optimize.minimize(fun=gp_objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
-            res = sp.optimize.minimize(fun=gp_objective_f_2, x0=hyp[:, i], jac=True, bounds=list(zip(LB, UB)))
+            # res = sp.optimize.minimize(fun=objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
+            res = sp.optimize.minimize(fun=objective_f_2, x0=hyp[:, i], jac=True, bounds=list(zip(LB, UB)))
             hyp[:, i] = res.x
             nll[i] = res.fun
         
         # Take the best hyperparameter vector.
         hyp_start = hyp[:, np.argmin(nll)]
+        t2 = time.time() - t2_s
+        
+        # print(t1)
+        # print(t2)
+        # print(hyp_start)
         # print(nll)
-            
+
         ## Sample from best hyperparameter vector using slice sampling
+        
+        t3_s = time.time()
+        # Effective number of samples (thin after)
+        eff_s_N = s_N * thin
+        
+        sample_f = lambda hyp_ : self.__gp_obj_fun(hyp_, False, True)
+        hyp_pre_thin = slice_sample(sample_f, hyp_start, eff_s_N, widths_default, LB, UB).T
+        
+        # Thin samples
+        hyp = hyp_pre_thin[:, thin-1::thin]
+        # print(hyp)
+        #log_p = log_p_pre_thin[thin-1:thin:]
+        
+        t3 = time.time() - t3_s
+        # print(t3)
         
         # Recompute GP with finalized hyperparameters.
         self.update(hyp, self.X, self.y)
