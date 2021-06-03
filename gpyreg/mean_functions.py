@@ -15,7 +15,7 @@ class ZeroMean:
         m = np.zeros((N, 1))
         
         if compute_grad:
-            assert(False)
+            return m, []
             
         return m 
         

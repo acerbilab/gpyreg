@@ -21,7 +21,7 @@ y_data = np.reshape(np.sin(np.sum(x_data, 1)) + norm.ppf(np.random.random_sample
 
 gp = gpr.GP(
     D = D,
-    covariance = gpr.covariance_functions.Matern(3),
+    covariance = gpr.covariance_functions.SquaredExponential(),
     mean = gpr.mean_functions.ConstantMean(),
     noise = gpr.noise_functions.GaussianNoise([1, 0, 0])
 )

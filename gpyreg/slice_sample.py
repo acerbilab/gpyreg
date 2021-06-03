@@ -1,203 +1,277 @@
 import math
 import numpy as np
 
-def slice_sample(log_f, x0, N, widths, LB, UB):
-    ## Default options
-    thin = 1
-    burn = 50 # round(N/3)
-    step_out = False
-    display = 'notify'
-    adaptive = True
-    log_prior = None
-    diagnostics = True
-    metropolis_pdf = None
-    metropolis_rnd = None
-    
-    ## Startup and initial checks.
-    D = x0.size   
-    if np.size(LB) == 1:
-        LB = np.tile(LB, D)
-    if np.size(UB) == 1:
-        UB = np.tile(UB, D)
-    if np.size(widths) == 1:
-        widths = np.tile(widths, D)
-    LB_out = LB + np.spacing(LB)
-    UB_out = UB + np.spacing(UB)
-    base_widths = widths.copy()
-    xx = x0
-
-    if widths is None:
-        widths = (UB - LB) / 2
-    widths[np.isinf(widths)] = 10
-    widths[LB == UB] = 1 # Widths is irrelevant when LB == UB, set to 1
-     
-    samples = np.zeros((N, D))
-    
-    # Sanity checks
-    assert(np.ndim(x0) <= 1)
-    assert(np.shape(LB) == np.shape(x0) and np.shape(UB) == np.shape(x0))
-    assert(np.all(UB >= LB))
-    assert(np.all(widths > 0) and np.all(np.isfinite(widths)) and np.all(np.isreal(widths)))
-    assert(np.all(x0 >= LB) and np.all(x0 <= UB))
-    assert(np.isscalar(thin) and thin > 0)
-    assert(np.isscalar(burn) and burn >= 0)
-
-    # Effective samples
-    eff_N = N + (N-1) * (thin - 1)
-    
-    xx_sum = np.zeros((D,))
-    xx_sq_sum = np.zeros((D,))
-    
-    log_dist = lambda xx_ : log_pdf_bound(log_f, xx_, LB, UB, False)[0]
-    log_Px = log_dist(xx)
-   
-    # Main loop
-    for i in range(0, eff_N + burn):
-        # Metropolis step (optional)
+class SliceSampler:
+    def __init__(self, log_f, x0, widths, LB, UB, options={}):
+        np.random.seed(1234)
+        D = x0.size
+        self.log_f = log_f
+        self.x0 = x0
+        self.LB = LB
+        self.UB = UB
+        if np.size(LB) == 1:
+            self.LB = np.tile(LB, D)
+        if np.size(UB) == 1:
+            self.UB = np.tile(UB, D)
+        self.LB_out = LB + np.spacing(LB)
+        self.UB_out = UB + np.spacing(UB)
         
-        # Slice sampling step.
-        xx, widths = slice_sweep(xx, log_dist, widths, step_out, width_adapt = i < burn and adaptive, LB = LB, UB=UB)
+        if np.size(widths) == 1:
+            widths = np.tile(widths, D)
+        self.widths = widths
+        self.base_widths = widths.copy()
         
-        # Metropolis step (optional)
-            
-        # Record samples and miscellaneous bookkeeping.
-        record = i >= burn and np.mod(i - burn, thin) == 0
-        if record:
-            i_smpl = (i - burn) // thin
-            samples[i_smpl, :] = xx
+        if self.widths is None:
+            self.widths = (self.UB - self.LB) / 2
+        self.widths[np.isinf(self.widths)] = 10
+        self.widths[self.LB == self.UB] = 1 # Widths is irrelevant when LB == UB, set to 1
         
-        # Store summary statistics starting half.way into burn-in.
-        if i < burn and i > burn / 2:
-            xx_sum += xx 
-            xx_sq_sum += xx**2
-            
-            # End of burn-in, update widths if using adaptive method.
-            if i == burn - 1 and adaptive:
-                burn_stored = np.floor(burn / 2)
-                new_widths = np.minimum(5 * np.sqrt(xx_sq_sum / burn_stored - (xx_sum / burn_stored)**2), UB_out - LB_out)
-                if not np.all(np.isreal(new_widths)):
-                    new_widths = widths
-                if base_widths is None:
-                    widths = new_widths
-                else:
-                    # Max between new widths and geometric mean with user-supplied
-                    # widths (i.e. bias towards keeping larger widths)
-                    widths = np.maximum(new_widths, np.sqrt(new_widths * base_widths))
+        # Default options
+        self.thin = options.get("thin", 1)
+        self.burn = options.get('burn_in', None) 
+        self.step_out = options.get("step_out", False)
+        self.display = options.get("display", "notify")
+        self.adaptive = options.get("adaptive", True)
+        self.log_prior = options.get("log_prior", None)
+        self.diagnostics = options.get("diagnostics", True)
+        self.metropolis_pdf = options.get("metropolis_pdf", None)
+        self.metropolis_rnd = options.get("metopolis_rnd", None)
+        
+    def sample(self, N):
+        xx = self.x0
+        D = xx.size
+        if self.burn is None:
+            self.burn = round(N/3)
 
+        # Sanity checks
+        assert(np.ndim(self.x0) <= 1)
+        assert(np.shape(self.LB) == np.shape(self.x0) and np.shape(self.UB) == np.shape(self.x0))
+        assert(np.all(self.UB >= self.LB))
+        assert(np.all(self.widths > 0) and np.all(np.isfinite(self.widths)) and np.all(np.isreal(self.widths)))
+        assert(np.all(self.x0 >= self.LB) and np.all(self.x0 <= self.UB))
+        assert(np.isscalar(self.thin) and self.thin > 0)
+        assert(np.isscalar(self.burn) and self.burn >= 0)
+
+        # Effective samples
+        eff_N = N + (N-1) * (self.thin - 1)
+        
+        samples = np.zeros((N, D))
+        xx_sum = np.zeros((D,))
+        xx_sq_sum = np.zeros((D,))
+        
+        log_dist = lambda xx_ : self.__log_pdf_bound(xx_, False)[0]
+        xx_shape = xx.shape
+        logdist_vec = lambda x: log_dist(np.reshape(x, xx_shape))
+        log_Px = log_dist(xx)
+        
+        # Main loop
+        for i in range(0, eff_N + self.burn):
+            # Metropolis step (optional)
+  
+            ## Slice sampling step.
+            perm = np.array(range(D))
+            # Force xx into vector for ease of use:
+            xx = xx.ravel()
+            x_l = xx.copy()
+            x_r = xx.copy()
+            xprime = xx.copy()
+
+            # Random scan through axes
+            perm = rand_perm(D) # np.random.shuffle(perm)
+            for dd in perm:
+                log_uprime = log_Px + np.log(np.random.rand())
+                # Create a horizontal interval (x_l, x_r) enclosing xx
+                rr = np.random.rand()
+                x_l[dd] = xx[dd] - rr*self.widths[dd]
+                x_r[dd] = xx[dd] + (1-rr)*self.widths[dd]
                 
-    return samples
-    
-# Evaluate log pdf with bounds and prior.
-def log_pdf_bound(log_f, x, LB, UB, do_prior):
-    y = f_val = log_prior = None
-    
-    if np.any(x < LB) or np.any(x > UB):
-        y = -np.inf
-    else:
-        if do_prior:
-            assert(False)
-        else:
-            log_prior = 0
+                # Adjust interval to outside bounds for bounded problems.
+                if np.isfinite(self.LB[dd]) or self.isfinite(self.UB[dd]):
+                    if x_l[dd] < self.LB_out[dd]:
+                        delta = self.LB_out[dd] - x_l[dd]
+                        x_l[dd] += delta
+                        x_r[dd] += delta
+                    if x_r[dd] > self.UB_out[dd]:
+                        delta = x_r[dd] - self.UB_out[dd]
+                        x_l[dd] -= delta
+                        x_r[dd] -= delta
+                    x_l[dd] = np.maximum(x_l[dd], self.LB_out[dd])
+                    x_r[dd] = np.minimum(x_r[dd], self.UB_out[dd])
+
+                if self.step_out:
+                    # Typo in early book editions: said compare to u, should be u'
+                    while logdist_vec(x_l) > log_uprime:
+                        x_l[dd] = x_l[dd] - self.widths[dd]
+                    while logdist_vec(x_r) > log_uprime:
+                        x_r[dd] = x_r[dd] + self.widths[dd]
+                        
+                # Inner loop:
+                # Propose xprimes and shrink interval until good one found
+                shrink = 0
+                while True:
+                    shrink += 1
+                    xprime[dd] = np.random.rand()*(x_r[dd] - x_l[dd]) + x_l[dd]
+                    log_Px = float(logdist_vec(xprime))
+                    if log_Px > log_uprime:
+                        break # this is the only way to leave the while loop
+                    else:
+                        # Shrink in
+                        if xprime[dd] > xx[dd]:
+                            x_r[dd] = xprime[dd]
+                        elif xprime[dd] < xx[dd]:
+                            x_l[dd] = xprime[dd]
+                        else:
+                            if warnings:
+                                print('WARNING: Shrunk to current '
+                                    + 'position and still not acceptable.')
+                        #    raise Exception('BUG DETECTED: Shrunk to current '
+                        #        + 'position and still not acceptable.')
+                            break
+                            
+                # Width adaptation (only during burn-in, might break detailed balance)
+                if i < self.burn and self.adaptive:
+                    delta = self.UB[dd] - self.LB[dd]
+                    if shrink > 3:
+                        if np.isfinite(delta):
+                            self.widths[dd] = np.maximum(self.widths[dd]/1.1, np.spacing(delta))
+                        else:
+                            self.widths[dd] = np.maximum(self.widths[dd]/1.1, np.spacing(1))
+                    elif shrink < 2:
+                        self.widths[dd] = np.minimum(self.widths[dd]*1.2, delta)
+
+                xx[dd] = xprime[dd]
+
+            # Metropolis step (optional)
+                
+            # Record samples and miscellaneous bookkeeping.
+            record = i >= self.burn and np.mod(i - self.burn, self.thin) == 0
+            if record:
+                i_smpl = (i - self.burn) // self.thin
+                samples[i_smpl, :] = xx
             
-        f_val = log_f(x)
-        if np.any(np.isnan(f_val)):
+            # Store summary statistics starting half.way into burn-in.
+            if i < self.burn and i >= self.burn / 2:
+                xx_sum += xx 
+                xx_sq_sum += xx**2
+                
+                # End of burn-in, update widths if using adaptive method.
+                if i == self.burn - 1 and self.adaptive:
+                    burn_stored = np.floor(self.burn / 2)
+                    new_widths = np.minimum(5 * np.sqrt(xx_sq_sum / burn_stored - (xx_sum / burn_stored)**2), self.UB_out - self.LB_out)
+                    if not np.all(np.isreal(new_widths)):
+                        new_widths = self.widths
+                    if self.base_widths is None:
+                        self.widths = new_widths
+                    else:
+                        # Max between new widths and geometric mean with user-supplied
+                        # widths (i.e. bias towards keeping larger widths)
+                        self.widths = np.maximum(new_widths, np.sqrt(new_widths * self.base_widths))
+
+        split_samples = np.array([samples[0:math.floor(N/2), :], samples[math.floor(N/2):2*math.floor(N/2)]])
+        print(self.__gelman_rubin(split_samples))
+        print(self.__effective_n(split_samples))
+        return samples
+    
+    # Evaluate log pdf with bounds and prior.
+    def __log_pdf_bound(self, x, do_prior):
+        y = f_val = log_prior = None
+        
+        if np.any(x < self.LB) or np.any(x > self.UB):
             y = -np.inf
         else:
-            y = np.sum(f_val) + log_prior
-            
-    return y, f_val, log_prior
-
-def slice_sweep(xx, logdist, widths=1.0, step_out=True, Lp=None, width_adapt=True, LB=None, UB=None, warnings=True):
-    """simple axis-aligned slice sampling sweep
-         xx_next = slice_sweep(xx, logdist)
-     Inputs:
-                xx  D,  initial state (or array with D elements)
-           logdist  fn  function: log of unnormalized probability of xx
-            widths  D,  or 1x1, step sizes for slice sampling (default 1.0)
-          step_out bool set to True (default) if widths sometimes far too small
-                Lp  1,  Optional: logdist(xx) if have already evaluated it
-          warnings bool print warnings if slice falls back to point (default True)
-     Outputs:
-                xx  D,  final state (same shape as at start)
-     If Lp was provided as an input, then return tuple with second element:
-                Lp  1,  final log-prob, logdist(xx)
-    """
-    # Iain Murray 2004, 2009, 2010, 2013, 2016
-    # Luigi Acerbi 2021
-    # Algorithm orginally by Radford Neal, e.g., Annals of Statistic (2003)
-    # See also pseudo-code in David MacKay's text book p375
-    
-    # startup stuff
-    D = xx.size
-    widths = np.array(widths)
-    if widths.size == 1:
-        widths = np.tile(widths, D)
-    output_Lp = Lp is not None
-    if Lp is None:
-        log_Px = logdist(xx)
-    else:
-        log_Px = Lp
-    perm = np.array(range(D))
-    # Force xx into vector for ease of use:
-    xx_shape = xx.shape
-    logdist_vec = lambda x: logdist(np.reshape(x, xx_shape))
-    xx = xx.ravel().copy()
-    x_l = xx.copy()
-    x_r = xx.copy()
-    xprime = xx.copy()
-
-    # Random scan through axes
-    np.random.shuffle(perm)
-    for dd in perm:
-        log_uprime = log_Px + np.log(np.random.rand())
-        # Create a horizontal interval (x_l, x_r) enclosing xx
-        rr = np.random.rand()
-        x_l[dd] = xx[dd] - rr*widths[dd]
-        x_r[dd] = xx[dd] + (1-rr)*widths[dd]
-        if step_out:
-            # Typo in early book editions: said compare to u, should be u'
-            while logdist_vec(x_l) > log_uprime:
-                x_l[dd] = x_l[dd] - widths[dd]
-            while logdist_vec(x_r) > log_uprime:
-                x_r[dd] = x_r[dd] + widths[dd]
-                
-        # Inner loop:
-        # Propose xprimes and shrink interval until good one found
-        shrink = 0
-        while True:
-            shrink += 1
-            xprime[dd] = np.random.rand()*(x_r[dd] - x_l[dd]) + x_l[dd]
-            log_Px = float(logdist_vec(xprime))
-            if log_Px > log_uprime:
-                break # this is the only way to leave the while loop
+            if do_prior:
+                assert(False)
             else:
-                # Shrink in
-                if xprime[dd] > xx[dd]:
-                    x_r[dd] = xprime[dd]
-                elif xprime[dd] < xx[dd]:
-                    x_l[dd] = xprime[dd]
-                else:
-                    if warnings:
-                        print('WARNING: Shrunk to current '
-                            + 'position and still not acceptable.')
-                #    raise Exception('BUG DETECTED: Shrunk to current '
-                #        + 'position and still not acceptable.')
-                    break
-                    
-        # Width adaptation (only during burn-in, might break detailed balance)
-        if width_adapt:
-            delta = UB[dd] - LB[dd]
-            if shrink > 3:
-                if np.isfinite(delta):
-                    widths[dd] = np.maximum(widths[dd]/1.1, np.spacing(delta))
-                else:
-                    widths[dd] = np.maximum(widths[dd]/1.1, np.spacing(1))
-            elif shrink < 2:
-                widths[dd] = np.minimum(widths[dd]*1.2, delta)
+                log_prior = 0
+                
+            f_val = self.log_f(x)
+            if np.any(np.isnan(f_val)):
+                y = -np.inf
+            else:
+                y = np.sum(f_val) + log_prior
+                
+        return y, f_val, log_prior
+        
+    def __gelman_rubin(self, x, return_var = False):
+        if np.shape(x) < (2,):
+            raise ValueError(
+                'Gelman-Rubin diagnostic requires multiple chains of the same length.')
 
-        xx[dd] = xprime[dd]
+        try:
+            m, n = np.shape(x)
+        except ValueError:
+            return [self.__gelman_rubin(np.transpose(y)) for y in np.transpose(x)]
 
-    if output_Lp:
-        return xx, log_Px, widths
-    else:
-        return xx, widths
+        # Calculate between-chain variance
+        B_over_n = np.sum((np.mean(x, 1) - np.mean(x)) ** 2) / (m - 1)
+
+        # Calculate within-chain variances
+        W = np.sum(
+            [(x[i] - xbar) ** 2 for i,
+             xbar in enumerate(np.mean(x,
+                                       1))]) / (m * (n - 1))
+
+        # (over) estimate of variance
+        s2 = W * (n - 1) / n + B_over_n
+        
+        if return_var:
+            return s2
+
+        # Pooled posterior variance estimate
+        V = s2 + B_over_n / m
+
+        # Calculate PSRF
+        R = V / W
+
+        return np.sqrt(R)
+
+    def __effective_n(self, x):       
+        if np.shape(x) < (2,):
+            raise ValueError(
+                'Calculation of effective sample size requires multiple chains of the same length.')
+
+        try:
+            m, n = np.shape(x)
+        except ValueError:
+            return [self.__effective_n(np.transpose(y)) for y in np.transpose(x)]
+            
+        s2 = self.__gelman_rubin(x, return_var=True)
+        
+        negative_autocorr = False
+        t = 1
+        
+        variogram = lambda t: (sum(sum((x[j][i] - x[j][i-t])**2 for i in range(t,n)) for j in range(m)) 
+                                    / (m*(n - t)))
+        rho = np.ones(n)
+        # Iterate until the sum of consecutive estimates of autocorrelation is negative
+        while not negative_autocorr and (t < n):
+            
+            rho[t] = 1. - variogram(t)/(2.*s2)
+            
+            if not t % 2:
+                negative_autocorr = sum(rho[t-1:t+1]) < 0
+            
+            t += 1
+            
+        return int(m*n / (1 + 2*rho[1:t].sum()))
+
+def rand_int(hi):
+    proportion = 1.0 / hi
+    tmp = np.random.rand()
+    res = lo
+    while res * proportion < tmp:
+        res += 1 
+    return res
+
+def fisher_yates_shuffle(a):
+    b = a.copy()
+    left = b.size
+    
+    while left > 1:
+        i = int(np.floor(np.random.rand() * left))
+        left -= 1
+        b[i], b[left] = b[left], b[i]
+    return b
+    
+def rand_perm(n):
+    return fisher_yates_shuffle(np.array(range(0, n)))

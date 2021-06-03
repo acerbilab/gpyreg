@@ -6,7 +6,7 @@ import scipy as sp
 import matplotlib.pyplot as plt 
 
 from gpyreg.f_min_fill import f_min_fill
-from gpyreg.slice_sample import slice_sample
+from gpyreg.slice_sample import SliceSampler
 
 class GP:
     def __init__(self, D, covariance, mean, noise, s2 = None):
@@ -152,8 +152,6 @@ class GP:
         hyp_start = hyp[:, np.argmin(nll)]
         t2 = time.time() - t2_s
         
-        # print(t1)
-        # print(t2)
         # print(hyp_start)
         # print(nll)
 
@@ -162,17 +160,31 @@ class GP:
         t3_s = time.time()
         # Effective number of samples (thin after)
         eff_s_N = s_N * thin
-        
+
         sample_f = lambda hyp_ : self.__gp_obj_fun(hyp_, False, True)
-        hyp_pre_thin = slice_sample(sample_f, hyp_start, eff_s_N, widths_default, LB, UB).T
+        #hyp_start = np.array([-2.6, 1.6, -6.9, -2.0, 2.2, 3.3])
+        #widths_default = np.array([2.6, 2.6, 1.6, 4, 3.2, 2.6])
+        #LB = np.array([-12, -11, -14, -20, -10, -12])
+        #UB = np.array([5, 6, 4, 22, 10, 6])
+        
+        #hyp_start = np.array([-0.6, -0.0, -0.3, -6.9, -0.1])
+        #widths_default = np.array([2.7, 2.7, 2.7, 1.5, 0.7])
+        #LB = np.array([-13, -13, -14, -14, -3])
+        #UB = np.array([5, 5, 4, 1, 3])
+        
+        options = {'burn_in' : 50,
+                   'display' : 'off',
+                   'diagnostics' : False}
+        slicer = SliceSampler(sample_f, hyp_start, widths_default, LB, UB, options)
+        hyp_pre_thin = slicer.sample(eff_s_N).T
         
         # Thin samples
         hyp = hyp_pre_thin[:, thin-1::thin]
         # print(hyp)
-        #log_p = log_p_pre_thin[thin-1:thin:]
+        # log_p = log_p_pre_thin[thin-1:thin:]
         
         t3 = time.time() - t3_s
-        # print(t3)
+        #print(t1, t2, t3)
         
         # Recompute GP with finalized hyperparameters.
         self.update(hyp, self.X, self.y)
@@ -437,6 +449,14 @@ class GP:
                     ax[i1, i2].set_xlim(lb[i2], ub[i2])
                     ax[i1, i2].set_ylim(lb[i1], ub[i1])
                     ax[i1, i2].scatter(self.X[:, i2], self.X[:, i1], color="blue", s=10)
+                    
+                    ax[i1, i2].hlines(x0[i1], ax[i1, i2].get_xlim()[0], ax[i1, i2].get_xlim()[1], colors='k', linewidth=linewidth)
+                    ax[i1, i2].vlines(x0[i2], ax[i1, i2].get_ylim()[0], ax[i1, i2].get_ylim()[1], colors='k', linewidth=linewidth)
+                    
+                if j == 0:
+                    ax[i, j].set_ylabel(r"$x_" + str(i+1) + r"$")
+                if i == D-1:
+                    ax[i, j].set_xlabel(r"$x_" + str(j+1) + r"$")
 
         plt.show()
         

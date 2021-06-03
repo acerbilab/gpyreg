@@ -16,7 +16,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
     if N > N0:
        # First test hyperparameters on a space-filling initial design
        S = lhs(n_vars, samples = N - N0, criterion = 'maximin')
-       # np.random.shuffle(S.T) # Randomly permute columns
+       np.random.shuffle(S.T) # Randomly permute columns
 
        sX = np.zeros((N-N0, n_vars))
        
@@ -53,7 +53,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
         y[i] = f(X[i, :])
      
     order = np.argsort(y)
-    #print(time.time() - t_s)
+    print(time.time() - t_s)
     
     return X[order, :], y[order]
       

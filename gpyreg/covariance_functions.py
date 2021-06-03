@@ -33,7 +33,11 @@ class SquaredExponential:
        K = sf2 * np.exp(-tmp/2)
        
        if compute_grad:
-           assert(False)
+           dK = np.zeros((N, N, cov_N))
+           for i in range(0, D):
+               dK[:, :, i] = K * sq_dist(np.reshape(X[:, i] / ell[i], (-1, 1)))
+           dK[:, :, D] = 2 * K
+           return K, dK
 
        return K
 
