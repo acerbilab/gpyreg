@@ -76,7 +76,7 @@ class Matern:
            assert(False) 
 
        if X_star is None:
-           # tmp = squareform(pdist(np.diag(np.sqrt(self.degree) / ell) @ X.T))
+           # tmp = squareform(pdist((np.diag(np.sqrt(self.degree) / ell) @ X.T).T))
            tmp = np.sqrt(sq_dist(np.diag(np.sqrt(self.degree) / ell) @ X.T))
        elif isinstance(X_star, str):
            tmp = np.zeros((X.shape[0], 1))

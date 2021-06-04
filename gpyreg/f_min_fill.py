@@ -53,7 +53,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
         y[i] = f(X[i, :])
      
     order = np.argsort(y)
-    print(time.time() - t_s)
+    # print(time.time() - t_s)
     
     return X[order, :], y[order]
       

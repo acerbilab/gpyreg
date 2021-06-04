@@ -1,9 +1,17 @@
 import math
+import logging
+
 import numpy as np
 
 class SliceSampler:
+    """This is the form of a docstring.
+
+    It can be spread over several lines.
+
+    """
+    
     def __init__(self, log_f, x0, widths, LB, UB, options={}):
-        np.random.seed(1234)
+        np.random.seed(2)
         D = x0.size
         self.log_f = log_f
         self.x0 = x0
@@ -26,6 +34,8 @@ class SliceSampler:
         self.widths[np.isinf(self.widths)] = 10
         self.widths[self.LB == self.UB] = 1 # Widths is irrelevant when LB == UB, set to 1
         
+        self.func_count = 0
+        
         # Default options
         self.thin = options.get("thin", 1)
         self.burn = options.get('burn_in', None) 
@@ -34,8 +44,19 @@ class SliceSampler:
         self.adaptive = options.get("adaptive", True)
         self.log_prior = options.get("log_prior", None)
         self.diagnostics = options.get("diagnostics", True)
-        self.metropolis_pdf = options.get("metropolis_pdf", None)
-        self.metropolis_rnd = options.get("metopolis_rnd", None)
+        self.metropolis_pdf = options.get("metropolis_pdf", None) # not done 
+        self.metropolis_rnd = options.get("metopolis_rnd", None) # not done
+        
+        # Logging
+        self.logger = logging.getLogger("SliceSampler")
+        self.logger.addHandler(logging.StreamHandler())
+        self.logger.setLevel(logging.INFO)
+        if self.display == 'off':
+            self.logger.setLevel(logging.WARN)
+        elif self.display == 'summary':
+            self.logger.setLevel(logging.INFO)
+        elif self.display == 'full':
+            self.logger.setLevel(logging.DEBUG)
         
     def sample(self, N):
         xx = self.x0
@@ -59,25 +80,33 @@ class SliceSampler:
         xx_sum = np.zeros((D,))
         xx_sq_sum = np.zeros((D,))
         
-        log_dist = lambda xx_ : self.__log_pdf_bound(xx_, False)[0]
-        xx_shape = xx.shape
-        logdist_vec = lambda x: log_dist(np.reshape(x, xx_shape))
+        log_dist = lambda xx_ : self.__log_pdf_bound(xx_)[0]
         log_Px = log_dist(xx)
         
+        # Force xx into vector for ease of use:
+        xx_shape = xx.shape
+        xx = xx.ravel()
+        logdist_vec = lambda x: log_dist(np.reshape(x, xx_shape))
+        
+        self.logger.debug(' Iteration     f-count       log p(x)                   Action')
+        display_format = ' %7.0f     %8.0f    %12.6g    %26s'
+        
         # Main loop
+        perm = np.array(range(D))
         for i in range(0, eff_N + self.burn):
+            if i == self.burn:
+                action = 'start recording'
+                self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
+        
             # Metropolis step (optional)
   
-            ## Slice sampling step.
-            perm = np.array(range(D))
-            # Force xx into vector for ease of use:
-            xx = xx.ravel()
+            ## Slice sampling step.   
             x_l = xx.copy()
             x_r = xx.copy()
             xprime = xx.copy()
 
             # Random scan through axes
-            perm = rand_perm(D) # np.random.shuffle(perm)
+            np.random.shuffle(perm)
             for dd in perm:
                 log_uprime = log_Px + np.log(np.random.rand())
                 # Create a horizontal interval (x_l, x_r) enclosing xx
@@ -99,11 +128,17 @@ class SliceSampler:
                     x_r[dd] = np.minimum(x_r[dd], self.UB_out[dd])
 
                 if self.step_out:
+                    steps = 0
                     # Typo in early book editions: said compare to u, should be u'
                     while logdist_vec(x_l) > log_uprime:
                         x_l[dd] = x_l[dd] - self.widths[dd]
+                        steps += 1
                     while logdist_vec(x_r) > log_uprime:
                         x_r[dd] = x_r[dd] + self.widths[dd]
+                        steps += 1
+                    if steps >= 10:
+                        action = 'step-out dim ' + str(dd) + ' (' + str(steps) + ' steps)' 
+                        self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
                         
                 # Inner loop:
                 # Propose xprimes and shrink interval until good one found
@@ -121,9 +156,7 @@ class SliceSampler:
                         elif xprime[dd] < xx[dd]:
                             x_l[dd] = xprime[dd]
                         else:
-                            if warnings:
-                                print('WARNING: Shrunk to current '
-                                    + 'position and still not acceptable.')
+                            self.logger.warning('WARNING: Shrunk to current position and still not acceptable!')
                         #    raise Exception('BUG DETECTED: Shrunk to current '
                         #        + 'position and still not acceptable.')
                             break
@@ -138,6 +171,10 @@ class SliceSampler:
                             self.widths[dd] = np.maximum(self.widths[dd]/1.1, np.spacing(1))
                     elif shrink < 2:
                         self.widths[dd] = np.minimum(self.widths[dd]*1.2, delta)
+                        
+                if shrink >= 10:
+                    action = 'shrink dim ' + str(dd) + ' (' + str(shrink) + ' steps)' 
+                    self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
 
                 xx[dd] = xprime[dd]
 
@@ -166,26 +203,91 @@ class SliceSampler:
                         # Max between new widths and geometric mean with user-supplied
                         # widths (i.e. bias towards keeping larger widths)
                         self.widths = np.maximum(new_widths, np.sqrt(new_widths * self.base_widths))
+                        
+            if i < self.burn:
+                action = 'burn'
+            elif not record:
+                action = 'thin'
+            else:
+                action = 'record' 
+            self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
 
-        split_samples = np.array([samples[0:math.floor(N/2), :], samples[math.floor(N/2):2*math.floor(N/2)]])
-        print(self.__gelman_rubin(split_samples))
-        print(self.__effective_n(split_samples))
+        if self.thin > 1:
+           thin_msg = '   and keeping 1 sample every ' + str(self.thin) + ', '
+        else:
+           thin_msg = '   '
+        self.logger.info('\nSampling terminated: ')
+        self.logger.info(' * %d samples obtained after a burn-in period of %d samples' % (N, self.burn))
+        self.logger.info(thin_msg + ('for a total of %d function evaluations.' % self.func_count))
+        
+        if self.diagnostics:
+            exit_flag = self.__diagnose(samples)
+            diag_msg = ''
+            if exit_flag == -2 or exit_flag == -3:
+                diag_msg = ' * Try sampling for longer, by increasing N or the thinning factor'
+            elif exit_flag == -1:
+                diag_msg = ' * Try increasing thinning factor to obtain more uncorrelated samples'
+            elif exit_flag == 0:
+                diag_msg = ' * No violations of convergence have been detected (this does NOT guarantee convergence)'
+                
+            if diag_msg != '':
+                self.logger.info(diag_msg)
+
         return samples
+        
+    def __diagnose(self, samples):
+        N = samples.shape[0]
+        split_samples = np.array([samples[0:math.floor(N/2), :], samples[math.floor(N/2):2*math.floor(N/2)]])
+        R = self.__gelman_rubin(split_samples)
+        eff_N = self.__effective_n(split_samples)
+        
+        diag_msg = None
+        exit_flag = 0
+        if np.any(R > 1.5):
+            diag_msg = ' * Detected lack of convergence! (max R = %.2f >> 1, mean R = %.2f)' % (np.max(R), np.mean(R)) 
+            exit_flag = -3
+        elif np.any(R > 1.1):
+           diag_msg = ' * Detected probable lack of convergence! (max R = %.2f > 1, mean R = %.2f)' % (np.max(R), np.mean(R)) 
+           exit_flag = -2
+           
+        if np.any(eff_N < N/10.0):
+            diag_msg = ' * Low number of effective samples! (min eff_N = %.1f, mean eff_N = %.1f, requested N = %d)' % (np.min(eff_N), np.mean(eff_N), N)
+            if exit_flag == 0:
+                exit_flag = -1
+        
+        if diag_msg is None and exit_flag == 0:
+            exit_flag == 1
+        
+        if diag_msg is not None:
+            self.logger.info(diag_msg)
+            
+        return exit_flag
     
     # Evaluate log pdf with bounds and prior.
-    def __log_pdf_bound(self, x, do_prior):
+    def __log_pdf_bound(self, x):
         y = f_val = log_prior = None
         
         if np.any(x < self.LB) or np.any(x > self.UB):
             y = -np.inf
         else:
-            if do_prior:
-                assert(False)
+            if self.log_prior is not None:
+                log_prior = self.log_prior(x)
+                if np.isnan(log_prior):
+                    y = -np.inf
+                    # TODO: warning here?
+                    return y, f_val, log_prior
+                elif not np.isfinite(log_prior):
+                    y = -np.inf
+                    # TODO: and here?
+                    return y, f_val, log_prior
             else:
                 log_prior = 0
                 
             f_val = self.log_f(x)
+            self.func_count += 1
+            
             if np.any(np.isnan(f_val)):
+                # TODO: and here?
                 y = -np.inf
             else:
                 y = np.sum(f_val) + log_prior
@@ -200,7 +302,7 @@ class SliceSampler:
         try:
             m, n = np.shape(x)
         except ValueError:
-            return [self.__gelman_rubin(np.transpose(y)) for y in np.transpose(x)]
+            return np.array([self.__gelman_rubin(np.transpose(y)) for y in np.transpose(x)])
 
         # Calculate between-chain variance
         B_over_n = np.sum((np.mean(x, 1) - np.mean(x)) ** 2) / (m - 1)
@@ -213,12 +315,12 @@ class SliceSampler:
 
         # (over) estimate of variance
         s2 = W * (n - 1) / n + B_over_n
-        
+
         if return_var:
             return s2
 
         # Pooled posterior variance estimate
-        V = s2 + B_over_n / m
+        V = s2 # + B_over_n / m
 
         # Calculate PSRF
         R = V / W
@@ -233,7 +335,7 @@ class SliceSampler:
         try:
             m, n = np.shape(x)
         except ValueError:
-            return [self.__effective_n(np.transpose(y)) for y in np.transpose(x)]
+            return np.array([self.__effective_n(np.transpose(y)) for y in np.transpose(x)])
             
         s2 = self.__gelman_rubin(x, return_var=True)
         
@@ -247,31 +349,31 @@ class SliceSampler:
         while not negative_autocorr and (t < n):
             
             rho[t] = 1. - variogram(t)/(2.*s2)
-            
-            if not t % 2:
+ 
+            if t % 2:
                 negative_autocorr = sum(rho[t-1:t+1]) < 0
             
             t += 1
-            
-        return int(m*n / (1 + 2*rho[1:t].sum()))
 
-def rand_int(hi):
-    proportion = 1.0 / hi
-    tmp = np.random.rand()
-    res = lo
-    while res * proportion < tmp:
-        res += 1 
-    return res
+        return m*n / (-1 + 2*rho[0:t-2].sum())
+        
+    # def __rand_int(self, hi):
+    #    proportion = 1.0 / hi
+    #    tmp = np.random.rand()
+    #    res = lo
+    #    while res * proportion < tmp:
+    #        res += 1 
+    #    return res
 
-def fisher_yates_shuffle(a):
-    b = a.copy()
-    left = b.size
-    
-    while left > 1:
-        i = int(np.floor(np.random.rand() * left))
-        left -= 1
-        b[i], b[left] = b[left], b[i]
-    return b
-    
-def rand_perm(n):
-    return fisher_yates_shuffle(np.array(range(0, n)))
+    #def __fisher_yates_shuffle(self, a):
+    #    b = a.copy()
+    #    left = b.size
+    #    
+    #    while left > 1:
+    #        i = int(np.floor(np.random.rand() * left))
+    #        left -= 1
+    #        b[i], b[left] = b[left], b[i]
+    #    return b
+        
+    #def __rand_perm(self, n):
+    #    return self.__fisher_yates_shuffle(np.array(range(0, n)))
