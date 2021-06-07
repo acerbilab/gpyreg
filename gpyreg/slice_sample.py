@@ -11,7 +11,6 @@ class SliceSampler:
     """
     
     def __init__(self, log_f, x0, widths=None, LB=None, UB=None, options={}):
-        # np.random.seed(2)
         D = x0.size
         self.log_f = log_f
         self.x0 = x0
@@ -23,7 +22,7 @@ class SliceSampler:
             self.LB = LB
             if np.size(LB) == 1:
                 self.LB = np.tile(LB, D)
-            self.LB_out = self.LB + np.spacing(self.LB)
+        self.LB_out = self.LB + np.spacing(self.LB)
             
         if UB is None:
             self.UB = np.tile(np.inf, D)
@@ -32,7 +31,7 @@ class SliceSampler:
             self.UB = UB
             if np.size(UB) == 1:
                 self.UB = np.tile(UB, D)
-            self.UB_out = self.UB + np.spacing(self.UB)
+        self.UB_out = self.UB + np.spacing(self.UB)
             
         if widths is None:
             widths = (self.UB - self.LB) / 2     
@@ -53,8 +52,9 @@ class SliceSampler:
         self.adaptive = options.get("adaptive", True)
         self.log_prior = options.get("log_prior", None)
         self.diagnostics = options.get("diagnostics", True)
-        self.metropolis_pdf = options.get("metropolis_pdf", None) # not done 
-        self.metropolis_rnd = options.get("metopolis_rnd", None) # not done
+        self.metropolis_pdf = options.get("metropolis_pdf", None) 
+        self.metropolis_rnd = options.get("metopolis_rnd", None)
+        self.metropolis_flag = self.metropolis_pdf is not None and self.metropolis_rnd is not None
         
         # Logging
         self.logger = logging.getLogger("SliceSampler")
@@ -108,6 +108,8 @@ class SliceSampler:
                 self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
         
             # Metropolis step (optional)
+            if self.metropolis_flag:
+                xx, log_Px = self.__metropolis_step(xx, logdist_vec, log_Px)
   
             ## Slice sampling step.   
             x_l = xx.copy()
@@ -120,35 +122,26 @@ class SliceSampler:
                 log_uprime = log_Px + np.log(np.random.rand())
                 # Create a horizontal interval (x_l, x_r) enclosing xx
                 rr = np.random.rand()
-                x_l[dd] = xx[dd] - rr*self.widths[dd]
-                x_r[dd] = xx[dd] + (1-rr)*self.widths[dd]
-
+                x_l[dd] -= rr*self.widths[dd]
+                x_r[dd] += (1-rr)*self.widths[dd]
+                
                 # Adjust interval to outside bounds for bounded problems.
-                if np.isfinite(self.LB[dd]) or np.isfinite(self.UB[dd]):
-                    if x_l[dd] < self.LB_out[dd]:
-                        delta = self.LB_out[dd] - x_l[dd]
-                        x_l[dd] += delta
-                        x_r[dd] += delta
-                    if x_r[dd] > self.UB_out[dd]:
-                        delta = x_r[dd] - self.UB_out[dd]
-                        x_l[dd] -= delta
-                        x_r[dd] -= delta
-                    x_l[dd] = np.maximum(x_l[dd], self.LB_out[dd])
-                    x_r[dd] = np.minimum(x_r[dd], self.UB_out[dd])
-
+                x_l[dd] = np.fmax(x_l[dd], self.LB_out[dd])
+                x_r[dd] = np.fmin(x_r[dd], self.UB_out[dd])
+                     
                 if self.step_out:
                     steps = 0
                     # Typo in early book editions: said compare to u, should be u'
                     while logdist_vec(x_l) > log_uprime:
-                        x_l[dd] = x_l[dd] - self.widths[dd]
+                        x_l[dd] -= self.widths[dd]
                         steps += 1
                     while logdist_vec(x_r) > log_uprime:
-                        x_r[dd] = x_r[dd] + self.widths[dd]
+                        x_r[dd] += self.widths[dd]
                         steps += 1
                     if steps >= 10:
                         action = 'step-out dim ' + str(dd) + ' (' + str(steps) + ' steps)' 
-                        self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
-                        
+                        self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))        
+   
                 # Inner loop:
                 # Propose xprimes and shrink interval until good one found
                 shrink = 0
@@ -188,6 +181,8 @@ class SliceSampler:
                 xx[dd] = xprime[dd]
 
             # Metropolis step (optional)
+            if self.metropolis_flag:
+                xx, log_Px = self.__metropolis_step(xx, logdist_vec, log_Px)
                 
             # Record samples and miscellaneous bookkeeping.
             record = i >= self.burn and np.mod(i - self.burn, self.thin) == 0
@@ -204,7 +199,7 @@ class SliceSampler:
                 if i == self.burn - 1 and self.adaptive:
                     burn_stored = np.floor(self.burn / 2)
                     # There can be numerical error here but then width has already shrunk to 0?
-                    new_widths = np.minimum(5 * np.sqrt(xx_sq_sum / burn_stored - (xx_sum / burn_stored)**2), self.UB_out - self.LB_out)
+                    new_widths = np.fmin(5 * np.sqrt(xx_sq_sum / burn_stored - (xx_sum / burn_stored)**2), self.UB_out - self.LB_out)
                     if not np.all(np.isreal(new_widths)):
                         new_widths = self.widths
                     if self.base_widths is None:
@@ -303,6 +298,19 @@ class SliceSampler:
                 y = np.sum(f_val) + log_prior
                 
         return y, f_val, log_prior
+        
+    def __metropolis_step(self, x, log_f, log_Px):
+        xx_new = self.metropolis_rnd()
+        log_Px_new, f_val_new, log_prior_new = log_f(xx_new)
+        
+        # Acceptance rate
+        a = np.exp(log_Px_new - log_Px) * (self.metropolis_pdf(x) / self.metropolis_pdf(xx_new))
+        
+        # Accept proposal?
+        if np.random.rand() < a:
+            return xx_new, log_Px_new
+        else:
+            return x, log_Px
         
     def __gelman_rubin(self, x, return_var = False):
         if np.shape(x) < (2,):
