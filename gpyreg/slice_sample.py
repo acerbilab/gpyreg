@@ -10,37 +10,46 @@ class SliceSampler:
 
     """
     
-    def __init__(self, log_f, x0, widths, LB, UB, options={}):
-        np.random.seed(2)
+    def __init__(self, log_f, x0, widths=None, LB=None, UB=None, options={}):
+        # np.random.seed(2)
         D = x0.size
         self.log_f = log_f
         self.x0 = x0
-        self.LB = LB
-        self.UB = UB
-        if np.size(LB) == 1:
-            self.LB = np.tile(LB, D)
-        if np.size(UB) == 1:
-            self.UB = np.tile(UB, D)
-        self.LB_out = LB + np.spacing(LB)
-        self.UB_out = UB + np.spacing(UB)
         
+        if LB is None:
+            self.LB = np.tile(-np.inf, D)
+            self.LB_out = np.tile(-np.inf, D)
+        else:
+            self.LB = LB
+            if np.size(LB) == 1:
+                self.LB = np.tile(LB, D)
+            self.LB_out = self.LB + np.spacing(self.LB)
+            
+        if UB is None:
+            self.UB = np.tile(np.inf, D)
+            self.UB_out = np.tile(np.inf, D)
+        else:
+            self.UB = UB
+            if np.size(UB) == 1:
+                self.UB = np.tile(UB, D)
+            self.UB_out = self.UB + np.spacing(self.UB)
+            
+        if widths is None:
+            widths = (self.UB - self.LB) / 2     
         if np.size(widths) == 1:
             widths = np.tile(widths, D)
         self.widths = widths
-        self.base_widths = widths.copy()
-        
-        if self.widths is None:
-            self.widths = (self.UB - self.LB) / 2
         self.widths[np.isinf(self.widths)] = 10
+        self.base_widths = widths.copy()
         self.widths[self.LB == self.UB] = 1 # Widths is irrelevant when LB == UB, set to 1
-        
+
         self.func_count = 0
-        
+            
         # Default options
         self.thin = options.get("thin", 1)
         self.burn = options.get('burn_in', None) 
         self.step_out = options.get("step_out", False)
-        self.display = options.get("display", "notify")
+        self.display = options.get("display", "full")
         self.adaptive = options.get("adaptive", True)
         self.log_prior = options.get("log_prior", None)
         self.diagnostics = options.get("diagnostics", True)
@@ -63,7 +72,7 @@ class SliceSampler:
         D = xx.size
         if self.burn is None:
             self.burn = round(N/3)
-
+            
         # Sanity checks
         assert(np.ndim(self.x0) <= 1)
         assert(np.shape(self.LB) == np.shape(self.x0) and np.shape(self.UB) == np.shape(self.x0))
@@ -113,9 +122,9 @@ class SliceSampler:
                 rr = np.random.rand()
                 x_l[dd] = xx[dd] - rr*self.widths[dd]
                 x_r[dd] = xx[dd] + (1-rr)*self.widths[dd]
-                
+
                 # Adjust interval to outside bounds for bounded problems.
-                if np.isfinite(self.LB[dd]) or self.isfinite(self.UB[dd]):
+                if np.isfinite(self.LB[dd]) or np.isfinite(self.UB[dd]):
                     if x_l[dd] < self.LB_out[dd]:
                         delta = self.LB_out[dd] - x_l[dd]
                         x_l[dd] += delta
@@ -194,6 +203,7 @@ class SliceSampler:
                 # End of burn-in, update widths if using adaptive method.
                 if i == self.burn - 1 and self.adaptive:
                     burn_stored = np.floor(self.burn / 2)
+                    # There can be numerical error here but then width has already shrunk to 0?
                     new_widths = np.minimum(5 * np.sqrt(xx_sq_sum / burn_stored - (xx_sum / burn_stored)**2), self.UB_out - self.LB_out)
                     if not np.all(np.isreal(new_widths)):
                         new_widths = self.widths
