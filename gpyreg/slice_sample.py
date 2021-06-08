@@ -57,12 +57,17 @@ class SliceSampler:
             
         self.widths[np.isinf(self.widths)] = 10
         self.widths[self.LB == self.UB] = 1 # Widths is irrelevant when LB == UB, set to 1
+                    
+        # Sanity checks    
+        assert np.ndim(self.x0) <= 1, 'The initial point X0 needs to be a scalar or a 1D array.'
+        assert np.shape(self.LB) == np.shape(self.x0) and np.shape(self.UB) == np.shape(self.x0), 'LB and UB need to be None, scalars, or 1D arrays of the same size as X0.'
+        assert np.all(self.UB >= self.LB), 'All upper bounds UB need to be equal or greater than lower bounds LB.'
+        assert np.all(self.widths > 0) and np.all(np.isfinite(self.widths)) and np.all(np.isreal(self.widths)), 'The widths vector needs to be all positive real numbers.'
+        assert np.all(self.x0 >= self.LB) and np.all(self.x0 <= self.UB), 'The initial starting point X0 is outside the bounds.'
 
         self.func_count = 0
             
         # Default options
-        self.thin = options.get("thin", 1)
-        self.burn = options.get('burn_in', None) 
         self.step_out = options.get("step_out", False)
         self.display = options.get("display", "full")
         self.adaptive = options.get("adaptive", True)
@@ -81,36 +86,46 @@ class SliceSampler:
         elif self.display == 'summary':
             self.logger.setLevel(logging.INFO)
         elif self.display == 'full':
-            self.logger.setLevel(logging.DEBUG)
+            self.logger.setLevel(logging.DEBUG) 
         
-    def sample(self, N):
-        '''Description here
+    def sample(self, N, thin=1, burn=None):
+        '''Samples an arbitrary number of points from the distribution.
         
         Parameters
         ----------
         N : int
             The number of samples to return.
+        thin : int, optional
+            The thinning factor will omit ``thin-1`` out of ``thin`` values in the generated sequence (after burn-in).
+        burn : int, optional
+            The burn factor omits the first ``burn`` points before starting recording 
+            points for the generated sequence. It is is a non-negative integer.  
+            In case this is the first time sampling, the default value of burn is ``round(N/3)`` (that is, one third of the number of recorded samples),
+            while otherwise it is 0.
+            
+        Returns
+        -------
+        res : SamplingResult
+          The sampling result represented as a ``SamplingResult`` object.
             
         '''
+        
+        # Reference to x0 so it is updated as we go along, allowing us to use this function multiple times.
         xx = self.x0
         D = xx.size
-        if self.burn is None:
-            self.burn = round(N/3)
+        
+        if burn is None:
+            # In case we are sampling again there is no need for burn-in.
+            if self.func_count > 0:
+                burn = 0
+            else:
+                burn = round(N/3)
             
-        if self.burn == 0 and self.base_widths is None and self.adaptive:
+        if burn == 0 and self.base_widths is None and self.adaptive and self.func_count == 0:
             self.logger.warning('WIDTHS not specified and adaptation is ON (OPTIONS.Adaptive == 1), but OPTIONS.Burnin is set to 0. SLICESAMPLEBND will attempt to use default values for WIDTHS.')
             
-        # Sanity checks
-        assert np.ndim(self.x0) <= 1, 'The initial point X0 needs to be a scalar or a 1D array.'
-        assert np.shape(self.LB) == np.shape(self.x0) and np.shape(self.UB) == np.shape(self.x0), 'LB and UB need to be None, scalars, or 1D arrays of the same size as X0.'
-        assert np.all(self.UB >= self.LB), 'All upper bounds UB need to be equal or greater than lower bounds LB.'
-        assert np.all(self.widths > 0) and np.all(np.isfinite(self.widths)) and np.all(np.isreal(self.widths)), 'The widths vector needs to be all positive real numbers.'
-        assert np.all(self.x0 >= self.LB) and np.all(self.x0 <= self.UB), 'The initial starting point X0 is outside the bounds.'
-        assert np.isscalar(self.thin) and self.thin > 0, 'The thinning factor option needs to be a positive integer.'
-        assert np.isscalar(self.burn) and self.burn >= 0, 'The burn-in samples option needs to be a non-negative integer.'
-
         # Effective samples
-        eff_N = N + (N-1) * (self.thin - 1)
+        eff_N = N + (N-1) * (thin - 1)
         
         samples = np.zeros((N, D))
         xx_sum = np.zeros((D,))
@@ -121,6 +136,9 @@ class SliceSampler:
         log_priors = np.zeros((N,))
         f_vals = np.zeros((N, np.size(f_val)))
         
+        # Sanity checks
+        assert np.isscalar(thin) and thin > 0, 'The thinning factor option needs to be a positive integer.'
+        assert np.isscalar(burn) and burn >= 0, 'The burn-in samples option needs to be a non-negative integer.'
         assert np.all(np.isfinite(log_Px)), 'The initial starting point X0 needs to evaluate to a real number (not Inf or NaN).'
         
         # Force xx into vector for ease of use
@@ -133,10 +151,10 @@ class SliceSampler:
         
         # Main loop
         perm = np.array(range(D))
-        for i in range(0, eff_N + self.burn):
-            if i == self.burn:
+        for i in range(0, eff_N + burn):
+            if i == burn:
                 action = 'start recording'
-                self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
+                self.logger.debug(display_format % (i-burn+1, self.func_count, log_Px, action))
         
             # Metropolis step (optional)
             if self.metropolis_flag:
@@ -175,7 +193,7 @@ class SliceSampler:
                         steps += 1
                     if steps >= 10:
                         action = 'step-out dim ' + str(dd) + ' (' + str(steps) + ' steps)' 
-                        self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))        
+                        self.logger.debug(display_format % (i-burn+1, self.func_count, log_Px, action))        
    
                 # Inner loop:
                 # Propose xprimes and shrink interval until good one found
@@ -199,7 +217,7 @@ class SliceSampler:
                             break
                             
                 # Width adaptation (only during burn-in, might break detailed balance)
-                if i < self.burn and self.adaptive:
+                if i < burn and self.adaptive:
                     delta = self.UB[dd] - self.LB[dd]
                     if shrink > 3:
                         if np.isfinite(delta):
@@ -211,7 +229,7 @@ class SliceSampler:
                         
                 if shrink >= 10:
                     action = 'shrink dim ' + str(dd) + ' (' + str(shrink) + ' steps)' 
-                    self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
+                    self.logger.debug(display_format % (i-burn+1, self.func_count, log_Px, action))
 
                 xx[dd] = xprime[dd]
 
@@ -220,21 +238,21 @@ class SliceSampler:
                 xx, log_Px, f_val, log_prior = self.__metropolis_step(xx, logdist_vec, log_Px, f_val, log_prior)
                 
             # Record samples and miscellaneous bookkeeping.
-            record = i >= self.burn and np.mod(i - self.burn, self.thin) == 0
+            record = i >= burn and np.mod(i - burn, thin) == 0
             if record:
-                i_smpl = (i - self.burn) // self.thin
+                i_smpl = (i - burn) // thin
                 samples[i_smpl, :] = xx
                 f_vals[i_smpl, :] = f_val
                 log_priors[i_smpl] = log_prior
             
             # Store summary statistics starting half.way into burn-in.
-            if i < self.burn and i >= self.burn / 2:
+            if i < burn and i >= burn / 2:
                 xx_sum += xx 
                 xx_sq_sum += xx**2
                 
                 # End of burn-in, update widths if using adaptive method.
-                if i == self.burn - 1 and self.adaptive:
-                    burn_stored = np.floor(self.burn / 2)
+                if i == burn - 1 and self.adaptive:
+                    burn_stored = np.floor(burn / 2)
                     # There can be numerical error here but then width has already shrunk to 0?
                     new_widths = np.fmin(5 * np.sqrt(xx_sq_sum / burn_stored - (xx_sum / burn_stored)**2), self.UB_out - self.LB_out)
                     if not np.all(np.isreal(new_widths)):
@@ -246,20 +264,21 @@ class SliceSampler:
                         # widths (i.e. bias towards keeping larger widths)
                         self.widths = np.maximum(new_widths, np.sqrt(new_widths * self.base_widths))
                         
-            if i < self.burn:
+            if i < burn:
                 action = 'burn'
             elif not record:
                 action = 'thin'
             else:
                 action = 'record' 
-            self.logger.debug(display_format % (i-self.burn+1, self.func_count, log_Px, action))
+                
+            self.logger.debug(display_format % (i-burn+1, self.func_count, log_Px, action))
 
-        if self.thin > 1:
-           thin_msg = '   and keeping 1 sample every ' + str(self.thin) + ', '
+        if thin > 1:
+           thin_msg = '   and keeping 1 sample every ' + str(thin) + ', '
         else:
            thin_msg = '   '
         self.logger.info('\nSampling terminated: ')
-        self.logger.info(' * %d samples obtained after a burn-in period of %d samples' % (N, self.burn))
+        self.logger.info(' * %d samples obtained after a burn-in period of %d samples' % (N, burn))
         self.logger.info(thin_msg + ('for a total of %d function evaluations.' % self.func_count))
         
         R = eff_N = None
@@ -277,7 +296,7 @@ class SliceSampler:
             if diag_msg != '':
                 self.logger.info(diag_msg)
 
-        return SamplingResult(samples, f_vals, exit_flag, self.widths.copy(), log_priors, self.func_count, R, eff_N)
+        return SamplingResult(samples, f_vals, exit_flag, log_priors, R, eff_N)
         
     def __diagnose(self, samples):
         N = samples.shape[0]
@@ -452,12 +471,10 @@ class SliceSampler:
         return m*n / (-1 + 2*rho[0:t-2].sum())
         
 class SamplingResult:
-    def __init__(self, samples, f_vals, exit_flag, widths, log_priors, func_count, R = None, eff_N = None):
+    def __init__(self, samples, f_vals, exit_flag, log_priors, R = None, eff_N = None):
         self.samples = samples
         self.f_vals = f_vals
         self.exit_flag = exit_flag
-        self.widths = widths
         self.log_priors = log_priors
-        self.func_count = func_count
         self.R = R
         self.eff_N = eff_N

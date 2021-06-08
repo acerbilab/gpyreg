@@ -5,13 +5,30 @@ from scipy.stats import norm, expon, uniform, beta, multivariate_normal, multiva
 
 from gpyreg.slice_sample import SliceSampler
 
-# These unit tests can fail with some small probability. 
-
 options = {
     'display' : 'off',
     'diagnostics' : False
 }
 threshold = 0.1
+
+def test_multiple_runs():
+    state = np.random.get_state()
+    
+    np.random.seed(1234)
+    slicer1 = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    res1 = slicer1.sample(300)
+    
+    np.random.seed(1234)
+    slicer2 = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    res2 = slicer2.sample(100, burn=100)
+    res3 = slicer2.sample(100)
+    res4 = slicer2.sample(100)
+    
+    np.random.set_state(state)
+
+    assert np.all(res1.samples == np.concatenate((res2.samples, res3.samples, res4.samples)))
+    
+# The following tests can fail with some small probability. 
 
 def test_normal():
     slicer = SliceSampler(norm.logpdf, np.array([0.5]), options=options)

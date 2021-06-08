@@ -4,7 +4,7 @@ import gpyreg as gpr
 from scipy.stats import norm
 
 # Create toy training data for the GP
-np.random.seed(12345)
+np.random.seed(1235)
 N = 20
 D = 2
 x_data = np.random.uniform(low = -3, high = 3, size = (N, D))
@@ -65,13 +65,13 @@ _, _, fmu, fs2 = gp.predict(x_star, add_noise = False)
 gp.plot()
 
 # Update the GP by adding some extra points
-
 x_new = np.random.uniform(low = -5, high = 5, size = (N, D))
 y_new = np.sin(np.sum(x_new, 1)) + np.random.normal(scale = 0.1, size = x_new.shape[0])
 
-# This function updates the training data and (usally) the GP posterior but does not 
+# This function updates the training data and (usually) the GP posterior but does not 
 # retrain the GP hyperparameters - it also fills in the auxiliary data that might have
 # been stripped out.
+# TODO: make hyp optional in update to make this work
 # gp.update(x_new = x_new, y_new = y_new, compute_posterior = False)
 
 # In the case above we did not recompute the posterior as we are 
@@ -79,4 +79,5 @@ y_new = np.sin(np.sum(x_new, 1)) + np.random.normal(scale = 0.1, size = x_new.sh
 
 # Retrain the GP (the data are already inside the GP object, and
 # include both the original data and the new data)
+# TODO: use self.X etc instead of x in fit to make this work.
 # gp.fit(options = gp_train)

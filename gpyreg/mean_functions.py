@@ -62,8 +62,7 @@ class NegativeQuadratic:
         omega = np.exp(hyp[(1+D):(1+2*D)])
         z_2 = ((X - x_m) / omega)**2
         m = m_0 - 0.5 * np.sum(z_2, 1)
-        dm = None
-        
+
         if compute_grad:
             dm = np.zeros((N, mean_N))
             dm[:, 0] = np.ones((N,))

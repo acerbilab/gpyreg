@@ -42,7 +42,7 @@ class GP:
             for i in range(0, s_N):
                 self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
                 
-    def fit(self, x, y, options):
+    def fit(self, x, y, options={}):
         ## Default options
         opts_N = 3 # Hyperparameter optimization runs
         init_N = 2**10 # Initial design size for hyperparameter optimization
@@ -172,24 +172,23 @@ class GP:
         #LB = np.array([-13, -13, -14, -14, -3])
         #UB = np.array([5, 5, 4, 1, 3])
         
-        options = {'burn_in' : 50,
-                   'display' : 'off',
-                   'diagnostics' : False}
+        options = {
+            'display' : 'off',
+            'diagnostics' : False
+        }
         slicer = SliceSampler(sample_f, hyp_start, widths_default, LB, UB, options)
-        res = slicer.sample(eff_s_N)
+        res = slicer.sample(eff_s_N, burn=50)
 
         # Thin samples
         hyp_pre_thin = res.samples.T
         hyp = hyp_pre_thin[:, thin-1::thin]
-        # print(hyp)
-        # log_p = log_p_pre_thin[thin-1:thin:]
-        
+
         t3 = time.time() - t3_s
         print(hyp)
         print(t1, t2, t3)
         
         # Recompute GP with finalized hyperparameters.
-        self.update(hyp, self.X, self.y)
+        self.update(hyp, x, y)
         
     def compute_log_priors(self, hyp, compute_grad):
         hyp_N = np.size(hyp)

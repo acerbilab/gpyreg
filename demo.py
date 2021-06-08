@@ -42,6 +42,7 @@ gp.fit(
 )
 
 x_star = np.reshape(np.linspace(-15, 15, 200), (-1, 1))
+# TODO: make predict work with 1D arrays
 ymu, ys2, fmu, fs2 = gp.predict(x_star)
 
 # Plot the GP
