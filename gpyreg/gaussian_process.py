@@ -173,18 +173,20 @@ class GP:
         #UB = np.array([5, 5, 4, 1, 3])
         
         options = {'burn_in' : 50,
-                   'display' : 'full',
-                   'diagnostics' : True}
+                   'display' : 'off',
+                   'diagnostics' : False}
         slicer = SliceSampler(sample_f, hyp_start, widths_default, LB, UB, options)
-        hyp_pre_thin = slicer.sample(eff_s_N).T
-        
+        res = slicer.sample(eff_s_N)
+
         # Thin samples
+        hyp_pre_thin = res.samples.T
         hyp = hyp_pre_thin[:, thin-1::thin]
         # print(hyp)
         # log_p = log_p_pre_thin[thin-1:thin:]
         
         t3 = time.time() - t3_s
-        # print(t1, t2, t3)
+        print(hyp)
+        print(t1, t2, t3)
         
         # Recompute GP with finalized hyperparameters.
         self.update(hyp, self.X, self.y)

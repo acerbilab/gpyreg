@@ -4,11 +4,23 @@ import logging
 import numpy as np
 
 class SliceSampler:
-    """This is the form of a docstring.
+    '''This is the form of a docstring.
 
     It can be spread over several lines.
-
-    """
+    
+    References
+    ----------
+    -- R. Neal (2003), Slice Sampling, Annals of Statistics, 31(3), p705-67.
+    
+    -- D. J. MacKay (2003), Information theory, inference and learning 
+       algorithms, Cambridge university press, p374-7.
+    -- S. Watanabe (2010), Asymptotic equivalence of Bayes cross validation
+       and widely applicable information criterion in singular learning 
+       theory, The Journal of Machine Learning Research, 11, p3571-94.
+    -- A. Gelman, et al (2013), Bayesian data analysis. Vol. 2. Boca Raton, 
+       FL, USA: Chapman & Hall/CRC.
+       
+    '''
     
     def __init__(self, log_f, x0, widths=None, LB=None, UB=None, options={}):
         D = x0.size
@@ -34,12 +46,16 @@ class SliceSampler:
         self.UB_out = self.UB + np.spacing(self.UB)
             
         if widths is None:
-            widths = (self.UB - self.LB) / 2     
-        if np.size(widths) == 1:
-            widths = np.tile(widths, D)
-        self.widths = widths
+            self.widths = (self.UB - self.LB) / 2
+            self.base_widths = widths
+        else:
+            if np.size(widths) == 1:
+                self.widths = np.tile(widths, D)
+            else:
+                self.widths = widths
+            self.base_widths = self.widths.copy()
+            
         self.widths[np.isinf(self.widths)] = 10
-        self.base_widths = widths.copy()
         self.widths[self.LB == self.UB] = 1 # Widths is irrelevant when LB == UB, set to 1
 
         self.func_count = 0
@@ -68,19 +84,30 @@ class SliceSampler:
             self.logger.setLevel(logging.DEBUG)
         
     def sample(self, N):
+        '''Description here
+        
+        Parameters
+        ----------
+        N : int
+            The number of samples to return.
+            
+        '''
         xx = self.x0
         D = xx.size
         if self.burn is None:
             self.burn = round(N/3)
             
+        if self.burn == 0 and self.base_widths is None and self.adaptive:
+            self.logger.warning('WIDTHS not specified and adaptation is ON (OPTIONS.Adaptive == 1), but OPTIONS.Burnin is set to 0. SLICESAMPLEBND will attempt to use default values for WIDTHS.')
+            
         # Sanity checks
-        assert(np.ndim(self.x0) <= 1)
-        assert(np.shape(self.LB) == np.shape(self.x0) and np.shape(self.UB) == np.shape(self.x0))
-        assert(np.all(self.UB >= self.LB))
-        assert(np.all(self.widths > 0) and np.all(np.isfinite(self.widths)) and np.all(np.isreal(self.widths)))
-        assert(np.all(self.x0 >= self.LB) and np.all(self.x0 <= self.UB))
-        assert(np.isscalar(self.thin) and self.thin > 0)
-        assert(np.isscalar(self.burn) and self.burn >= 0)
+        assert np.ndim(self.x0) <= 1, 'The initial point X0 needs to be a scalar or a 1D array.'
+        assert np.shape(self.LB) == np.shape(self.x0) and np.shape(self.UB) == np.shape(self.x0), 'LB and UB need to be None, scalars, or 1D arrays of the same size as X0.'
+        assert np.all(self.UB >= self.LB), 'All upper bounds UB need to be equal or greater than lower bounds LB.'
+        assert np.all(self.widths > 0) and np.all(np.isfinite(self.widths)) and np.all(np.isreal(self.widths)), 'The widths vector needs to be all positive real numbers.'
+        assert np.all(self.x0 >= self.LB) and np.all(self.x0 <= self.UB), 'The initial starting point X0 is outside the bounds.'
+        assert np.isscalar(self.thin) and self.thin > 0, 'The thinning factor option needs to be a positive integer.'
+        assert np.isscalar(self.burn) and self.burn >= 0, 'The burn-in samples option needs to be a non-negative integer.'
 
         # Effective samples
         eff_N = N + (N-1) * (self.thin - 1)
@@ -89,10 +116,14 @@ class SliceSampler:
         xx_sum = np.zeros((D,))
         xx_sq_sum = np.zeros((D,))
         
-        log_dist = lambda xx_ : self.__log_pdf_bound(xx_)[0]
-        log_Px = log_dist(xx)
+        log_dist = lambda xx_ : self.__log_pdf_bound(xx_)
+        log_Px, f_val, log_prior = log_dist(xx)
+        log_priors = np.zeros((N,))
+        f_vals = np.zeros((N, np.size(f_val)))
         
-        # Force xx into vector for ease of use:
+        assert np.all(np.isfinite(log_Px)), 'The initial starting point X0 needs to evaluate to a real number (not Inf or NaN).'
+        
+        # Force xx into vector for ease of use
         xx_shape = xx.shape
         xx = xx.ravel()
         logdist_vec = lambda x: log_dist(np.reshape(x, xx_shape))
@@ -109,7 +140,7 @@ class SliceSampler:
         
             # Metropolis step (optional)
             if self.metropolis_flag:
-                xx, log_Px = self.__metropolis_step(xx, logdist_vec, log_Px)
+                xx, log_Px, f_val, log_prior = self.__metropolis_step(xx, logdist_vec, log_Px, f_val, log_prior)
   
             ## Slice sampling step.   
             x_l = xx.copy()
@@ -119,6 +150,10 @@ class SliceSampler:
             # Random scan through axes
             np.random.shuffle(perm)
             for dd in perm:
+                # Skip fixed dimensions.
+                if self.LB[dd] == self.UB[dd]:
+                    continue
+            
                 log_uprime = log_Px + np.log(np.random.rand())
                 # Create a horizontal interval (x_l, x_r) enclosing xx
                 rr = np.random.rand()
@@ -132,10 +167,10 @@ class SliceSampler:
                 if self.step_out:
                     steps = 0
                     # Typo in early book editions: said compare to u, should be u'
-                    while logdist_vec(x_l) > log_uprime:
+                    while logdist_vec(x_l)[0] > log_uprime:
                         x_l[dd] -= self.widths[dd]
                         steps += 1
-                    while logdist_vec(x_r) > log_uprime:
+                    while logdist_vec(x_r)[0] > log_uprime:
                         x_r[dd] += self.widths[dd]
                         steps += 1
                     if steps >= 10:
@@ -148,7 +183,7 @@ class SliceSampler:
                 while True:
                     shrink += 1
                     xprime[dd] = np.random.rand()*(x_r[dd] - x_l[dd]) + x_l[dd]
-                    log_Px = float(logdist_vec(xprime))
+                    log_Px, f_val, log_prior = logdist_vec(xprime)
                     if log_Px > log_uprime:
                         break # this is the only way to leave the while loop
                     else:
@@ -182,13 +217,15 @@ class SliceSampler:
 
             # Metropolis step (optional)
             if self.metropolis_flag:
-                xx, log_Px = self.__metropolis_step(xx, logdist_vec, log_Px)
+                xx, log_Px, f_val, log_prior = self.__metropolis_step(xx, logdist_vec, log_Px, f_val, log_prior)
                 
             # Record samples and miscellaneous bookkeeping.
             record = i >= self.burn and np.mod(i - self.burn, self.thin) == 0
             if record:
                 i_smpl = (i - self.burn) // self.thin
                 samples[i_smpl, :] = xx
+                f_vals[i_smpl, :] = f_val
+                log_priors[i_smpl] = log_prior
             
             # Store summary statistics starting half.way into burn-in.
             if i < self.burn and i >= self.burn / 2:
@@ -225,8 +262,10 @@ class SliceSampler:
         self.logger.info(' * %d samples obtained after a burn-in period of %d samples' % (N, self.burn))
         self.logger.info(thin_msg + ('for a total of %d function evaluations.' % self.func_count))
         
+        R = eff_N = None
+        exit_flag = 0
         if self.diagnostics:
-            exit_flag = self.__diagnose(samples)
+            exit_flag, R, eff_N = self.__diagnose(samples)
             diag_msg = ''
             if exit_flag == -2 or exit_flag == -3:
                 diag_msg = ' * Try sampling for longer, by increasing N or the thinning factor'
@@ -238,7 +277,7 @@ class SliceSampler:
             if diag_msg != '':
                 self.logger.info(diag_msg)
 
-        return samples
+        return SamplingResult(samples, f_vals, exit_flag, self.widths.copy(), log_priors, self.func_count, R, eff_N)
         
     def __diagnose(self, samples):
         N = samples.shape[0]
@@ -266,7 +305,7 @@ class SliceSampler:
         if diag_msg is not None:
             self.logger.info(diag_msg)
             
-        return exit_flag
+        return exit_flag, R, eff_N
     
     # Evaluate log pdf with bounds and prior.
     def __log_pdf_bound(self, x):
@@ -279,11 +318,10 @@ class SliceSampler:
                 log_prior = self.log_prior(x)
                 if np.isnan(log_prior):
                     y = -np.inf
-                    # TODO: warning here?
+                    self.logger.warning('Prior density function returned NaN. Trying to continue.')
                     return y, f_val, log_prior
                 elif not np.isfinite(log_prior):
                     y = -np.inf
-                    # TODO: and here?
                     return y, f_val, log_prior
             else:
                 log_prior = 0
@@ -292,14 +330,14 @@ class SliceSampler:
             self.func_count += 1
             
             if np.any(np.isnan(f_val)):
-                # TODO: and here?
+                self.logger.warning('Target density function returned NaN. Trying to continue.')
                 y = -np.inf
             else:
                 y = np.sum(f_val) + log_prior
                 
         return y, f_val, log_prior
         
-    def __metropolis_step(self, x, log_f, log_Px):
+    def __metropolis_step(self, x, log_f, log_Px, f_val, log_prior):
         xx_new = self.metropolis_rnd()
         log_Px_new, f_val_new, log_prior_new = log_f(xx_new)
         
@@ -308,11 +346,35 @@ class SliceSampler:
         
         # Accept proposal?
         if np.random.rand() < a:
-            return xx_new, log_Px_new
+            return xx_new, log_Px_new, f_val_new, log_prior_new
         else:
-            return x, log_Px
+            return x, log_Px, f_val, log_prior
         
     def __gelman_rubin(self, x, return_var = False):
+        '''Returns estimate of R for a set of traces.
+        
+        The Gelman-Rubin diagnostic tests for lack of convergence by comparing
+        the variance between multiple chains to the variance within each chain.
+        If convergence has been achieved, the between-chain and within-chain
+        variances should be identical. To be most effective in detecting evidence
+        for nonconvergence, each chain should have been initialized to starting
+        values that are dispersed relative to the target distribution.
+        
+        Parameters
+        ----------
+        x : array-like
+          An array containing the 2 or more traces of a stochastic parameter. 
+          That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
+          
+        return_var : bool
+          Flag for returning the marginal posterior variance instead of R-hat (defaults of False).
+          
+        Returns
+        -------
+        Rhat : float
+          Return the potential scale reduction factor, :math:`\hat{R}`
+          
+        '''
         if np.shape(x) < (2,):
             raise ValueError(
                 'Gelman-Rubin diagnostic requires multiple chains of the same length.')
@@ -345,7 +407,21 @@ class SliceSampler:
 
         return np.sqrt(R)
 
-    def __effective_n(self, x):       
+    def __effective_n(self, x):
+        '''Returns estimate of the effective sample size of a set of traces.
+    
+        Parameters
+        ----------
+        x : array-like
+          An array containing the 2 or more traces of a stochastic parameter. 
+          That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
+        
+        Returns
+        -------
+        n_eff : float
+          Return the effective sample size, :math:`\hat{n}_{eff}`
+
+        '''       
         if np.shape(x) < (2,):
             raise ValueError(
                 'Calculation of effective sample size requires multiple chains of the same length.')
@@ -375,23 +451,13 @@ class SliceSampler:
 
         return m*n / (-1 + 2*rho[0:t-2].sum())
         
-    # def __rand_int(self, hi):
-    #    proportion = 1.0 / hi
-    #    tmp = np.random.rand()
-    #    res = lo
-    #    while res * proportion < tmp:
-    #        res += 1 
-    #    return res
-
-    #def __fisher_yates_shuffle(self, a):
-    #    b = a.copy()
-    #    left = b.size
-    #    
-    #    while left > 1:
-    #        i = int(np.floor(np.random.rand() * left))
-    #        left -= 1
-    #        b[i], b[left] = b[left], b[i]
-    #    return b
-        
-    #def __rand_perm(self, n):
-    #    return self.__fisher_yates_shuffle(np.array(range(0, n)))
+class SamplingResult:
+    def __init__(self, samples, f_vals, exit_flag, widths, log_priors, func_count, R = None, eff_N = None):
+        self.samples = samples
+        self.f_vals = f_vals
+        self.exit_flag = exit_flag
+        self.widths = widths
+        self.log_priors = log_priors
+        self.func_count = func_count
+        self.R = R
+        self.eff_N = eff_N

@@ -66,8 +66,8 @@ gp.plot()
 
 # Update the GP by adding some extra points
 
-# x_new = np.random.uniform(low = -5, high = 5, size = (N, D))
-# y_new = np.sin(np.sum(x_new, 1)) + np.random.normal(scale = 0.1, size = x_new.shape[0])
+x_new = np.random.uniform(low = -5, high = 5, size = (N, D))
+y_new = np.sin(np.sum(x_new, 1)) + np.random.normal(scale = 0.1, size = x_new.shape[0])
 
 # This function updates the training data and (usally) the GP posterior but does not 
 # retrain the GP hyperparameters - it also fills in the auxiliary data that might have
@@ -79,4 +79,4 @@ gp.plot()
 
 # Retrain the GP (the data are already inside the GP object, and
 # include both the original data and the new data)
-# gp.train(options = gp_train)
+# gp.fit(options = gp_train)

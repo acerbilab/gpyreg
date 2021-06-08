@@ -32,7 +32,21 @@ release = 'TODO'
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
+    "numpydoc",
 ]
+numpydoc_show_class_members = False
+autodoc_default_options = { 
+    "members": True, 
+    "undoc-members": True, 
+    "private-members": True 
+}
+
+# autodoc_default_options = {
+#    "members": "var1, var2",
+#    "special-members": "__init__, __call__",
+#    "undoc-members": True,
+#    "exclude-members": "__weakref__",
+#}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

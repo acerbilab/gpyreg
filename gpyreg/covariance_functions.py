@@ -24,18 +24,18 @@ class SquaredExponential:
        
        tmp = None
        if X_star is None:
-           tmp = sq_dist(np.diag(1 / ell) @ X.T)
+           tmp = squareform(pdist(X @ np.diag(1 / ell), 'sqeuclidean'))
        elif isinstance(X_star, str):
            tmp = np.zeros((X.shape[0], 1))
        else:
-           tmp = sq_dist(np.diag(1 / ell) @ X.T, np.diag(1 / ell) @ X_star.T)
+           tmp = cdist(X @ np.diag(1 / ell), X_star @ np.diag(1 / ell), 'sqeuclidean')
            
        K = sf2 * np.exp(-tmp/2)
        
        if compute_grad:
            dK = np.zeros((N, N, cov_N))
            for i in range(0, D):
-               dK[:, :, i] = K * sq_dist(np.reshape(X[:, i] / ell[i], (-1, 1)))
+               dK[:, :, i] = K * squareform(pdist(np.reshape(X[:, i] / ell[i], (1, -1)), 'sqeuclidean'))
            dK[:, :, D] = 2 * K
            return K, dK
 
@@ -76,56 +76,26 @@ class Matern:
            assert(False) 
 
        if X_star is None:
-           # tmp = squareform(pdist((np.diag(np.sqrt(self.degree) / ell) @ X.T).T))
-           tmp = np.sqrt(sq_dist(np.diag(np.sqrt(self.degree) / ell) @ X.T))
+           tmp = squareform(pdist(X @ np.diag(np.sqrt(self.degree) / ell)))
        elif isinstance(X_star, str):
            tmp = np.zeros((X.shape[0], 1))
        else:
-           a = np.diag(np.sqrt(self.degree) / ell) @ X.T
-           b = np.diag(np.sqrt(self.degree) / ell) @ X_star.T
-           # tmp = squareform(cdist(a, b))
-           tmp = np.sqrt(sq_dist(a, b))
+           a = X @ np.diag(np.sqrt(self.degree) / ell)
+           b = X_star @ np.diag(np.sqrt(self.degree) / ell)
+           tmp = cdist(a, b)
            
        K = sf2 * f(tmp) * np.exp(-tmp)
 
        if compute_grad:
            dK = np.zeros((N, N, cov_N))
            for i in range(0, D):
-               Ki = sq_dist(np.reshape((np.sqrt(self.degree) / ell[i]) * X[:, i], (1, -1)))
+               Ki = squareform(pdist(np.reshape(np.sqrt(self.degree) / ell[i] * X[:, i], (-1, 1)), 'sqeuclidean'))
                dK[:, :, i] = sf2 * (df(tmp) * np.exp(-tmp)) * Ki
            dK[:, :, D] = 2 * K
            return K, dK
 
        return K
-    
-def sq_dist(a, b=None):
-    D, n = a.shape
-    d = m = None
-
-    # Computation of a^2 - 2*a*b + b^2 is less stable than (a-b)^2 because numerical precision 
-    # can be lost when both a and b have very large absolute value and the same sign.
-    # For that reason, we subtract the mean from the data beforehand to stabilise the computations.
-    # This is OK because the squared error is independent of the mean.
-    if b is None:
-        mu = np.reshape(np.mean(a, 1), (-1, 1))
-        a = a - mu
-        b = a
-        m = n
-    else:
-        d, m = b.shape
-        assert(d == D)
-        
-        mu = np.reshape((m/(n+m))*np.mean(b, 1) + (n/(n+m))*np.mean(a, 1), (-1, 1))
-        a = a - mu
-        b = b - mu
-    
-    # Compute squared distances.
-    # TODO: annoying reshapes
-    C = np.reshape(np.sum(a * a, 0), (1, -1)).T + np.reshape(np.sum(b * b, 0), (1, -1)) - 2 * a.T @ b
  
-    # Numerical noise can cause C to go negative, i.e. C > -1e-14
-    return np.maximum(C, 0)
-    
 class CovarianceInfo:
     def __init__(self, gp, X, y):
         N, D = X.shape
