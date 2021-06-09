@@ -92,7 +92,10 @@ class GP:
         ## Hyperparameter optimization
         
         # Initialize GP
-        self.update(np.reshape(hyp0, (-1, 1)), x, y)
+        # in practice changing the compute_posterior thing won't matter
+        # this is essentially just self.X = x, self.y = y
+        # computing and recomputing posterior is a different thing!
+        self.update(np.reshape(hyp0, (-1, 1)), x, y, compute_posterior=True)
         
         objective_f_1 = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
         
@@ -151,9 +154,6 @@ class GP:
         # Take the best hyperparameter vector.
         hyp_start = hyp[:, np.argmin(nll)]
         t2 = time.time() - t2_s
-        
-        # print(hyp_start)
-        # print(nll)
 
         ## Sample from best hyperparameter vector using slice sampling
         
@@ -327,6 +327,8 @@ class GP:
         
         return ymu, ys2, fmu, fs2
 
+    # sigma doesn't work, requires gplite_quad implementation
+    # quantile doesn't work, requires gplite_qpred implementation
     def plot(self, x0 = None, lb = None, ub = None, sigma = None, quantile = False):
         delta_y = None
         if np.isscalar(lb) and ub is None:

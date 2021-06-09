@@ -31,16 +31,7 @@ function [samples,fvals,exitflag,output] = slicesamplebnd(logf,x0,N,widths,LB,UB
 %   SAMPLES = SLICESAMPLEBND(LOGF,X0,N,WIDTHS,LB,UB,OPTIONS) samples with 
 %   the default sampling parameters replaced by values in the structure 
 %   OPTIONS. SLICESAMPLEBND uses these options:
-%
-%     OPTIONS.Thin generates random samples with Thin-1 out of Thin values 
-%     omitted in the generated sequence (after burn-in). Thin is a positive
-%     integer. The default value of Thin is 1.
-%
-%     OPTIONS.Burnin omits the first Burnin points before starting recording 
-%     points for the generated sequence. Burnin is a non-negative integer. 
-%     The default value of Burnin is round(N/3) (that is, one third of the 
-%     number of recorded samples).
-%    
+
 %     OPTIONS.StepOut if set to true, performs the stepping-out action when 
 %     the current window does not bracket the probability density; see 
 %     Neal (2003) for details. StepOut is a boolean value. The default 

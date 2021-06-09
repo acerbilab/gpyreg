@@ -4,22 +4,89 @@ import logging
 import numpy as np
 
 class SliceSampler:
-    '''This is the form of a docstring.
+    '''Class for drawing random samples from a target distribution with a given
+    log probability density function using the coordinate-wise slice sampling method. 
 
-    It can be spread over several lines.
+    Parameters
+    ----------
+    log_f : callable
+        The log pdf of the target distribution. It takes one argument as input 
+        that has the same type and size as ``x0`` and returns the target 
+        log density function (minus a constant; that is, the normalization constant
+        of the pdf need not be known). 
+        
+        Note that ``log_f`` can return either a scalar
+        (the value of the log probability density at ``x``) or a row vector (the
+        value of the log probability density at ``x`` for each data point; each column
+        corresponds to a different data point). In the latter case, the total log pdf 
+        is obtained by summing the log pdf per each individual data point. Also, ``f_vals``
+        in the object returned by ``sample`` is a matrix (each row corresponds to a 
+        sampled point, each column to a different data point). Knowing the log pdf of
+        the sampled points per each data point can be useful to compute estimates of
+        predictive error such as the widely applicable information criterion (WAIC); 
+        see [3]_.
+    x0 : ndarray, shape (n,) 
+        Initial value of the random sample sequence. It must be within the domain of
+        the target distribution. The number of independent variables is 'n'.
+    widths : array_like, optional
+        A parameter for typical widths. Either a scalar or a 1D array.
+        If it is a scalar, all dimensions are assumed to have the same
+        typical widths. If it is a 1D array, each element of the array
+        is the typical width of the marginal target distribution in that 
+        dimension. The default value of ``widths[i]`` is ``(UB[i]-LB[i])/2`` 
+        if the ``i``-th bounds are finite, or 10 otherwise. By default we 
+        use an adaptive widths method during the burn-in period, so 
+        the choice of typical widths is not crucial.
+    LB : array_like, optional
+        An array of lower bounds on the domain of the target density function, which is
+        assumed to be zero outside the range ``LB <= x <= UB``. If not given we
+        assume no lower bounds. Set ``LB[i] = -inf`` if ``x[i]`` is unbounded 
+        below. If ``LB[i] == UB[i]``, the variable is assumed to be fixed on that dimension.
+    UB : array_like, optional 
+        An array of upper bounds on the domain of the target density function, which is
+        assumed to be zero outside the range ``LB <= x <= UB``. If not given we
+        assume no upper bounds. Set ``UB[i] = inf`` if ``x[i]`` is unbounded 
+        above. If ``LB[i] == UB[i]``, the variable is assumed to be fixed on that dimension.
+    options : dict, optional
+        A dictionary of sampler options. The possible options are:
+
+            **step_out** : bool, defaults to False
+                If set to true, performs the stepping-out action when 
+                the current window does not bracket the probability density.
+                For details see [1]_. 
+            **display** : {'off', 'summary', 'full'}, defaults to 'full'
+                Defines the level of display.
+            **log_prior** : callable, optional
+                Allows the user to specify a prior over ``x``. The function 
+                ``log_prior`` takes one argument as input that has the same 
+                type and size as ``x0`` and returns the log prior density 
+                function at X. The generated samples will be then drawn 
+                from the log density ``log_f + log_prior``.
+            **adaptive** : bool, defaults to True
+                Specifies whether to adapt ``widths`` at the end of the 
+                burn-in period based on the samples obtained so far.
+                Disabling this works best if we already have good estimates.
+            **diagnostics** : bool, defaults to True
+                Specifies whether convergence diagnostics are performed at
+                the end of the run. The diagnostic tests are from [4]_.
+        
+    Notes
+    -----
     
+    Inspired by a MATLAB implementation of slice sampling by Iain Murray. See pseudo-code in [2]_.
+             
     References
     ----------
-    -- R. Neal (2003), Slice Sampling, Annals of Statistics, 31(3), p705-67.
-    
-    -- D. J. MacKay (2003), Information theory, inference and learning 
+    .. [1] R. Neal (2003), Slice Sampling, Annals of Statistics, 
+       31(3), p705-67.
+    .. [2] D. J. MacKay (2003), Information theory, inference and learning 
        algorithms, Cambridge university press, p374-7.
-    -- S. Watanabe (2010), Asymptotic equivalence of Bayes cross validation
+    .. [3] S. Watanabe (2010), Asymptotic equivalence of Bayes cross validation
        and widely applicable information criterion in singular learning 
        theory, The Journal of Machine Learning Research, 11, p3571-94.
-    -- A. Gelman, et al (2013), Bayesian data analysis. Vol. 2. Boca Raton, 
+    .. [4] A. Gelman, et al (2013), Bayesian data analysis. Vol. 2. Boca Raton, 
        FL, USA: Chapman & Hall/CRC.
-       
+
     '''
     
     def __init__(self, log_f, x0, widths=None, LB=None, UB=None, options={}):
@@ -96,10 +163,9 @@ class SliceSampler:
         N : int
             The number of samples to return.
         thin : int, optional
-            The thinning factor will omit ``thin-1`` out of ``thin`` values in the generated sequence (after burn-in).
+            The thinning parameter will omit ``thin-1`` out of ``thin`` values in the generated sequence (after burn-in).
         burn : int, optional
-            The burn factor omits the first ``burn`` points before starting recording 
-            points for the generated sequence. It is is a non-negative integer.  
+            The burn parameter omits the first ``burn`` points before starting recording points for the generated sequence. 
             In case this is the first time sampling, the default value of burn is ``round(N/3)`` (that is, one third of the number of recorded samples),
             while otherwise it is 0.
             
@@ -299,6 +365,8 @@ class SliceSampler:
         return SamplingResult(samples, f_vals, exit_flag, log_priors, R, eff_N)
         
     def __diagnose(self, samples):
+        '''Performs a quick and dirty diagnosis of convergence.
+        '''
         N = samples.shape[0]
         split_samples = np.array([samples[0:math.floor(N/2), :], samples[math.floor(N/2):2*math.floor(N/2)]])
         R = self.__gelman_rubin(split_samples)
@@ -326,8 +394,9 @@ class SliceSampler:
             
         return exit_flag, R, eff_N
     
-    # Evaluate log pdf with bounds and prior.
     def __log_pdf_bound(self, x):
+        '''Evaluate log pdf with bounds and prior.
+        '''
         y = f_val = log_prior = None
         
         if np.any(x < self.LB) or np.any(x > self.UB):
@@ -355,8 +424,10 @@ class SliceSampler:
                 y = np.sum(f_val) + log_prior
                 
         return y, f_val, log_prior
-        
+    
     def __metropolis_step(self, x, log_f, log_Px, f_val, log_prior):
+        '''Metropolis step.
+        '''
         xx_new = self.metropolis_rnd()
         log_Px_new, f_val_new, log_prior_new = log_f(xx_new)
         
@@ -371,28 +442,31 @@ class SliceSampler:
         
     def __gelman_rubin(self, x, return_var = False):
         '''Returns estimate of R for a set of traces.
-        
-        The Gelman-Rubin diagnostic tests for lack of convergence by comparing
-        the variance between multiple chains to the variance within each chain.
-        If convergence has been achieved, the between-chain and within-chain
-        variances should be identical. To be most effective in detecting evidence
-        for nonconvergence, each chain should have been initialized to starting
-        values that are dispersed relative to the target distribution.
-        
+
         Parameters
         ----------
-        x : array-like
+        x : array_like
           An array containing the 2 or more traces of a stochastic parameter. 
           That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
           
         return_var : bool
-          Flag for returning the marginal posterior variance instead of R-hat (defaults of False).
+          Flag for returning the marginal posterior variance instead of R-hat.
           
         Returns
         -------
         Rhat : float
           Return the potential scale reduction factor, :math:`\hat{R}`
           
+        Notes
+        -----
+                
+        The Gelman-Rubin diagnostic tests for lack of convergence by comparing
+        the variance between multiple chains to the variance within each chain.
+        If convergence has been achieved, the between-chain and within-chain
+        variances should be identical. To be most effective in detecting evidence
+        for nonconvergence, each chain should have been initialized to starting
+        values that are dispersed relative to the target distribution.
+
         '''
         if np.shape(x) < (2,):
             raise ValueError(
@@ -431,7 +505,7 @@ class SliceSampler:
     
         Parameters
         ----------
-        x : array-like
+        x : array_like
           An array containing the 2 or more traces of a stochastic parameter. 
           That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
         
@@ -471,7 +545,42 @@ class SliceSampler:
         return m*n / (-1 + 2*rho[0:t-2].sum())
         
 class SamplingResult:
-    def __init__(self, samples, f_vals, exit_flag, log_priors, R = None, eff_N = None):
+    '''Results of a sampling run.
+
+    Attributes
+    ----------
+    samples : array_like
+        The actual samplesd points.
+    f_vals : array_like
+        The sequence of values of the target log pdf at the sampled points. 
+        If a prior is specified in ``log_prior``, then ``f_vals`` does NOT
+        include the contribution of the prior.
+    exit_flag : { 1, 0, -1, -2, -3 }
+        Possible values and the corresponding exit conditions are
+
+            1, Target number of recorded samples reached, 
+              with no explicit violation of convergence (this does not ensure convergence).
+            
+            0, Target number of recorded samples reached, 
+              convergence status is unknown (no diagnostics have been run).
+            
+            -1, No explicit violation of convergence detected, but the number of
+                effective (independent) samples in the sampled sequence is much 
+                lower than the number of requested samples N for at least one 
+                dimension.
+                
+            -2, Detected probable lack of convergence of the sampling procedure.
+            
+            -3, Detected lack of convergence of the sampling procedure.
+    log_priors : array_like
+        The sequence of the values of the log prior at the sampled points 
+    R : array_like
+        Estimate of the potential scale reduction factor in each dimension.
+    eff_N : array_like
+        Estimate of the effective number of samples in each dimension.
+
+    '''
+    def __init__(self, samples, f_vals, exit_flag, log_priors, R, eff_N):
         self.samples = samples
         self.f_vals = f_vals
         self.exit_flag = exit_flag
