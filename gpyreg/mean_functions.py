@@ -8,10 +8,18 @@ class ZeroMean:
         return 0
         
     def get_info(self, X, y):
-        return MeanInfo(self, X, y, 0)
+        mean_N = self.hyperparameter_count(X.shape[1])
+        return MeanInfo(mean_N, X, y, 0)
         
     def compute(self, hyp, X, compute_grad = False):
         N, D = X.shape
+        mean_N = self.hyperparameter_count(D)
+
+        if hyp.size != mean_N:
+            raise Exception('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+        if hyp.ndim != 1:
+            raise Exception('Mean function output is available only for one-sample hyperparameter inputs.')
+
         m = np.zeros((N, 1))
         
         if compute_grad:
@@ -27,10 +35,18 @@ class ConstantMean:
         return 1
         
     def get_info(self, X, y):
-        return MeanInfo(self, X, y, 1)
+        mean_N = self.hyperparameter_count(X.shape[1])
+        return MeanInfo(mean_N, X, y, 1)
         
     def compute(self, hyp, X, compute_grad = False):
         N, D = X.shape
+        mean_N = self.hyperparameter_count(D)
+
+        if hyp.size != mean_N:
+            raise Exception('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+        if hyp.ndim != 1:
+            raise Exception('Mean function output is available only for one-sample hyperparameter inputs.')
+        
         m0 = hyp[0]
         m = m0 * np.ones((N, 1))
         
@@ -47,15 +63,17 @@ class NegativeQuadratic:
         return 1 + 2 * d
         
     def get_info(self, X, y):
-        return MeanInfo(self, X, y, 2)
+        mean_N = self.hyperparameter_count(X.shape[1])
+        return MeanInfo(mean_N, X, y, 2)
     
     def compute(self, hyp, X, compute_grad = False):
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
-        hyp_N = hyp.size
 
-        assert(hyp_N == mean_N)
-        assert(hyp.ndim == 1)
+        if hyp.size != mean_N:
+            raise Exception('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+        if hyp.ndim != 1:
+            raise Exception('Mean function output is available only for one-sample hyperparameter inputs.')
         
         m_0 = hyp[0]
         x_m = hyp[1:(1+D)]
@@ -73,9 +91,8 @@ class NegativeQuadratic:
         return m
         
 class MeanInfo:
-    def __init__(self, gp, X, y, idx):
+    def __init__(self, mean_N, X, y, idx):
         N, D = X.shape
-        mean_N = gp.hyperparameter_count(D)
         tol = 1e-6
         big = np.exp(3)
         self.LB = np.full((mean_N,), -np.inf)
@@ -94,7 +111,8 @@ class MeanInfo:
         elif idx == 1:
             self.LB[0] = np.min(y) - 0.5 * h
             self.UB[0] = np.max(y) + 0.5 * h
-            # TODO: Quantile behaviour in MATLAB and Python is slightly different.
+            # For future reference note that quantile behaviour in MATLAB and NumPy is slightly different.
+            # https://stackoverflow.com/questions/58424704/output-produced-by-python-numpy-percentile-not-same-as-matlab-prctile
             self.PLB[0] = np.quantile(y, 0.1)
             self.PUB[0] = np.quantile(y, 0.9)
             self.x0[0] = np.median(y)
@@ -117,6 +135,8 @@ class MeanInfo:
             self.UB[1+D:mean_N] = np.log(w) + np.log(big)
             self.PLB[1+D:mean_N] = np.log(w) + 0.5 * np.log(tol)
             self.PUB[1+D:mean_N] = np.log(w)
+            # For future reference note that std behaviour in MATLAB and NumPy is slightly different.
+            # https://stackoverflow.com/questions/27600207/why-does-numpy-std-give-a-different-result-to-matlab-std
             self.x0[1+D:mean_N] = np.log(np.std(X, ddof=1))     
         
         # Plausible starting point

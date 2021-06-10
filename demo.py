@@ -17,7 +17,7 @@ gp = gpr.GP(
     D = D,
     covariance = gpr.covariance_functions.Matern(3),
     mean = gpr.mean_functions.NegativeQuadratic(),
-    noise = gpr.noise_functions.GaussianNoise([1, 0, 0]),
+    noise = gpr.noise_functions.GaussianNoise(constant_add=True, user_provided_add=True),
     s2 = s2
 )
 
@@ -25,7 +25,7 @@ gp = gpr.GP(
 # are 'gaussian', 'studentt', 'smoothbox', 'smoothbox_studentt')
 gp_priors = {
     'noise_log_scale' : 
-    ('gaussian', (np.log(1e-3), 1.0)),
+    ('student_t', (np.log(1e-3), 1.0, 7)),
 }
 
 # Assign the hyperparameter priors to the gp model
@@ -36,14 +36,13 @@ gp_train = {'n_samples' : 10}
 
 # Train the GP
 gp.fit(
-    x = X,
+    X = X,
     y = y,
     options = gp_train
 )
 
-x_star = np.reshape(np.linspace(-15, 15, 200), (-1, 1))
-# TODO: make predict work with 1D arrays
-ymu, ys2, fmu, fs2 = gp.predict(x_star)
+x_star = np.linspace(-15, 15, 200)
+fmu, fs2 = gp.predict(x_star, add_noise=False)
 
 # Plot the GP
 gp.plot()

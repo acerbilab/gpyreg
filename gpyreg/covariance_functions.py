@@ -9,16 +9,18 @@ class SquaredExponential:
         return d + 1
         
     def get_info(self, X, y):
-        return CovarianceInfo(self, X, y)
+        cov_N = self.hyperparameter_count(X.shape[1])
+        return CovarianceInfo(cov_N, X, y)
     
     def compute(self, hyp, X, X_star = None, compute_grad = False):
        N, D = X.shape
        cov_N = self.hyperparameter_count(D)
-       hyp_N = hyp.size
-
-       assert(hyp_N == cov_N)
-       assert(hyp.ndim == 1)
-       
+      
+       if hyp.size != cov_N:
+           raise Exception('Expected %d covariance function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+       if hyp.ndim != 1:
+           raise Exception('Covariance function output is available only for one-sample hyperparameter inputs.')
+        
        ell = np.exp(hyp[0:D])
        sf2 = np.exp(2*hyp[D])
        
@@ -49,15 +51,17 @@ class Matern:
         return d + 1
         
     def get_info(self, X, y):
-        return CovarianceInfo(self, X, y)
+        cov_N = self.hyperparameter_count(X.shape[1])
+        return CovarianceInfo(cov_N, X, y)
         
     def compute(self, hyp, X, X_star = None, compute_grad = False):
        N, D = X.shape
        cov_N = self.hyperparameter_count(D)
-       hyp_N = hyp.size
-
-       assert(hyp_N == cov_N)
-       assert(hyp.ndim == 1)
+      
+       if hyp.size != cov_N:
+           raise Exception('Expected %d covariance function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+       if hyp.ndim != 1:
+           raise Exception('Covariance function output is available only for one-sample hyperparameter inputs.')
        
        ell = np.exp(hyp[0:D])
        sf2 = np.exp(2*hyp[D])
@@ -73,7 +77,7 @@ class Matern:
            f = lambda t : 1 + t * (1+ t / 3)
            df = lambda t : (1+t)/3
        else:
-           assert(False) 
+           raise Exception('Only degrees 1, 3 and 5 are supported for the Matern covariance function.')
 
        if X_star is None:
            tmp = squareform(pdist(X @ np.diag(np.sqrt(self.degree) / ell)))
@@ -97,9 +101,8 @@ class Matern:
        return K
  
 class CovarianceInfo:
-    def __init__(self, gp, X, y):
+    def __init__(self, cov_N, X, y):
         N, D = X.shape
-        cov_N = gp.hyperparameter_count(D)
         tol = 1e-6
         self.LB = np.full((cov_N,), -np.inf)
         self.UB = np.full((cov_N,), np.inf)

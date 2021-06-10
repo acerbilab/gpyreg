@@ -7,8 +7,9 @@ from scipy.stats import norm
 np.random.seed(1235)
 N = 20
 D = 2
-x_data = np.random.uniform(low = -3, high = 3, size = (N, D))
-y_data = np.reshape(np.sin(np.sum(x_data, 1)) + norm.ppf(np.random.random_sample(size = x_data.shape[0]), scale=0.1), (-1, 1))  # np.random.normal(scale = 0.1, size = x_data.shape[0])
+X = np.random.uniform(low = -3, high = 3, size = (N, D))
+# TODO: get rid of the reshape here
+y = np.reshape(np.sin(np.sum(X, 1)) + norm.ppf(np.random.random_sample(size = N), scale=0.1), (-1, 1))  # np.random.normal(scale = 0.1, size = N)
 
 # Define the GP model
 
@@ -23,21 +24,26 @@ gp = gpr.GP(
     D = D,
     covariance = gpr.covariance_functions.SquaredExponential(),
     mean = gpr.mean_functions.ConstantMean(),
-    noise = gpr.noise_functions.GaussianNoise([1, 0, 0])
+    noise = gpr.noise_functions.GaussianNoise(constant_add=True)
 )
 
 # Define the priors of the GP hyperparameters (supported priors
 # are 'gaussian', 'studentt', 'smoothbox', 'smoothbox_studentt')
-# NOTE: these are not used properly currently.
 gp_priors = {
     'covariance_log_outputscale' :
-    ('studentt', (0, np.log(10), 3)),
+    ('student_t', (0, np.log(10), 3)),
     'covariance_log_lengthscale' :
-    ('gaussian', (np.log(np.std(x_data, ddof=1)), np.log(10))),
+    ('gaussian', (np.log(np.std(X, ddof=1)), np.log(10))),
     'noise_log_scale' : 
     ('gaussian', (np.log(1e-3), 1.0)),
     'mean_const' :
-    ('smoothbox', (np.min(y_data), np.max(y_data), 1.0))
+    ('smoothbox', (np.min(y), np.max(y), 1.0))
+}
+
+# TODO: remove this when above works
+gp_priors = {
+    'noise_log_scale' : 
+    ('student_t', (np.log(1e-3), 1.0, 7)),
 }
 
 # Assign the hyperparameter priors to the gp model
@@ -48,8 +54,8 @@ gp_train = {'n_samples' : 10}
 
 # Train the GP
 gp.fit(
-    x = x_data,
-    y = y_data,
+    X = X,
+    y = y,
     options = gp_train
 )
 
@@ -59,25 +65,24 @@ x_star = np.array((xx.ravel(), yy.ravel())).T
 
 # Predictive latent mean and variance of the gp at test points
 # ("latent" means that we do not add observation noise)
-_, _, fmu, fs2 = gp.predict(x_star, add_noise = False)
+fmu, fs2 = gp.predict(x_star, add_noise = False)
 
 # Plot the GP
 gp.plot()
 
 # Update the GP by adding some extra points
-x_new = np.random.uniform(low = -5, high = 5, size = (N, D))
-y_new = np.sin(np.sum(x_new, 1)) + np.random.normal(scale = 0.1, size = x_new.shape[0])
+X_new = np.random.uniform(low = -5, high = 5, size = (N, D))
+# TODO: get rid of the reshape here
+y_new = np.reshape(np.sin(np.sum(X_new, 1)) + np.random.normal(scale = 0.1, size = N), (-1, 1))
 
 # This function updates the training data and (usually) the GP posterior but does not 
 # retrain the GP hyperparameters - it also fills in the auxiliary data that might have
 # been stripped out.
-# TODO: make hyp optional in update to make this work
-# gp.update(x_new = x_new, y_new = y_new, compute_posterior = False)
+gp.update(X_new = X_new, y_new = y_new, compute_posterior = False)
 
 # In the case above we did not recompute the posterior as we are 
 # anyhow retraining the GP right after
 
 # Retrain the GP (the data are already inside the GP object, and
 # include both the original data and the new data)
-# TODO: use self.X etc instead of x in fit to make this work.
-# gp.fit(options = gp_train)
+gp.fit(options = gp_train)

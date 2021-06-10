@@ -1,8 +1,16 @@
 import numpy as np
 
 class GaussianNoise:
-    def __init__(self, parameters):
-        self.parameters = parameters
+    def __init__(self, constant_add = False, user_provided_add = False, scale_user_provided = False, rectified_linear_output_dependent_add = False):
+        self.parameters = np.zeros((3,))
+        if constant_add:
+            self.parameters[0] = 1
+        if user_provided_add: 
+            self.parameters[1] = 1
+            if scale_user_provided:
+                self.parameters[1] += 1
+        if rectified_linear_output_dependent_add:
+            self.parameters[2] = 1 
         
     def hyperparameter_count(self):
         noise_N = 0
@@ -74,11 +82,12 @@ class GaussianNoise:
         
     def compute(self, hyp, X, y, s2, compute_grad=False):
         N, D = X.shape
-        hyp_N = hyp.size
         noise_N = self.hyperparameter_count()
            
-        assert(hyp_N == noise_N)
-        assert(hyp.ndim == 1)
+        if hyp.size != noise_N:
+            raise Exception('Expected %d noise function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+        if hyp.ndim != 1:
+            raise Exception('Noise function output is available only for one-sample hyperparameter inputs.')
         
         dsn2 = None
         if compute_grad:

@@ -56,10 +56,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
     # print(time.time() - t_s)
     
     return X[order, :], y[order]
-      
-# p = percentile
-# B = bounds
-# w = width?
+
 def uuinv(p, B, w):
     x = np.zeros(p.shape)
     L1 = B[3] - B[0]

@@ -15,6 +15,8 @@ class GP:
         self.mean = mean
         self.noise = noise
         self.s2 = s2
+        self.X = None
+        self.y = None
                
     def set_priors(self, priors):
         cov_N = self.covariance.hyperparameter_count(self.D) 
@@ -25,32 +27,87 @@ class GP:
                                  np.full((hyp_N,), np.nan),
                                  np.full((hyp_N,), np.nan),
                                  np.full((hyp_N,), np.nan),
+                                 np.full((hyp_N,), np.nan),
+                                 np.full((hyp_N,), np.nan),
                                  np.full((hyp_N,), np.nan))
+
+        for prior in priors:
+            idx = None
+            if prior == 'covariance_log_outputscale':
+                idx = self.D
+            elif prior == 'covariance_log_lengthscale':
+                idx = range(0, self.D)
+            elif prior == 'noise_log_scale':
+                idx = cov_N
+            elif prior == 'mean_const' :
+                idx = cov_N + noise_N
+            else:
+                continue
+                
+            self.__set_priors_helper(idx, priors[prior][0], priors[prior][1])
+
+    def __set_priors_helper(self, i, prior_type, prior_params):
+        if prior_type == 'gaussian':
+            mu, sigma = prior_params
+            self.hprior.mu[i] = mu
+            self.hprior.sigma[i] = sigma
+            self.hprior.df[i] = 0
+        elif prior_type == 'student_t':
+            mu, sigma, df = prior_params
+            self.hprior.mu[i] = mu
+            self.hprior.sigma[i] = sigma
+            self.hprior.df[i] = df
+        elif prior_type == 'smoothbox':
+            a, b, sigma = prior_params
+            self.hprior.a[i] = a
+            self.hprior.b[i] = b
+            self.hprior.sigma[i] = sigma
+        elif prior_type == 'smoothbox_student_t':
+            a, b, sigma, df = prior_params
+            self.hprior.a[i] = a    
+            self.hprior.b[i] = b
+            self.hprior.sigma[i] = sigma
+            self.hprior.df[i] = df
+                
+    def update(self, X_new = None, y_new = None, hyp=None, compute_posterior=True):
+        if X_new is not None:
+            if self.X is None:
+                self.X = X_new
+            else:
+                self.X = np.concatenate((self.X, X_new))
         
-        # mu and sigma with df is t, without df gaussian
-        # what is smoothbox? or smoothbox_studentt?                   
-        self.hprior.mu[cov_N] = priors['noise_log_scale'][1][0]
-        self.hprior.sigma[cov_N] = priors['noise_log_scale'][1][1]
-         
-    def update(self, hyp, X, y, compute_posterior=True):
-        self.X = X
-        self.y = y
- 
-        if compute_posterior:
+        if y_new is not None:
+            if self.y is None:
+                self.y = y_new
+            else:
+                self.y = np.concatenate((self.y, y_new))
+
+        if hyp is not None and compute_posterior:
             hyp_N, s_N = hyp.shape
             self.post = np.empty((s_N,), dtype=Posterior)
             for i in range(0, s_N):
                 self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
                 
-    def fit(self, x, y, options={}):
+    def fit(self, X = None, y = None, options={}):
         ## Default options
         opts_N = 3 # Hyperparameter optimization runs
         init_N = 2**10 # Initial design size for hyperparameter optimization
         thin = 5
         burn_in = None
-        df_base = 7 # Default degrees of freedom for Student's t prior
-       
+        df_base = 7 # Default degrees of freedom for Student's t prior  
         s_N = options['n_samples']
+        
+                
+        # Initialize GP if requested.
+        if X is not None:
+            self.X = X
+        else:
+            X = self.X
+        if y is not None:
+            self.y = y
+        else:
+            y = self.y
+        
         cov_N = self.covariance.hyperparameter_count(self.D) 
         mean_N = self.mean.hyperparameter_count(self.D) 
         noise_N = self.noise.hyperparameter_count()
@@ -62,9 +119,9 @@ class GP:
         
         ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
         
-        cov_info = self.covariance.get_info(x, y)
-        mean_info = self.mean.get_info(x, y)
-        noise_info = self.noise.get_info(x, y)
+        cov_info = self.covariance.get_info(X, y)
+        mean_info = self.mean.get_info(X, y)
+        noise_info = self.noise.get_info(X, y)
         
         self.hprior.df[np.isnan(self.hprior.df)] = df_base
         
@@ -90,13 +147,6 @@ class GP:
         PUB = np.maximum(np.minimum(PUB, UB), LB)
         
         ## Hyperparameter optimization
-        
-        # Initialize GP
-        # in practice changing the compute_posterior thing won't matter
-        # this is essentially just self.X = x, self.y = y
-        # computing and recomputing posterior is a different thing!
-        self.update(np.reshape(hyp0, (-1, 1)), x, y, compute_posterior=True)
-        
         objective_f_1 = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
         
         # First evaluate GP log posterior on an informed space-filling design.
@@ -188,9 +238,9 @@ class GP:
         print(t1, t2, t3)
         
         # Recompute GP with finalized hyperparameters.
-        self.update(hyp, x, y)
+        self.update(hyp=hyp)
         
-    def compute_log_priors(self, hyp, compute_grad):
+    def __compute_log_priors(self, hyp, compute_grad):
         hyp_N = np.size(hyp)
         
         lp = 0
@@ -208,11 +258,11 @@ class GP:
         
         # Quadratic form
         z2 = np.zeros(hyp.shape)
-        z2[g_idx | t_idx] = ((hyp[g_idx | t_idx] - mu[g_idx | t_idx]) / sigma[t_idx | t_idx])**2
+        z2[g_idx | t_idx] = ((hyp[g_idx | t_idx] - mu[g_idx | t_idx]) / sigma[g_idx | t_idx])**2
         
         # Gaussian prior
         if np.any(g_idx):
-            lp -= 0.5 * (np.sum(np.log(2*np.pi*sigma[g_idx]**2))+ z2[g_idx])
+            lp -= 0.5 * (np.sum(np.log(2*np.pi*sigma[g_idx]**2)) + z2[g_idx])
             if compute_grad:
                 dlp[g_idx] = -(hyp[g_idx] - mu[g_idx]) / sigma[g_idx]**2
          
@@ -228,7 +278,7 @@ class GP:
         else:
             return lp
         
-    def compute_nlZ(self, hyp, compute_grad, compute_prior):
+    def __compute_nlZ(self, hyp, compute_grad, compute_prior):
         nlZ = dnlZ = None
         if compute_grad:
             nlZ, dnlZ = self.__core_computation(hyp, 1, compute_grad)
@@ -237,11 +287,11 @@ class GP:
                     
         if compute_prior:
             if compute_grad:
-                P, dP = self.compute_log_priors(hyp, compute_grad)
+                P, dP = self.__compute_log_priors(hyp, compute_grad)
                 nlZ -= P
                 dnlZ -= dP
             else:
-                P = self.compute_log_priors(hyp, compute_grad)
+                P = self.__compute_log_priors(hyp, compute_grad)
                 nlZ -= P
                 
         if compute_grad:
@@ -252,9 +302,9 @@ class GP:
     def __gp_obj_fun(self, hyp, compute_grad, swap_sign):
         nlZ = dnlZ = None
         if compute_grad:
-            nlZ, dnlZ = self.compute_nlZ(hyp, compute_grad, self.hprior is not None)
+            nlZ, dnlZ = self.__compute_nlZ(hyp, compute_grad, self.hprior is not None)
         else:
-            nlZ = self.compute_nlZ(hyp, compute_grad, self.hprior is not None) 
+            nlZ = self.__compute_nlZ(hyp, compute_grad, self.hprior is not None) 
 
         # Swap sign of negative log marginal likelihood (e.g. for sampling)
         if swap_sign:
@@ -267,7 +317,9 @@ class GP:
         else:
             return nlZ
         
-    def predict(self, x_star, y_star = None, s2_star = None, add_noise=False):
+    def predict(self, x_star, y_star = None, s2_star = 0, add_noise=False):
+        if x_star.ndim == 1:
+            x_star = np.reshape(x_star, (-1, 1))
         N, D = self.X.shape
         s_N = self.post.size
         N_star = x_star.shape[0]
@@ -311,7 +363,7 @@ class GP:
                 fs2[:, s:s+1] = kss
                 
             fs2[:, s] = np.maximum(fs2[:, s], 0) # remove numerical noise, i.e. negative variances
-            ys2[:, s] = fs2[:, s] + sn2_star * sn2_mult
+            ys2[:, s:s+1] = fs2[:, s:s+1] + sn2_star * sn2_mult
 
         # Unless predictions for samples are requested separately, average over samples.
         if s_N > 1:
@@ -325,11 +377,13 @@ class GP:
             fmu = fbar
             ymu = ybar
         
-        return ymu, ys2, fmu, fs2
+        if add_noise:
+            return ymu, ys2
+        return fmu, fs2
 
     # sigma doesn't work, requires gplite_quad implementation
     # quantile doesn't work, requires gplite_qpred implementation
-    def plot(self, x0 = None, lb = None, ub = None, sigma = None, quantile = False):
+    def plot(self, x0 = None, lb = None, ub = None, max_min_flag = None):
         delta_y = None
         if np.isscalar(lb) and ub is None:
             delta_y = lb
@@ -355,17 +409,15 @@ class GP:
         linewidth = 1
 
         if x0 is None:
-            x0 = "max"
-        if isinstance(x0, str):
-            if x0 == "max":
+            max_min_flag = True
+        if max_min_flag is not None:
+            if max_min_flag:
                 i = np.argmax(self.y)
                 x0 = self.X[i, :]
-            elif x0 == "min":
+            else:
                 i = np.argmin(self.y)
                 x0 = self.X[i, :]
-            else:
-                assert(False)      
-                
+
         fig, ax = plt.subplots(D, D, squeeze=False)
      
         flo = fhi = None
@@ -380,18 +432,36 @@ class GP:
             else:
                 xx = xx_vec
             
-            if sigma is None:
-                if quantile:
-                    assert(False)
-                else:
-                    _, _, fmu, fs2 = self.predict(xx)
-                    flo = fmu - 1.96 * np.sqrt(fs2)
-                    fhi = fmu + 1.96 * np.sqrt(fs2)
-            else:
-                assert(False)
+            # TODO: Missing quantile prediction stuff etc here
+            fmu, fs2 = self.predict(xx, add_noise=False)
+            flo = fmu - 1.96 * np.sqrt(fs2)
+            fhi = fmu + 1.96 * np.sqrt(fs2)
                
             if delta_y is not None:
-                assert(False)
+                # Probably doesn't work
+                fm0, _ = self.predict(x0, add_noise=False)
+                dx = xx_vec[1] - xx_vec[0]
+                region = np.abs(fmu-fmu0) < delta_y
+                if np.any(region):
+                    idx1 = np.argmax(region)
+                    idx2 = np.size(region) - np.argmax(region[::-1]) - 1
+                    LB[i] = x0[idx1] - 0.5 * dx
+                    UB[i] = x0[idx2] + 0.5 * dx
+                else:
+                    LB[i] = x0[i] - 0.5 * dx
+                    UB[i] = x0[i] + 0.5 * dx
+                    
+                xx_vec = np.reshape(np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)), (-1, 1))
+                if D > 1:
+                    xx = np.tile(x0, (np.size(xx_vec), 1))
+                    xx[:, i:i+1] = xx_vec
+                else:
+                    xx = xx_vec
+                    
+                # TODO: Missing quantile prediction stuff etc here
+                fmu, fs2 = self.predict(xx, add_noise=False)
+                flo = fmu - 1.96 * np.sqrt(fs2)
+                fhi = fmu + 1.96 * np.sqrt(fs2)
             
             ax[i, i].plot(xx_vec, fmu, '-k', linewidth=linewidth)
             ax[i, i].plot(xx_vec, fhi, '-', color=(0.8, 0.8, 0.8), linewidth=linewidth)
@@ -424,10 +494,7 @@ class GP:
                 xx[:, i] = xx_vec[:, 0]
                 xx[:, j] = xx_vec[:, 1]
                  
-                if sigma is not None:
-                   assert(False)
-                   
-                _, _, fmu, fs2 = self.predict(xx)
+                fmu, fs2 = self.predict(xx, add_noise=False)
                 
                 for k in range(0, 2):
                     i1 = i2 = mat = None
@@ -508,7 +575,7 @@ class GP:
                 sn2_mat = np.eye(N)
             else:
                 sn2_div = np.min(sn2)
-                sn2_mat = np.diag(sn2 / sn2div) 
+                sn2_mat = np.diag(sn2 / sn2_div) 
                  
             for i in range(0, 10):
                 try:
@@ -570,15 +637,17 @@ class GP:
         return Posterior(hyp, alpha, np.ones((N, 1)) / np.sqrt(np.min(sn2)*sn2_mult), pL, sn2_mult, L_chol)
         
 class HyperPrior:
-    def __init__(self, mu = None, sigma = None, df = None, LB = None, UB = None):
+    def __init__(self, mu, sigma, df, a, b, LB, UB):
         self.mu = mu
         self.sigma = sigma
         self.df = df
+        self.a = a
+        self.b = b
         self.LB = LB
         self.UB = UB
                 
 class Posterior:
-    def __init__(self, hyp = None, alpha = None, sW = None, L = None, sn2_mult = None, Lchol = None):
+    def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
         self.hyp = hyp
         self.alpha = alpha
         self.sW = sW
