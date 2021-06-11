@@ -39,12 +39,18 @@ class GP:
                 idx = range(0, self.D)
             elif prior == 'noise_log_scale':
                 idx = cov_N
-            elif prior == 'mean_const' :
+            elif prior == 'mean_const':
                 idx = cov_N + noise_N
             else:
                 continue
                 
             self.__set_priors_helper(idx, priors[prior][0], priors[prior][1])
+            
+        print(self.hprior.mu)
+        print(self.hprior.sigma)
+        print(self.hprior.df)
+        print(self.hprior.a)
+        print(self.hprior.b)
 
     def __set_priors_helper(self, i, prior_type, prior_params):
         if prior_type == 'gaussian':
@@ -62,6 +68,7 @@ class GP:
             self.hprior.a[i] = a
             self.hprior.b[i] = b
             self.hprior.sigma[i] = sigma
+            self.hprior.df[i] = 0
         elif prior_type == 'smoothbox_student_t':
             a, b, sigma, df = prior_params
             self.hprior.a[i] = a    
@@ -96,8 +103,7 @@ class GP:
         burn_in = None
         df_base = 7 # Default degrees of freedom for Student's t prior  
         s_N = options['n_samples']
-        
-                
+                   
         # Initialize GP if requested.
         if X is not None:
             self.X = X
@@ -192,8 +198,10 @@ class GP:
         objective_f_2 = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((opts_N,), np.inf)
 
-        # for i in range(0, 1024):
-        #    res = sp.optimize.check_grad(objective_f_1, gradient, x0=X0.T[:, i])
+        for i in range(0, opts_N):
+            res = sp.optimize.check_grad(objective_f_1, gradient, x0=X0.T[:, i])
+            print(res)
+            
         t2_s = time.time()
         for i in range(0, opts_N):
             # res = sp.optimize.minimize(fun=objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
@@ -251,18 +259,74 @@ class GP:
         mu = self.hprior.mu
         sigma = np.abs(self.hprior.sigma)
         df = self.hprior.df
+        a = self.hprior.a
+        b = self.hprior.b
 
-        u_idx = (~np.isfinite(mu)) | (~np.isfinite(sigma))
-        g_idx = ~u_idx & (df == 0 | ~np.isfinite(df)) & np.isfinite(sigma)
-        t_idx = ~u_idx & (df > 0) & np.isfinite(df)
+        sb_idx = np.isfinite(a) & np.isfinite(b) & (df == 0 | ~np.isfinite(df)) & ~np.isfinite(mu) & np.isfinite(sigma)
+        sb_t_idx = np.isfinite(a) & np.isfinite(b) & (df > 0) & ~np.isfinite(mu) & np.isfinite(sigma) & np.isfinite(df)
+        u_idx = ~np.isfinite(mu) & ~np.isfinite(sigma)
+        g_idx = ~u_idx & ~sb_idx & (df == 0 | ~np.isfinite(df)) & np.isfinite(sigma)
+        t_idx = ~u_idx & ~sb_t_idx & (df > 0) & np.isfinite(df)
         
         # Quadratic form
         z2 = np.zeros(hyp.shape)
         z2[g_idx | t_idx] = ((hyp[g_idx | t_idx] - mu[g_idx | t_idx]) / sigma[g_idx | t_idx])**2
         
+        # Smooth box prior
+        if np.any(sb_idx):
+            # Norming constant so that integral over pdf is 1.
+            C = 1.0 + (b[sb_idx] - a[sb_idx]) / (sigma[sb_idx] * np.sqrt(2 * np.pi))
+            
+            sb_idx_b = hyp < a
+            sb_idx_a = hyp > b
+            sb_idx_btw = (hyp >= a) & (hyp <= b)
+                                
+            z2_tmp = np.zeros(hyp.shape)
+            z2_tmp[sb_idx_b] = ((hyp[sb_idx_b] - a[sb_idx_b]) / sigma[sb_idx_b])**2
+            z2_tmp[sb_idx_a] = ((hyp[sb_idx_a] - b[sb_idx_a]) / sigma[sb_idx_a])**2
+
+            if np.any(sb_idx_b | sb_idx_a):
+                lp -= 0.5 * np.sum(np.log(C**2 * 2*np.pi*sigma[sb_idx_b | sb_idx_a]**2) + z2_tmp[sb_idx_b | sb_idx_a])
+            if np.any(sb_idx_btw):
+                lp -= np.sum(np.log(C*sigma[sb_idx_btw]) + np.log(np.sqrt(2 * np.pi)))
+
+            if compute_grad:
+                if np.any(sb_idx_b):
+                    dlp[sb_idx_b] = -(hyp[sb_idx_b] - a[sb_idx_b]) / sigma[sb_idx_b]**2
+                if np.any(sb_idx_a):
+                    dlp[sb_idx_a] = -(hyp[sb_idx_a] - b[sb_idx_a]) / sigma[sb_idx_a]**2
+        
+        # Smooth box Student's t prior
+        if np.any(sb_t_idx):
+            # Norming constant so that integral over pdf is 1.
+            C = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * sp.special.gamma(0.5*(df[sb_t_idx]+1)) / (sp.special.gamma(0.5*df[sb_t_idx]) * sigma[sb_t_idx] * np.sqrt(df[sb_t_idx] * np.pi))
+            
+            sb_t_idx_b = hyp < a
+            sb_t_idx_a = hyp > b
+            sb_t_idx_btw = (hyp >= a) & (hyp <= b)
+            
+            z2_tmp = np.zeros(hyp.shape)
+            z2_tmp[sb_t_idx_b] = ((hyp[sb_t_idx_b] - a[sb_t_idx_b]) / sigma[sb_t_idx_b])**2
+            z2_tmp[sb_t_idx_a] = ((hyp[sb_t_idx_a] - b[sb_t_idx_a]) / sigma[sb_t_idx_a])**2
+            
+            if np.any(sb_t_idx_b | sb_t_idx_a):
+                tmp_idx = sb_t_idx_b | sb_t_idx_a
+                lp += np.sum(sp.special.gammaln(0.5*(df[tmp_idx]+1)) - sp.special.gammaln(0.5*df[tmp_idx]))
+                lp += np.sum(-0.5*np.log(C*np.pi*df[tmp_idx]) - np.log(sigma[tmp_idx]) - 0.5*(df[tmp_idx]+1) * np.log1p(z2_tmp[tmp_idx] / df[tmp_idx]))
+            if np.any(sb_t_idx_btw):
+                tmp_idx = sb_t_idx_btw
+                lp += np.sum(sp.special.gammaln(0.5*(df[tmp_idx]+1)) - sp.special.gammaln(0.5*df[tmp_idx]))
+                lp += np.sum(-0.5*np.log(np.pi*df[tmp_idx]) - np.log(C*sigma[tmp_idx]))
+            
+            if compute_grad:
+                if np.any(sb_t_idx_b):
+                    dlp[sb_t_idx_b] = -(df[sb_t_idx_b]+1) / df[sb_t_idx_b] / (1+z2_tmp[sb_t_idx_b] / df[sb_t_idx_b]) * (hyp[sb_t_idx_b] - a[sb_t_idx_b]) / sigma[sb_t_idx_b]**2
+                if np.any(sb_t_idx_a):
+                    dlp[sb_t_idx_a] = -(df[sb_t_idx_a]+1) / df[sb_t_idx_a] / (1+z2_tmp[sb_t_idx_a] / df[sb_t_idx_a]) * (hyp[sb_t_idx_a] - b[sb_t_idx_a]) / sigma[sb_t_idx_a]**2
+        
         # Gaussian prior
         if np.any(g_idx):
-            lp -= 0.5 * (np.sum(np.log(2*np.pi*sigma[g_idx]**2)) + z2[g_idx])
+            lp -= 0.5 * np.sum(np.log(2*np.pi*sigma[g_idx]**2) + z2[g_idx])
             if compute_grad:
                 dlp[g_idx] = -(hyp[g_idx] - mu[g_idx]) / sigma[g_idx]**2
          
@@ -272,11 +336,11 @@ class GP:
             lp += np.sum(-0.5*np.log(np.pi*df[t_idx]) - np.log(sigma[t_idx]) - 0.5*(df[t_idx]+1) * np.log1p(z2[t_idx] / df[t_idx]))
             if compute_grad:
                 dlp[t_idx] = -(df[t_idx]+1) / df[t_idx] / (1+z2[t_idx] / df[t_idx]) * (hyp[t_idx] - mu[t_idx]) / sigma[t_idx]**2
-     
+
         if compute_grad:
             return lp, dlp
-        else:
-            return lp
+        
+        return lp
         
     def __compute_nlZ(self, hyp, compute_grad, compute_prior):
         nlZ = dnlZ = None
@@ -314,8 +378,8 @@ class GP:
         
         if compute_grad:
             return nlZ, dnlZ
-        else:
-            return nlZ
+        
+        return nlZ
         
     def predict(self, x_star, y_star = None, s2_star = 0, add_noise=False):
         if x_star.ndim == 1:

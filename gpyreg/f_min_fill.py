@@ -28,7 +28,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
                if np.isfinite(LB[i]) and np.isfinite(UB[i]):
                    # Mixture of uniforms (full bounds and plausible bounds)
                    w = 0.5**(1/n_vars) # Half of all starting points from inside the plausible box
-                   sX[:, i] = uuinv(S[:, i], [LB[i], PLB[i], PUB[i], UB[i]], w)
+                   sX[:, i] = __uuinv(S[:, i], [LB[i], PLB[i], PUB[i], UB[i]], w)
                else:
                    # All starting points from inside the plausible box
                    sX[:, i] = S[:, i] * (PUB[i] - PLB[i]) + PLB[i]
@@ -57,7 +57,8 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
     
     return X[order, :], y[order]
 
-def uuinv(p, B, w):
+# Inverse of mixture of uniform cumulative distribution function.
+def __uuinv(p, B, w):
     x = np.zeros(p.shape)
     L1 = B[3] - B[0]
     L2 = B[2] - B[1]

@@ -37,7 +37,7 @@ class SquaredExponential:
        if compute_grad:
            dK = np.zeros((N, N, cov_N))
            for i in range(0, D):
-               dK[:, :, i] = K * squareform(pdist(np.reshape(X[:, i] / ell[i], (1, -1)), 'sqeuclidean'))
+               dK[:, :, i] = K * squareform(pdist(np.reshape(X[:, i] / ell[i], (-1, 1)), 'sqeuclidean'))
            dK[:, :, D] = 2 * K
            return K, dK
 
