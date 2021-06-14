@@ -7,6 +7,9 @@ class ZeroMean:
     def hyperparameter_count(self, d):
         return 0
         
+    def hyperparameter_info(self, d):
+        return []
+        
     def get_info(self, X, y):
         mean_N = self.hyperparameter_count(X.shape[1])
         return MeanInfo(mean_N, X, y, 0)
@@ -16,9 +19,9 @@ class ZeroMean:
         mean_N = self.hyperparameter_count(D)
 
         if hyp.size != mean_N:
-            raise Exception('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+            raise ValueError('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
         if hyp.ndim != 1:
-            raise Exception('Mean function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError('Mean function output is available only for one-sample hyperparameter inputs.')
 
         m = np.zeros((N, 1))
         
@@ -34,6 +37,9 @@ class ConstantMean:
     def hyperparameter_count(self, d):
         return 1
         
+    def hyperparameter_info(self, d):
+        return [('mean_const', 1)]
+        
     def get_info(self, X, y):
         mean_N = self.hyperparameter_count(X.shape[1])
         return MeanInfo(mean_N, X, y, 1)
@@ -43,9 +49,9 @@ class ConstantMean:
         mean_N = self.hyperparameter_count(D)
 
         if hyp.size != mean_N:
-            raise Exception('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+            raise ValueError('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
         if hyp.ndim != 1:
-            raise Exception('Mean function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError('Mean function output is available only for one-sample hyperparameter inputs.')
         
         m0 = hyp[0]
         m = m0 * np.ones((N, 1))
@@ -62,6 +68,9 @@ class NegativeQuadratic:
     def hyperparameter_count(self, d):
         return 1 + 2 * d
         
+    def hyperparameter_info(self, d):
+        return [('mean_const', 1), ('mean_placeholder_hyperparams', 2*d)]
+        
     def get_info(self, X, y):
         mean_N = self.hyperparameter_count(X.shape[1])
         return MeanInfo(mean_N, X, y, 2)
@@ -71,9 +80,9 @@ class NegativeQuadratic:
         mean_N = self.hyperparameter_count(D)
 
         if hyp.size != mean_N:
-            raise Exception('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+            raise ValueError('Expected %d mean function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
         if hyp.ndim != 1:
-            raise Exception('Mean function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError('Mean function output is available only for one-sample hyperparameter inputs.')
         
         m_0 = hyp[0]
         x_m = hyp[1:(1+D)]

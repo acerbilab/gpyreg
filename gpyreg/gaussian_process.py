@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 from gpyreg.f_min_fill import f_min_fill
 from gpyreg.slice_sample import SliceSampler
+from gpyreg.check_grad import check_grad
 
 class GP:
     def __init__(self, D, covariance, mean, noise, s2 = None):
@@ -20,8 +21,12 @@ class GP:
                
     def set_priors(self, priors):
         cov_N = self.covariance.hyperparameter_count(self.D) 
+        cov_h_info = self.covariance.hyperparameter_info(self.D)
         mean_N = self.mean.hyperparameter_count(self.D) 
+        mean_h_info = self.mean.hyperparameter_info(self.D)
         noise_N = self.noise.hyperparameter_count()
+        noise_h_info = self.noise.hyperparameter_info()
+
         hyp_N = cov_N + mean_N + noise_N
         self.hprior = HyperPrior(np.full((hyp_N,), np.nan), 
                                  np.full((hyp_N,), np.nan),
@@ -31,20 +36,36 @@ class GP:
                                  np.full((hyp_N,), np.nan),
                                  np.full((hyp_N,), np.nan))
 
-        for prior in priors:
-            idx = None
-            if prior == 'covariance_log_outputscale':
-                idx = self.D
-            elif prior == 'covariance_log_lengthscale':
-                idx = range(0, self.D)
-            elif prior == 'noise_log_scale':
-                idx = cov_N
-            elif prior == 'mean_const':
-                idx = cov_N + noise_N
-            else:
-                continue
+        for prior in priors: 
+            idx = 0
+            idx2 = None
+            found_flag = False
+            
+            for i in range(len(cov_h_info)):
+                if prior == cov_h_info[i][0]:
+                    idx2 = idx + cov_h_info[i][1]
+                    found_flag = True
+                    break
+                idx += cov_h_info[i][1]
                 
-            self.__set_priors_helper(idx, priors[prior][0], priors[prior][1])
+            if not found_flag:
+                for i in range(len(noise_h_info)):
+                    if prior == noise_h_info[i][0]:
+                        idx2 = idx + noise_h_info[i][1]
+                        found_flag = True
+                        break
+                    idx += mean_h_info[i][1] 
+
+            if not found_flag:
+                for i in range(len(mean_h_info)):
+                    if prior == mean_h_info[i][0]:
+                        idx2 = idx + mean_h_info[i][1]
+                        found_flag = True
+                        break
+                    idx += mean_h_info[i][1] 
+
+            if found_flag:
+                self.__set_priors_helper(range(idx, idx2), priors[prior][0], priors[prior][1])
             
         print(self.hprior.mu)
         print(self.hprior.sigma)
@@ -75,7 +96,7 @@ class GP:
             self.hprior.b[i] = b
             self.hprior.sigma[i] = sigma
             self.hprior.df[i] = df
-                
+  
     def update(self, X_new = None, y_new = None, hyp=None, compute_posterior=True):
         if X_new is not None:
             if self.X is None:
@@ -97,12 +118,12 @@ class GP:
                 
     def fit(self, X = None, y = None, options={}):
         ## Default options
-        opts_N = 3 # Hyperparameter optimization runs
-        init_N = 2**10 # Initial design size for hyperparameter optimization
-        thin = 5
-        burn_in = None
-        df_base = 7 # Default degrees of freedom for Student's t prior  
-        s_N = options['n_samples']
+        opts_N = options.get('opts_N', 3) # Hyperparameter optimization runs
+        init_N = options.get('init_N', 2**10) # Initial design size for hyperparameter optimization
+        thin = options.get('thin', 5)
+        df_base = options.get('df_base', 7) # Default degrees of freedom for Student's t prior  
+        s_N = options.get('n_samples', 10)
+        burn_in = options.get('burn', thin * s_N)
                    
         # Initialize GP if requested.
         if X is not None:
@@ -199,8 +220,7 @@ class GP:
         nll = np.full((opts_N,), np.inf)
 
         for i in range(0, opts_N):
-            res = sp.optimize.check_grad(objective_f_1, gradient, x0=X0.T[:, i])
-            print(res)
+            print(check_grad(objective_f_1, gradient, X0.T[:, i]))
             
         t2_s = time.time()
         for i in range(0, opts_N):
@@ -235,7 +255,7 @@ class GP:
             'diagnostics' : False
         }
         slicer = SliceSampler(sample_f, hyp_start, widths_default, LB, UB, options)
-        res = slicer.sample(eff_s_N, burn=50)
+        res = slicer.sample(eff_s_N, burn=burn_in)
 
         # Thin samples
         hyp_pre_thin = res.samples.T
@@ -274,7 +294,7 @@ class GP:
         
         # Smooth box prior
         if np.any(sb_idx):
-            # Norming constant so that integral over pdf is 1.
+            # Normalization constant so that integral over pdf is 1.
             C = 1.0 + (b[sb_idx] - a[sb_idx]) / (sigma[sb_idx] * np.sqrt(2 * np.pi))
             
             sb_idx_b = hyp < a
@@ -298,7 +318,7 @@ class GP:
         
         # Smooth box Student's t prior
         if np.any(sb_t_idx):
-            # Norming constant so that integral over pdf is 1.
+            # Normalization constant so that integral over pdf is 1.
             C = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * sp.special.gamma(0.5*(df[sb_t_idx]+1)) / (sp.special.gamma(0.5*df[sb_t_idx]) * sigma[sb_t_idx] * np.sqrt(df[sb_t_idx] * np.pi))
             
             sb_t_idx_b = hyp < a
@@ -312,7 +332,7 @@ class GP:
             if np.any(sb_t_idx_b | sb_t_idx_a):
                 tmp_idx = sb_t_idx_b | sb_t_idx_a
                 lp += np.sum(sp.special.gammaln(0.5*(df[tmp_idx]+1)) - sp.special.gammaln(0.5*df[tmp_idx]))
-                lp += np.sum(-0.5*np.log(C*np.pi*df[tmp_idx]) - np.log(sigma[tmp_idx]) - 0.5*(df[tmp_idx]+1) * np.log1p(z2_tmp[tmp_idx] / df[tmp_idx]))
+                lp += np.sum(-0.5*np.log(np.pi*df[tmp_idx]) - np.log(C*sigma[tmp_idx]) - 0.5*(df[tmp_idx]+1) * np.log1p(z2_tmp[tmp_idx] / df[tmp_idx]))
             if np.any(sb_t_idx_btw):
                 tmp_idx = sb_t_idx_btw
                 lp += np.sum(sp.special.gammaln(0.5*(df[tmp_idx]+1)) - sp.special.gammaln(0.5*df[tmp_idx]))
@@ -360,8 +380,8 @@ class GP:
                 
         if compute_grad:
             return nlZ, dnlZ
-        else:
-            return nlZ
+        
+        return nlZ
         
     def __gp_obj_fun(self, hyp, compute_grad, swap_sign):
         nlZ = dnlZ = None

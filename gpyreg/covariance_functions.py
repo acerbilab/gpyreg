@@ -8,6 +8,9 @@ class SquaredExponential:
     def hyperparameter_count(self, d):
         return d + 1
         
+    def hyperparameter_info(self, d):
+        return [('covariance_log_lengthscale', d), ('covariance_log_outputscale', 1)]
+        
     def get_info(self, X, y):
         cov_N = self.hyperparameter_count(X.shape[1])
         return CovarianceInfo(cov_N, X, y)
@@ -17,9 +20,9 @@ class SquaredExponential:
        cov_N = self.hyperparameter_count(D)
       
        if hyp.size != cov_N:
-           raise Exception('Expected %d covariance function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+           raise ValueError('Expected %d covariance function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
        if hyp.ndim != 1:
-           raise Exception('Covariance function output is available only for one-sample hyperparameter inputs.')
+           raise ValueError('Covariance function output is available only for one-sample hyperparameter inputs.')
         
        ell = np.exp(hyp[0:D])
        sf2 = np.exp(2*hyp[D])
@@ -50,6 +53,9 @@ class Matern:
     def hyperparameter_count(self, d):
         return d + 1
         
+    def hyperparameter_info(self, d):
+        return [('covariance_log_lengthscale', d), ('covariance_log_outputscale', 1)]
+        
     def get_info(self, X, y):
         cov_N = self.hyperparameter_count(X.shape[1])
         return CovarianceInfo(cov_N, X, y)
@@ -59,9 +65,9 @@ class Matern:
        cov_N = self.hyperparameter_count(D)
       
        if hyp.size != cov_N:
-           raise Exception('Expected %d covariance function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+           raise ValueError('Expected %d covariance function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
        if hyp.ndim != 1:
-           raise Exception('Covariance function output is available only for one-sample hyperparameter inputs.')
+           raise ValueError('Covariance function output is available only for one-sample hyperparameter inputs.')
        
        ell = np.exp(hyp[0:D])
        sf2 = np.exp(2*hyp[D])

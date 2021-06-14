@@ -126,11 +126,20 @@ class SliceSampler:
         self.widths[self.LB == self.UB] = 1 # Widths is irrelevant when LB == UB, set to 1
                     
         # Sanity checks    
-        assert np.ndim(self.x0) <= 1, 'The initial point X0 needs to be a scalar or a 1D array.'
-        assert np.shape(self.LB) == np.shape(self.x0) and np.shape(self.UB) == np.shape(self.x0), 'LB and UB need to be None, scalars, or 1D arrays of the same size as X0.'
-        assert np.all(self.UB >= self.LB), 'All upper bounds UB need to be equal or greater than lower bounds LB.'
-        assert np.all(self.widths > 0) and np.all(np.isfinite(self.widths)) and np.all(np.isreal(self.widths)), 'The widths vector needs to be all positive real numbers.'
-        assert np.all(self.x0 >= self.LB) and np.all(self.x0 <= self.UB), 'The initial starting point X0 is outside the bounds.'
+        if np.ndim(self.x0) > 1:
+            raise ValueError('The initial point x0 needs to be a scalar or a 1D array')
+            
+        if np.shape(self.LB) != np.shape(self.x0) or np.shape(self.UB) != np.shape(self.x0):
+            raise ValueError('LB and UB need to be None, scalars, or 1D arrays of the same size as X0.')
+        
+        if not np.all(self.UB >= self.LB):
+            raise ValueError('All upper bounds UB need to be equal or greater than lower bounds LB.')
+        
+        if np.any(self.widths <= 0) or np.any(~np.isfinite(self.widths)) or np.any(~np.isreal(self.widths)):
+            raise ValueError('The widths vector needs to be all positive real numbers.')
+        
+        if np.any(self.x0 < self.LB) or np.any(self.x0 > self.UB):
+            raise ValueError('The initial starting point X0 is outside the bounds.')
 
         self.func_count = 0
             
@@ -203,9 +212,14 @@ class SliceSampler:
         f_vals = np.zeros((N, np.size(f_val)))
         
         # Sanity checks
-        assert np.isscalar(thin) and thin > 0, 'The thinning factor option needs to be a positive integer.'
-        assert np.isscalar(burn) and burn >= 0, 'The burn-in samples option needs to be a non-negative integer.'
-        assert np.all(np.isfinite(log_Px)), 'The initial starting point X0 needs to evaluate to a real number (not Inf or NaN).'
+        if not np.isscalar(thin) or thin <= 0:
+            raise ValueError('The thinning factor option needs to be a positive integer.')
+            
+        if not np.isscalar(burn) or burn < 0:
+            raise ValueError('The burn-in samples option needs to be a non-negative integer.')
+        
+        if np.any(~np.isfinite(log_Px)):
+            raise ValueError('The initial starting point X0 needs to evaluate to a real number (not Inf or NaN).')
         
         # Force xx into vector for ease of use
         xx_shape = xx.shape

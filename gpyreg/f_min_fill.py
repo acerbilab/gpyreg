@@ -23,8 +23,10 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
        for i in range(0, n_vars):
            mu = tprior.mu[i]
            sigma = tprior.sigma[i]
+           a = tprior.a[i]
+           b = tprior.b[i]
            
-           if not np.isfinite(mu) or not np.isfinite(sigma): # Uniform distribution?
+           if not np.isfinite(mu) and not np.isfinite(sigma): # Uniform distribution?
                if np.isfinite(LB[i]) and np.isfinite(UB[i]):
                    # Mixture of uniforms (full bounds and plausible bounds)
                    w = 0.5**(1/n_vars) # Half of all starting points from inside the plausible box
@@ -32,6 +34,24 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
                else:
                    # All starting points from inside the plausible box
                    sX[:, i] = S[:, i] * (PUB[i] - PLB[i]) + PLB[i]
+           elif np.isfinite(a) and np.isfinite(b): # Smooth box student's t prior
+               df = tprior.df[i]
+               # Force fat tails
+               if not np.isfinite(df):
+                   df = 3
+               df = np.minimum(df, 3)
+               if df == 0:
+                   cdf_lb = smoothbox_cdf(LB[i], sigma, a, b)
+                   cdf_ub = smoothbox_cdf(UB[i], sigma, a, b)
+                   S_scaled = cdf_lb + (cdf_ub - cdf_lb) * S[:, i]
+                   for j in range(0, (N-N0)):
+                       sX[j, i] = smoothbox_ppf(S_scaled[j], sigma, a, b)
+               else:           
+                   tcdf_lb = smoothbox_student_t_cdf(LB[i], df, sigma, a, b)
+                   tcdf_ub = smoothbox_student_t_cdf(UB[i], df, sigma, a, b)
+                   S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
+                   for j in range(0, (N-N0)):
+                       sX[j, i] = smoothbox_student_t_ppf(S_scaled[j], df, sigma, a, b)
            else: # Student's t prior
                df = tprior.df[i]
                # Force fat tails
@@ -79,3 +99,49 @@ def __uuinv(p, B, w):
     x[p > 1] = np.nan
     
     return x
+    
+def smoothbox_cdf(x, sigma, a, b):
+    # Normalization constant so that integral over pdf is 1.
+    C = 1.0 + (b - a) / (sigma * np.sqrt(2 * np.pi))
+            
+    if x < a:
+        return sp.stats.norm.cdf(x, loc=a, scale=sigma)/C
+    elif x >= a and x <= b:
+        return (0.5 + (x-a)/(sigma*np.sqrt(2 * np.pi)))/C
+    else:
+        return (C - 1.0 + sp.stats.norm.cdf(x, loc=b, scale=sigma))/C
+        
+def smoothbox_student_t_cdf(x, df, sigma, a, b):
+    # Normalization constant so that integral over pdf is 1.
+    c = sp.special.gamma(0.5*(df+1)) / (sp.special.gamma(0.5*df) * sigma * np.sqrt(df * np.pi))
+    C = 1.0 + (b - a) * c
+                    
+    if x < a:
+        return sp.stats.t.cdf(x, df, loc=a, scale=sigma)/C
+    elif x >= a and x <= b:
+        return (0.5 + (x-a)*c)/C
+    else:
+        return (C - 1.0 + sp.stats.t.cdf(x, df, loc=b, scale=sigma))/C
+        
+def smoothbox_ppf(q, sigma, a, b):
+    # Normalization constant so that integral over pdf is 1.
+    C = 1.0 + (b - a) / (sigma * np.sqrt(2 * np.pi))
+    
+    if q < 0.5/C:
+        return sp.stats.norm.ppf(C*q, loc=a, scale=sigma)
+    elif q >= 0.5/C and q <= (C-0.5)/C:
+        return (q*C - 0.5)*sigma * np.sqrt(2 * np.pi) + a
+    else:
+        return sp.stats.norm.ppf(C*q-(C-1), loc=b, scale=sigma)
+        
+def smoothbox_student_t_ppf(q, df, sigma, a, b):
+    # Normalization constant so that integral over pdf is 1.
+    c = sp.special.gamma(0.5*(df+1)) / (sp.special.gamma(0.5*df) * sigma * np.sqrt(df * np.pi))
+    C = 1.0 + (b - a) * c
+    
+    if q < 0.5/C:
+        return sp.stats.t.ppf(C*q, df, loc=a, scale=sigma)
+    elif q >= 0.5/C and q <= (C-0.5)/C:
+        return (q*C - 0.5) / c + a
+    else:
+        return sp.stats.t.ppf(C*q-(C-1), df, loc=b, scale=sigma)

@@ -22,6 +22,17 @@ class GaussianNoise:
            noise_N += 2
         return noise_N
         
+    def hyperparameter_info(self):
+        hparams = []
+        if self.parameters[0] == 1:
+            hparams.append(('noise_log_scale', 1))
+        if self.parameters[1] == 2:
+            hparams.append(('noise_placeholder_hyperparams_1', 1))
+        if self.parameters[2] == 1:
+            hparams.append(('noise_placeholder_hyperparams_2', 2))
+            
+        return hparams
+        
     def get_info(self, X, y):
         N, D = X.shape
         noise_N = self.hyperparameter_count()
@@ -85,9 +96,9 @@ class GaussianNoise:
         noise_N = self.hyperparameter_count()
            
         if hyp.size != noise_N:
-            raise Exception('Expected %d noise function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
+            raise ValueError('Expected %d noise function hyperparameters, %d passed instead.' % (noise_N, hyp_N))
         if hyp.ndim != 1:
-            raise Exception('Noise function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError('Noise function output is available only for one-sample hyperparameter inputs.')
         
         dsn2 = None
         if compute_grad:
