@@ -227,7 +227,7 @@ class GP:
 
         for i in range(0, opts_N):
             print(check_grad(objective_f_1, gradient, X0.T[:, i]))
-            
+
         t2_s = time.time()
         for i in range(0, opts_N):
             # res = sp.optimize.minimize(fun=objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
@@ -646,13 +646,15 @@ class GP:
         if compute_nlZ_grad:
             sn2, dsn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2, compute_grad=True)
             m, dm = self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], self.X, compute_grad=True)
+            # This line is actually important due to behaviour of above, maybe change that in the future.
+            m = m.reshape((-1, 1))
             K, dK = self.covariance.compute(hyp[0:cov_N], self.X, compute_grad=True)   
         else:
             sn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2)
             m = np.reshape(self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], self.X), (-1, 1))
             K = self.covariance.compute(hyp[0:cov_N], self.X)   
         sn2_mult = 1 # Effective noise variance multiplier 
-        
+
         L_chol = np.min(sn2) >= 1e-6
         if L_chol:
             if np.isscalar(sn2):
@@ -660,8 +662,7 @@ class GP:
                 sn2_mat = np.eye(N)
             else:
                 sn2_div = np.min(sn2)
-                sn2_mat = np.diag(sn2 / sn2_div) 
-                 
+                sn2_mat = np.diag(sn2.ravel() / sn2_div)
             for i in range(0, 10):
                 try:
                     L = sp.linalg.cholesky(K / (sn2_div * sn2_mult) + sn2_mat)
@@ -675,7 +676,7 @@ class GP:
             if np.isscalar(sn2):
                 sn2_mat = sn2 * np.eye(N)
             else:
-                sn2_mat = np.diag(sn2)
+                sn2_mat = np.diag(sn2.ravel())
             for i in range(0, 10):
                 try:
                     L = sp.linalg.cholesky(K + sn2_mult * sn2_mat)
@@ -687,7 +688,7 @@ class GP:
             pL = np.linalg.solve(-L, np.linalg.solve(L.T, np.eye(N)))
  
         alpha = np.linalg.solve(L, np.linalg.solve(L.T, self.y - m)) / sl
-        
+
         # Negative log marginal likelihood computation
         if compute_nlZ:
             nlZ = np.dot((self.y - m).T, alpha/2) + np.sum(np.log(np.diag(L))) + N * np.log(2*np.pi*sl)/2

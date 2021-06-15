@@ -11,7 +11,7 @@ def __compute_gradient(f, x0):
 
     for i in range(0, np.size(x0)):
         f_i = lambda x0_i : __partial(f, x0, x0_i, i)
-        num_grad[i] = sp.misc.derivative(f_i, x0[i], dx=np.sqrt(np.finfo(float).eps), order=5)
+        num_grad[i] = sp.misc.derivative(f_i, x0[i], dx=np.finfo(float).eps**(1/5.0), order=5)
 
     return num_grad
 
