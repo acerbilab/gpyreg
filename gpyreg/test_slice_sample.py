@@ -54,7 +54,7 @@ def test_exponential():
     slicer = SliceSampler(expon.logpdf, np.array([0.5]), LB=0.0, options=options)
     samples = slicer.sample(20000).samples
 
-    # plt.scatter(samples , expon.pdf(samples))
+    # plt.scatter(samples, expon.pdf(samples))
     # plt.show()
     assert np.abs(expon.mean() - np.mean(samples)) < threshold
     assert np.abs(expon.var() - np.var(samples)) < threshold

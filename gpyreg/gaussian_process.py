@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 from gpyreg.f_min_fill import f_min_fill
 from gpyreg.slice_sample import SliceSampler
-from gpyreg.check_grad import check_grad
 
 class GP:
     def __init__(self, D, covariance, mean, noise, s2 = None):
@@ -42,25 +41,25 @@ class GP:
             idx = 0
             idx2 = None
             
-            for i in range(len(cov_hyper_info)):
-                if prior == cov_hyper_info[i][0]:
-                    idx2 = idx + cov_hyper_info[i][1]
+            for info in cov_hyper_info:
+                if prior == info[0]:
+                    idx2 = idx + info[1]
                     break
-                idx += cov_hyper_info[i][1]
+                idx += info[1]
                 
             if idx2 is None:
-                for i in range(len(noise_hyper_info)):
-                    if prior == noise_hyper_info[i][0]:
-                        idx2 = idx + noise_hyper_info[i][1]
+                for info in noise_hyper_info:
+                    if prior == info[0]:
+                        idx2 = idx + info[1]
                         break
-                    idx += noise_hyper_info[i][1] 
+                    idx += info[1] 
 
             if idx2 is None:
-                for i in range(len(mean_hyper_info)):
-                    if prior == mean_hyper_info[i][0]:
-                        idx2 = idx + mean_hyper_info[i][1]
+                for info in mean_hyper_info:
+                    if prior == info[0]:
+                        idx2 = idx + info[1]
                         break
-                    idx += mean_hyper_info[i][1] 
+                    idx += info[1] 
 
             if idx2 is not None:
                 self.__set_priors_helper(range(idx, idx2), priors[prior][0], priors[prior][1])
@@ -112,11 +111,17 @@ class GP:
             else:
                 self.y = np.concatenate((self.y, y_new))
 
-        if hyp is not None and compute_posterior:
+        if hyp is not None:
             _, s_N = hyp.shape
             self.post = np.empty((s_N,), dtype=Posterior)
-            for i in range(0, s_N):
-                self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
+
+                
+            if compute_posterior:
+                for i in range(0, s_N):
+                    self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
+            else:
+                for i in range (0, s_N):
+                    self.post[i] = Posterior(hyp[:, i], None, None, None, None, None)
                 
     def fit(self, X = None, y = None, options=None):
         ## Default options
@@ -225,9 +230,6 @@ class GP:
         objective_f_2 = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((opts_N,), np.inf)
 
-        for i in range(0, opts_N):
-            print(check_grad(objective_f_1, gradient, X0.T[:, i]))
-
         t2_s = time.time()
         for i in range(0, opts_N):
             # res = sp.optimize.minimize(fun=objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
@@ -301,9 +303,9 @@ class GP:
             # Normalization constant so that integral over pdf is 1.
             C = 1.0 + (b[sb_idx] - a[sb_idx]) / (sigma[sb_idx] * np.sqrt(2 * np.pi))
             
-            sb_idx_b = hyp < a
-            sb_idx_a = hyp > b
-            sb_idx_btw = (hyp >= a) & (hyp <= b)
+            sb_idx_b = (hyp < a) & sb_idx
+            sb_idx_a = (hyp > b) & sb_idx
+            sb_idx_btw = (hyp >= a) & (hyp <= b) & sb_idx
                                 
             z2_tmp = np.zeros(hyp.shape)
             z2_tmp[sb_idx_b] = ((hyp[sb_idx_b] - a[sb_idx_b]) / sigma[sb_idx_b])**2
@@ -325,9 +327,9 @@ class GP:
             # Normalization constant so that integral over pdf is 1.
             C = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * sp.special.gamma(0.5*(df[sb_t_idx]+1)) / (sp.special.gamma(0.5*df[sb_t_idx]) * sigma[sb_t_idx] * np.sqrt(df[sb_t_idx] * np.pi))
             
-            sb_t_idx_b = hyp < a
-            sb_t_idx_a = hyp > b
-            sb_t_idx_btw = (hyp >= a) & (hyp <= b)
+            sb_t_idx_b = (hyp < a) & sb_t_idx
+            sb_t_idx_a = (hyp > b) & sb_t_idx
+            sb_t_idx_btw = (hyp >= a) & (hyp <= b) & sb_t_idx
             
             z2_tmp = np.zeros(hyp.shape)
             z2_tmp[sb_t_idx_b] = ((hyp[sb_t_idx_b] - a[sb_t_idx_b]) / sigma[sb_t_idx_b])**2
@@ -636,6 +638,60 @@ class GP:
         pos_vec = [left, bottom, width, height]
         
         return pos_vec
+
+    def random_function(self, X_star, add_noise=False):   
+        N_star = X_star.shape[0]
+        N_s = np.size(self.post)
+        
+        cov_N = self.covariance.hyperparameter_count(self.D) 
+        mean_N = self.mean.hyperparameter_count(self.D) 
+        noise_N = self.noise.hyperparameter_count()
+     
+        # Draw from hyperparameter samples.
+        s = np.random.randint(0, N_s)
+        
+        hyp = self.post[s].hyp
+        alpha = self.post[s].hyp
+        L = self.post[s].L
+        L_chol = self.post[s].L_chol
+        sW = self.post[s].sW
+        
+        # Compute GP mena function at test points
+        m_star = np.reshape(self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], X_star), (-1, 1))  
+    
+        # Compute kernel matrix 
+        K_star = self.covariance.compute(hyp[0:cov_N], X_star)
+        
+        if self.y is None:
+            # No data, draw from prior
+            f_mu = m_star
+            C = K_star + np.spacing(1) * np.eye(N_star)
+        else:
+            # Compute cross-kernel matrix Ks
+            Ks = self.covariance.compute(hyp[0:cov_N], self.X, X_star = X_star)
+            
+            # Conditional mean
+            f_mu = m_star + np.dot(Ks.T, alpha) 
+            
+            if Lchol:
+                V = np.linalg.solve(L.T, np.tile(sW, (1, N_star)) * Ks)
+                C = K_star - np.dot(V.T, V) # Predictive variances
+            else:
+                LKs = np.dot(L, Ks)
+                C = K_star + np.dot(Ks.T, LKs)
+            
+        # Enforce symmetry if lost due to numerical errors.
+        C = (C+C.T)/2 
+        
+        # Draw random function
+        T = sp.linalg.cholesky(C)
+        f_star = np.dot(T.T, np.random.standard_normal((T.shape[0], 1))) + f_mu
+        
+        if add_noise:
+            sn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2)
+            return y_star 
+        
+        return f_star
         
     def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
         N, d = self.X.shape
