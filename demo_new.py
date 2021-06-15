@@ -1,20 +1,19 @@
 import numpy as np
-import gpyreg as gpr
-
 from scipy.stats import norm
+
+import gpyreg as gpr
 
 # Create toy training data for the GP
 np.random.seed(1235)
 N = 20
 D = 2
 X = np.random.uniform(low = -3, high = 3, size = (N, D))
-# TODO: get rid of the reshape here
-y = np.reshape(np.sin(np.sum(X, 1)) + norm.ppf(np.random.random_sample(size = N), scale=0.1), (-1, 1))  # np.random.normal(scale = 0.1, size = N)
+y = np.sin(np.sum(X, 1)) + norm.ppf(np.random.random_sample(size = N), scale=0.1)  # np.random.normal(scale = 0.1, size = N)
 
 # Define the GP model
 
 # the likelihood function is assumed to be Gaussian with variance
-# sigma_const**2 + s2 where s2 is a user-provided array of 
+# sigma_const**2 + s2 where s2 is a user-provided array of
 # observation noise variance at each training input (if s2 is not
 # provided, it is assumed to be 0)
 
@@ -34,7 +33,7 @@ gp_priors = {
     ('student_t', (0, np.log(10), 3)),
     'covariance_log_lengthscale' :
     ('gaussian', (np.log(np.std(X, ddof=1)), np.log(10))),
-    'noise_log_scale' : 
+    'noise_log_scale' :
     ('gaussian', (np.log(1e-3), 1.0)),
     'mean_const' :
     ('smoothbox', (np.min(y), np.max(y), 1.0))
@@ -66,15 +65,14 @@ gp.plot()
 
 # Update the GP by adding some extra points
 X_new = np.random.uniform(low = -5, high = 5, size = (N, D))
-# TODO: get rid of the reshape here
-y_new = np.reshape(np.sin(np.sum(X_new, 1)) + np.random.normal(scale = 0.1, size = N), (-1, 1))
+y_new = np.sin(np.sum(X_new, 1)) + np.random.normal(scale = 0.1, size = N)
 
-# This function updates the training data and (usually) the GP posterior but does not 
+# This function updates the training data and (usually) the GP posterior but does not
 # retrain the GP hyperparameters - it also fills in the auxiliary data that might have
 # been stripped out.
 gp.update(X_new = X_new, y_new = y_new, compute_posterior = False)
 
-# In the case above we did not recompute the posterior as we are 
+# In the case above we did not recompute the posterior as we are
 # anyhow retraining the GP right after
 
 # Retrain the GP (the data are already inside the GP object, and

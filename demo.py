@@ -24,7 +24,7 @@ gp = gpr.GP(
 # Define the priors of the GP hyperparameters (supported priors
 # are 'gaussian', 'studentt', 'smoothbox', 'smoothbox_studentt')
 gp_priors = {
-    'noise_log_scale' : 
+    'noise_log_scale' :
     ('student_t', (np.log(1e-3), 1.0, 7)),
 }
 
