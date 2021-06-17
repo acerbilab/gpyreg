@@ -1,3 +1,5 @@
+"""Module for slice sampling."""
+
 import math
 import logging
 
@@ -202,49 +204,49 @@ class SliceSampler:
 
         if burn == 0 and self.base_widths is None and self.adaptive and self.func_count == 0:
             self.logger.warning('WIDTHS not specified and adaptation is ON (OPTIONS.Adaptive == 1), but OPTIONS.Burnin is set to 0. SLICESAMPLEBND will attempt to use default values for WIDTHS.')
-            
+
         # Effective samples
         eff_N = N + (N-1) * (thin - 1)
-        
+
         samples = np.zeros((N, D))
         xx_sum = np.zeros((D,))
         xx_sq_sum = np.zeros((D,))
-        
+
         log_dist = self.__log_pdf_bound
         log_Px, f_val, log_prior = log_dist(xx)
         log_priors = np.zeros((N,))
         f_vals = np.zeros((N, np.size(f_val)))
-        
+
         # Sanity checks
         if not np.isscalar(thin) or thin <= 0:
             raise ValueError('The thinning factor option needs to be a positive integer.')
-            
+
         if not np.isscalar(burn) or burn < 0:
             raise ValueError('The burn-in samples option needs to be a non-negative integer.')
-        
+
         if np.any(~np.isfinite(log_Px)):
             raise ValueError('The initial starting point X0 needs to evaluate to a real number (not Inf or NaN).')
-        
+
         # Force xx into vector for ease of use
         xx_shape = xx.shape
         xx = xx.ravel()
         logdist_vec = lambda x: log_dist(np.reshape(x, xx_shape))
-        
+
         self.logger.debug(' Iteration     f-count       log p(x)                   Action')
         display_format = ' %7.0f     %8.0f    %12.6g    %26s'
-        
+
         # Main loop
         perm = np.array(range(D))
         for i in range(0, eff_N + burn):
             if i == burn:
                 action = 'start recording'
                 self.logger.debug(display_format, i-burn+1, self.func_count, log_Px, action)
-        
+
             # Metropolis step (optional)
             if self.metropolis_flag:
                 xx, log_Px, f_val, log_prior = self.__metropolis_step(xx, logdist_vec, log_Px, f_val, log_prior)
-  
-            ## Slice sampling step.   
+
+            ## Slice sampling step.
             x_l = xx.copy()
             x_r = xx.copy()
             xprime = xx.copy()
@@ -255,17 +257,17 @@ class SliceSampler:
                 # Skip fixed dimensions.
                 if self.LB[dd] == self.UB[dd]:
                     continue
-            
+
                 log_uprime = log_Px + np.log(np.random.rand())
                 # Create a horizontal interval (x_l, x_r) enclosing xx
                 rr = np.random.rand()
                 x_l[dd] -= rr*self.widths[dd]
                 x_r[dd] += (1-rr)*self.widths[dd]
-                
+
                 # Adjust interval to outside bounds for bounded problems.
                 x_l[dd] = np.fmax(x_l[dd], self.LB_out[dd])
                 x_r[dd] = np.fmin(x_r[dd], self.UB_out[dd])
-                     
+
                 if self.step_out:
                     steps = 0
                     # Typo in early book editions: said compare to u, should be u'
@@ -276,9 +278,9 @@ class SliceSampler:
                         x_r[dd] += self.widths[dd]
                         steps += 1
                     if steps >= 10:
-                        action = 'step-out dim ' + str(dd) + ' (' + str(steps) + ' steps)' 
-                        self.logger.debug(display_format, i-burn+1, self.func_count, log_Px, action)        
-   
+                        action = 'step-out dim ' + str(dd) + ' (' + str(steps) + ' steps)'
+                        self.logger.debug(display_format, i-burn+1, self.func_count, log_Px, action)
+
                 # Inner loop:
                 # Propose xprimes and shrink interval until good one found
                 shrink = 0
@@ -288,7 +290,7 @@ class SliceSampler:
                     log_Px, f_val, log_prior = logdist_vec(xprime)
                     if log_Px > log_uprime:
                         break # this is the only way to leave the while loop
-                        
+
                     # Shrink in
                     if xprime[dd] > xx[dd]:
                         x_r[dd] = xprime[dd]
@@ -298,7 +300,7 @@ class SliceSampler:
                         self.logger.warning('WARNING: Shrunk to current position and still not acceptable!')
                         # raise Exception('BUG DETECTED: Shrunk to current position and still not acceptable.')
                         break
-                            
+
                 # Width adaptation (only during burn-in, might break detailed balance)
                 if i < burn and self.adaptive:
                     delta = self.UB[dd] - self.LB[dd]
@@ -309,9 +311,9 @@ class SliceSampler:
                             self.widths[dd] = np.maximum(self.widths[dd]/1.1, np.spacing(1))
                     elif shrink < 2:
                         self.widths[dd] = np.minimum(self.widths[dd]*1.2, delta)
-                        
+
                 if shrink >= 10:
-                    action = 'shrink dim ' + str(dd) + ' (' + str(shrink) + ' steps)' 
+                    action = 'shrink dim ' + str(dd) + ' (' + str(shrink) + ' steps)'
                     self.logger.debug(display_format, i-burn+1, self.func_count, log_Px, action)
 
                 xx[dd] = xprime[dd]
@@ -319,7 +321,7 @@ class SliceSampler:
             # Metropolis step (optional)
             if self.metropolis_flag:
                 xx, log_Px, f_val, log_prior = self.__metropolis_step(xx, logdist_vec, log_Px, f_val, log_prior)
-                
+
             # Record samples and miscellaneous bookkeeping.
             record = i >= burn and np.mod(i - burn, thin) == 0
             if record:
@@ -327,12 +329,12 @@ class SliceSampler:
                 samples[i_smpl, :] = xx
                 f_vals[i_smpl, :] = f_val
                 log_priors[i_smpl] = log_prior
-            
+
             # Store summary statistics starting half.way into burn-in.
             if burn / 2 <= i < burn:
-                xx_sum += xx 
+                xx_sum += xx
                 xx_sq_sum += xx**2
-                
+
                 # End of burn-in, update widths if using adaptive method.
                 if i == burn - 1 and self.adaptive:
                     burn_stored = np.floor(burn / 2)
@@ -346,14 +348,14 @@ class SliceSampler:
                         # Max between new widths and geometric mean with user-supplied
                         # widths (i.e. bias towards keeping larger widths)
                         self.widths = np.maximum(new_widths, np.sqrt(new_widths * self.base_widths))
-                        
+
             if i < burn:
                 action = 'burn'
             elif not record:
                 action = 'thin'
             else:
-                action = 'record' 
-                
+                action = 'record'
+
             self.logger.debug(display_format, i-burn+1, self.func_count, log_Px, action)
 
         if thin > 1:
@@ -364,7 +366,7 @@ class SliceSampler:
         self.logger.info('\nSampling terminated: ')
         self.logger.info(' * %d samples obtained after a burn-in period of %d samples', N, burn)
         self.logger.info(thin_msg, self.func_count)
-        
+
         R = eff_N = None
         exit_flag = 0
         if self.diagnostics:
@@ -376,47 +378,48 @@ class SliceSampler:
                 diag_msg = ' * Try increasing thinning factor to obtain more uncorrelated samples'
             elif exit_flag == 0:
                 diag_msg = ' * No violations of convergence have been detected (this does NOT guarantee convergence)'
-                
+
             if diag_msg != '':
                 self.logger.info(diag_msg)
 
         return SamplingResult(samples, f_vals, exit_flag, log_priors, R, eff_N)
-        
+
     def __diagnose(self, samples):
         '''Performs a quick and dirty diagnosis of convergence.
         '''
         N = samples.shape[0]
+        # split psrf
         split_samples = np.array([samples[0:math.floor(N/2), :], samples[math.floor(N/2):2*math.floor(N/2)]])
         R = self.__gelman_rubin(split_samples)
         eff_N = self.__effective_n(split_samples)
-        
+
         diag_msg = None
         exit_flag = 0
         if np.any(R > 1.5):
-            diag_msg = ' * Detected lack of convergence! (max R = %.2f >> 1, mean R = %.2f)' % (np.max(R), np.mean(R)) 
+            diag_msg = ' * Detected lack of convergence! (max R = %.2f >> 1, mean R = %.2f)' % (np.max(R), np.mean(R))
             exit_flag = -3
         elif np.any(R > 1.1):
-            diag_msg = ' * Detected probable lack of convergence! (max R = %.2f > 1, mean R = %.2f)' % (np.max(R), np.mean(R)) 
+            diag_msg = ' * Detected probable lack of convergence! (max R = %.2f > 1, mean R = %.2f)' % (np.max(R), np.mean(R))
             exit_flag = -2
-           
+
         if np.any(eff_N < N/10.0):
             diag_msg = ' * Low number of effective samples! (min eff_N = %.1f, mean eff_N = %.1f, requested N = %d)' % (np.min(eff_N), np.mean(eff_N), N)
             if exit_flag == 0:
                 exit_flag = -1
-        
+
         if diag_msg is None and exit_flag == 0:
             exit_flag = 1
-        
+
         if diag_msg is not None:
             self.logger.info(diag_msg)
-            
+
         return exit_flag, R, eff_N
-    
+
     def __log_pdf_bound(self, x):
         '''Evaluate log pdf with bounds and prior.
         '''
         y = f_val = log_prior = None
-        
+
         if np.any(x < self.LB) or np.any(x > self.UB):
             y = -np.inf
         else:
@@ -426,59 +429,59 @@ class SliceSampler:
                     y = -np.inf
                     self.logger.warning('Prior density function returned NaN. Trying to continue.')
                     return y, f_val, log_prior
-                
+
                 if not np.isfinite(log_prior):
                     y = -np.inf
                     return y, f_val, log_prior
             else:
                 log_prior = 0
-                
+
             f_val = self.log_f(x)
             self.func_count += 1
-            
+
             if np.any(np.isnan(f_val)):
                 self.logger.warning('Target density function returned NaN. Trying to continue.')
                 y = -np.inf
             else:
                 y = np.sum(f_val) + log_prior
-                
+
         return y, f_val, log_prior
-    
+
     def __metropolis_step(self, x, log_f, log_Px, f_val, log_prior):
         '''Metropolis step.
         '''
         xx_new = self.metropolis_rnd()
         log_Px_new, f_val_new, log_prior_new = log_f(xx_new)
-        
+
         # Acceptance rate
         a = np.exp(log_Px_new - log_Px) * (self.metropolis_pdf(x) / self.metropolis_pdf(xx_new))
-        
+
         # Accept proposal?
         if np.random.rand() < a:
             return xx_new, log_Px_new, f_val_new, log_prior_new
-        
+
         return x, log_Px, f_val, log_prior
-        
+
     def __gelman_rubin(self, x, return_var = False):
         '''Returns estimate of R for a set of traces.
 
         Parameters
         ----------
         x : array_like
-          An array containing the 2 or more traces of a stochastic parameter. 
+          An array containing the 2 or more traces of a stochastic parameter.
           That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
-          
+
         return_var : bool
           Flag for returning the marginal posterior variance instead of R-hat.
-          
+
         Returns
         -------
         Rhat : float
-          Return the potential scale reduction factor, :math:`\hat{R}`
-          
+          Return the potential scale reduction factor, :math:`\\hat{R}`
+
         Notes
         -----
-                
+
         The Gelman-Rubin diagnostic tests for lack of convergence by comparing
         the variance between multiple chains to the variance within each chain.
         If convergence has been achieved, the between-chain and within-chain
@@ -512,6 +515,7 @@ class SliceSampler:
             return s2
 
         # Pooled posterior variance estimate
+        # It seems that in the comment is not in the definition of this diagnostic test.
         V = s2 # + B_over_n / m
 
         # Calculate PSRF
@@ -521,19 +525,19 @@ class SliceSampler:
 
     def __effective_n(self, x):
         '''Returns estimate of the effective sample size of a set of traces.
-    
+
         Parameters
         ----------
         x : array_like
-          An array containing the 2 or more traces of a stochastic parameter. 
+          An array containing the 2 or more traces of a stochastic parameter.
           That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
-        
+
         Returns
         -------
         n_eff : float
-          Return the effective sample size, :math:`\hat{n}_{eff}`
+          Return the effective sample size, :math:`\\hat{n}_{eff}`
 
-        '''       
+        '''
         if np.shape(x) < (2,):
             raise ValueError(
                 'Calculation of effective sample size requires multiple chains of the same length.')
@@ -542,27 +546,28 @@ class SliceSampler:
             m, n = np.shape(x)
         except ValueError:
             return np.array([self.__effective_n(np.transpose(y)) for y in np.transpose(x)])
-            
+
         s2 = self.__gelman_rubin(x, return_var=True)
-        
+
         negative_autocorr = False
         t = 1
-        
-        variogram = lambda t: (sum(sum((x[j][i] - x[j][i-t])**2 for i in range(t,n)) for j in range(m)) 
+
+        variogram = lambda t: (sum(sum((x[j][i] - x[j][i-t])**2 for i in range(t,n)) for j in range(m))
                                     / (m*(n - t)))
         rho = np.ones(n)
         # Iterate until the sum of consecutive estimates of autocorrelation is negative
         while not negative_autocorr and (t < n):
-            
             rho[t] = 1. - variogram(t)/(2.*s2)
- 
+
             if t % 2:
                 negative_autocorr = sum(rho[t-1:t+1]) < 0
-            
+
             t += 1
 
+        # This part in the original code was slightly different, along with the modulo check above.
+        # However, looking at definitions this seems like the correct way.
         return m*n / (-1 + 2*rho[0:t-2].sum())
-        
+
 class SamplingResult:
     '''Results of a sampling run.
 
@@ -571,28 +576,28 @@ class SamplingResult:
     samples : array_like
         The actual samplesd points.
     f_vals : array_like
-        The sequence of values of the target log pdf at the sampled points. 
+        The sequence of values of the target log pdf at the sampled points.
         If a prior is specified in ``log_prior``, then ``f_vals`` does NOT
         include the contribution of the prior.
     exit_flag : { 1, 0, -1, -2, -3 }
         Possible values and the corresponding exit conditions are
 
-            1, Target number of recorded samples reached, 
+            1, Target number of recorded samples reached,
               with no explicit violation of convergence (this does not ensure convergence).
-            
-            0, Target number of recorded samples reached, 
+
+            0, Target number of recorded samples reached,
               convergence status is unknown (no diagnostics have been run).
-            
+
             -1, No explicit violation of convergence detected, but the number of
-                effective (independent) samples in the sampled sequence is much 
-                lower than the number of requested samples N for at least one 
+                effective (independent) samples in the sampled sequence is much
+                lower than the number of requested samples N for at least one
                 dimension.
-                
+
             -2, Detected probable lack of convergence of the sampling procedure.
-            
+
             -3, Detected lack of convergence of the sampling procedure.
     log_priors : array_like
-        The sequence of the values of the log prior at the sampled points 
+        The sequence of the values of the log prior at the sampled points
     R : array_like
         Estimate of the potential scale reduction factor in each dimension.
     eff_N : array_like

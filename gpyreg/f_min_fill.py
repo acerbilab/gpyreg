@@ -1,3 +1,4 @@
+"""Module for helper functions for GP training."""
 # import time
 
 import numpy as np
@@ -101,6 +102,19 @@ def __uuinv(p, B, w):
     return x
 
 def smoothbox_cdf(x, sigma, a, b):
+    '''Computes the value of the cumulative distribution function for the smooth box distribution.
+
+    Parameters
+    ==========
+    x : float
+        The point where we want the value of the cdf.
+    sigma : float
+        Value of sigma for the smooth box distribution.
+    a : float
+        Value of a for the smooth box distribution.
+    b : float
+        Value of b for the smooth box distribution.
+    '''
     # Normalization constant so that integral over pdf is 1.
     C = 1.0 + (b - a) / (sigma * np.sqrt(2 * np.pi))
 
@@ -113,6 +127,21 @@ def smoothbox_cdf(x, sigma, a, b):
     return (C - 1.0 + sp.stats.norm.cdf(x, loc=b, scale=sigma))/C
 
 def smoothbox_student_t_cdf(x, df, sigma, a, b):
+    '''Computes the value of the cumulative distribution function for the smooth box student t distribution.
+
+    Parameters
+    ==========
+    x : float
+        The point where we want the value of the cdf.
+    df : float
+        The degrees of freedom of the distribution.
+    sigma : float
+        Value of sigma for the distribution.
+    a : float
+        Value of a for the distribution.
+    b : float
+        Value of b for the distribution.
+    '''
     # Normalization constant so that integral over pdf is 1.
     c = sp.special.gamma(0.5*(df+1)) / (sp.special.gamma(0.5*df) * sigma * np.sqrt(df * np.pi))
     C = 1.0 + (b - a) * c
@@ -126,6 +155,19 @@ def smoothbox_student_t_cdf(x, df, sigma, a, b):
     return (C - 1.0 + sp.stats.t.cdf(x, df, loc=b, scale=sigma))/C
 
 def smoothbox_ppf(q, sigma, a, b):
+    '''Computes the value of the percent point function for the smooth box distribution.
+
+    Parameters
+    ==========
+    q : float
+        The quantile where we want the value of the ppf.
+    sigma : float
+        Value of sigma for the smooth box distribution.
+    a : float
+        Value of a for the smooth box distribution.
+    b : float
+        Value of b for the smooth box distribution.
+    '''
     # Normalization constant so that integral over pdf is 1.
     C = 1.0 + (b - a) / (sigma * np.sqrt(2 * np.pi))
 
@@ -138,6 +180,21 @@ def smoothbox_ppf(q, sigma, a, b):
     return sp.stats.norm.ppf(C*q-(C-1), loc=b, scale=sigma)
 
 def smoothbox_student_t_ppf(q, df, sigma, a, b):
+    '''Computes the value of the percent point function for the smooth box student t distribution.
+
+    Parameters
+    ==========
+    q : float
+        The quantile where we want the value of the ppf.
+    df : float
+        The degrees of freedom of the distribution.
+    sigma : float
+        Value of sigma for the distribution.
+    a : float
+        Value of a for the distribution.
+    b : float
+        Value of b for the distribution.
+    '''
     # Normalization constant so that integral over pdf is 1.
     c = sp.special.gamma(0.5*(df+1)) / (sp.special.gamma(0.5*df) * sigma * np.sqrt(df * np.pi))
     C = 1.0 + (b - a) * c

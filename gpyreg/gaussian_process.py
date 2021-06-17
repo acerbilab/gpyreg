@@ -1,14 +1,31 @@
+"""Module for Gaussian processes."""
+
 import math
 import time
 
 import numpy as np
 import scipy as sp
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 
 from gpyreg.f_min_fill import f_min_fill
 from gpyreg.slice_sample import SliceSampler
 
 class GP:
+    '''A single gaussian process.
+
+    Parameters
+    ==========
+    D : int
+        The dimension for the gaussian process.
+    covariance : object
+        The covariance function to use.
+    mean : object
+        The mean function to use.
+    noise : object
+        The noise function to use.
+    s2 : array_like, optional
+        User-provided noise.
+    '''
     def __init__(self, D, covariance, mean, noise, s2 = None):
         self.D = D
         self.covariance = covariance
@@ -16,20 +33,27 @@ class GP:
         self.noise = noise
         self.s2 = s2
         self.X = None
-        self.y = None    
+        self.y = None
         self.hyper_priors = None
         self.post = None
-               
+
     def set_priors(self, priors):
-        cov_N = self.covariance.hyperparameter_count(self.D) 
+        '''Sets the hyperparameter priors.
+
+        Parameters
+        ==========
+        priors : dict
+            A dictionary of hyperparameter names and tuples of their values.
+        '''
+        cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
-        mean_N = self.mean.hyperparameter_count(self.D) 
+        mean_N = self.mean.hyperparameter_count(self.D)
         mean_hyper_info = self.mean.hyperparameter_info(self.D)
         noise_N = self.noise.hyperparameter_count()
         noise_hyper_info = self.noise.hyperparameter_info()
 
         hyp_N = cov_N + mean_N + noise_N
-        self.hyper_priors = HyperPrior(np.full((hyp_N,), np.nan), 
+        self.hyper_priors = HyperPrior(np.full((hyp_N,), np.nan),
                                        np.full((hyp_N,), np.nan),
                                        np.full((hyp_N,), np.nan),
                                        np.full((hyp_N,), np.nan),
@@ -37,75 +61,87 @@ class GP:
                                        np.full((hyp_N,), np.nan),
                                        np.full((hyp_N,), np.nan))
 
-        for prior in priors: 
+        for prior in priors:
             idx = 0
             idx2 = None
-            
+
             for info in cov_hyper_info:
                 if prior == info[0]:
                     idx2 = idx + info[1]
                     break
                 idx += info[1]
-                
+
             if idx2 is None:
                 for info in noise_hyper_info:
                     if prior == info[0]:
                         idx2 = idx + info[1]
                         break
-                    idx += info[1] 
+                    idx += info[1]
 
             if idx2 is None:
                 for info in mean_hyper_info:
                     if prior == info[0]:
                         idx2 = idx + info[1]
                         break
-                    idx += info[1] 
+                    idx += info[1]
 
             if idx2 is not None:
-                self.__set_priors_helper(range(idx, idx2), priors[prior][0], priors[prior][1])
-            
+                prior_type, prior_params = priors[prior]
+                i = range(idx, idx2)
+                if prior_type == 'gaussian':
+                    mu, sigma = prior_params
+                    self.hyper_priors.mu[i] = mu
+                    self.hyper_priors.sigma[i] = sigma
+                    self.hyper_priors.df[i] = 0
+                elif prior_type == 'student_t':
+                    mu, sigma, df = prior_params
+                    self.hyper_priors.mu[i] = mu
+                    self.hyper_priors.sigma[i] = sigma
+                    self.hyper_priors.df[i] = df
+                elif prior_type == 'smoothbox':
+                    a, b, sigma = prior_params
+                    self.hyper_priors.a[i] = a
+                    self.hyper_priors.b[i] = b
+                    self.hyper_priors.sigma[i] = sigma
+                    self.hyper_priors.df[i] = 0
+                elif prior_type == 'smoothbox_student_t':
+                    a, b, sigma, df = prior_params
+                    self.hyper_priors.a[i] = a
+                    self.hyper_priors.b[i] = b
+                    self.hyper_priors.sigma[i] = sigma
+                    self.hyper_priors.df[i] = df
+
         # print(self.hyper_priors.mu)
         # print(self.hyper_priors.sigma)
         # print(self.hyper_priors.df)
         # print(self.hyper_priors.a)
         # print(self.hyper_priors.b)
 
-    def __set_priors_helper(self, i, prior_type, prior_params):
-        if prior_type == 'gaussian':
-            mu, sigma = prior_params
-            self.hyper_priors.mu[i] = mu
-            self.hyper_priors.sigma[i] = sigma
-            self.hyper_priors.df[i] = 0
-        elif prior_type == 'student_t':
-            mu, sigma, df = prior_params
-            self.hyper_priors.mu[i] = mu
-            self.hyper_priors.sigma[i] = sigma
-            self.hyper_priors.df[i] = df
-        elif prior_type == 'smoothbox':
-            a, b, sigma = prior_params
-            self.hyper_priors.a[i] = a
-            self.hyper_priors.b[i] = b
-            self.hyper_priors.sigma[i] = sigma
-            self.hyper_priors.df[i] = 0
-        elif prior_type == 'smoothbox_student_t':
-            a, b, sigma, df = prior_params
-            self.hyper_priors.a[i] = a    
-            self.hyper_priors.b[i] = b
-            self.hyper_priors.sigma[i] = sigma
-            self.hyper_priors.df[i] = df
-  
     def update(self, X_new = None, y_new = None, hyp=None, compute_posterior=True):
+        '''Adds new data to the gaussian process.
+
+        Parameters
+        ==========
+        X_new : array_like, optional
+            New training inputs, that will be concatenated with the old ones.
+        y_new : array_like, optional
+            New training targets, that will be concatenated with the old ones.
+        hyp : array_like, optional
+            New hyperparameters that will replace the old ones.
+        compute_posterior : bool, defaults to True
+            Whether to compute the new posterior or not.
+        '''
         if X_new is not None:
             if self.X is None:
                 self.X = X_new
             else:
                 self.X = np.concatenate((self.X, X_new))
-        
+
         if y_new is not None:
             # Change from 1D to 2D internally.
             if y_new is not None and y_new.ndim == 1:
                 y_new = np.reshape(y_new, (-1, 1))
-                
+
             if self.y is None:
                 self.y = y_new
             else:
@@ -115,25 +151,50 @@ class GP:
             _, s_N = hyp.shape
             self.post = np.empty((s_N,), dtype=Posterior)
 
-                
+
             if compute_posterior:
                 for i in range(0, s_N):
                     self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
             else:
                 for i in range (0, s_N):
                     self.post[i] = Posterior(hyp[:, i], None, None, None, None, None)
-                
+
     def fit(self, X = None, y = None, options=None):
+        '''Trains gaussian process hyperparameters.
+
+        Parameters
+        ==========
+
+        X : array_like, optional
+            Inputs to train on.
+        y : array_like, optional
+            Targets to train on.
+        options : dict, optional
+            A dictionary of options for training. The possible options are:
+
+                **opts_N** : int, defaults to 3
+                    Number of hyperparameter optimization runs.
+                **init_N** : int, defaults to 1024
+                    Initial design size for hyperparameter optimization.
+                **df_base** : int, defaults to 7
+                    Default degrees of freedom for student's t prior.
+                **n_samples** : int, defaults to 10
+                    Number of hyperparameters to sample.
+                **thin** : int, defaults to 5
+                    Thinning parameter for slice sampling.
+                **burn** : int, defaults to ``thin * n_samples``
+                    Burn parameter for slice sampling.
+        '''
         ## Default options
         if options is None:
             options = {}
-        opts_N = options.get('opts_N', 3) # Hyperparameter optimization runs
-        init_N = options.get('init_N', 2**10) # Initial design size for hyperparameter optimization
+        opts_N = options.get('opts_N', 3)
+        init_N = options.get('init_N', 2**10)
         thin = options.get('thin', 5)
-        df_base = options.get('df_base', 7) # Default degrees of freedom for Student's t prior  
+        df_base = options.get('df_base', 7)
         s_N = options.get('n_samples', 10)
         burn_in = options.get('burn', thin * s_N)
-                   
+
         # Initialize GP if requested.
         if X is not None:
             self.X = X
@@ -145,68 +206,68 @@ class GP:
             self.y = y
         else:
             y = self.y
-        
-        cov_N = self.covariance.hyperparameter_count(self.D) 
-        mean_N = self.mean.hyperparameter_count(self.D) 
+
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
         hyp_N = cov_N + mean_N + noise_N
         hyp0 = np.zeros((hyp_N,))
-        
+
         LB = self.hyper_priors.LB
         UB = self.hyper_priors.UB
-        
+
         ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
-        
+
         cov_info = self.covariance.get_info(X, y)
         mean_info = self.mean.get_info(X, y)
         noise_info = self.noise.get_info(X, y)
-        
+
         self.hyper_priors.df[np.isnan(self.hyper_priors.df)] = df_base
-        
+
         # Set covariance/noise/mean function hyperparameter lower bounds.
         LB_cov = cov_info.LB[np.isnan(LB[0:cov_N])]
         LB_noise = noise_info.LB[np.isnan(LB[cov_N:cov_N+noise_N])]
         LB_mean = mean_info.LB[np.isnan(LB[cov_N+noise_N:cov_N+noise_N+mean_N])]
-        
+
         # Set covariance/noise/mean function hyperparameter upper bounds.
         UB_cov = cov_info.UB[np.isnan(UB[0:cov_N])]
         UB_noise = noise_info.UB[np.isnan(UB[cov_N:cov_N+noise_N])]
         UB_mean = mean_info.UB[np.isnan(UB[cov_N+noise_N:cov_N+noise_N+mean_N])]
-        
+
         # Create lower and upper bounds
         LB = np.concatenate([LB_cov, LB_noise, LB_mean])
         UB = np.concatenate([UB_cov, UB_noise, UB_mean])
         UB = np.maximum(LB, UB)
-        
+
         # Plausible bounds for generation of starting points
         PLB = np.concatenate([cov_info.PLB, noise_info.PLB, mean_info.PLB])
         PUB = np.concatenate([cov_info.PUB, noise_info.PUB, mean_info.PUB])
         PLB = np.minimum(np.maximum(PLB, LB), UB)
         PUB = np.maximum(np.minimum(PUB, UB), LB)
-        
+
         ## Hyperparameter optimization
         objective_f_1 = lambda hyp_ : self.__gp_obj_fun(hyp_, False, False)
-        
+
         # First evaluate GP log posterior on an informed space-filling design.
         t1_s = time.time()
         X0, y0 = f_min_fill(objective_f_1, hyp0, LB, UB, PLB, PUB, self.hyper_priors)
         hyp = X0[0:opts_N, :].T
         widths_default = np.std(X0, axis=0, ddof=1)
-        
+
         # Extract a good low-noise starting point for the 2nd optimization.
         if noise_N > 0 and 1 < opts_N < init_N:
             xx = X0[opts_N:, :]
             noise_y = y0[opts_N:]
             noise_params = xx[:, cov_N]
-        
+
             # Order by noise parameter magnitude.
             order = np.argsort(noise_params)
             xx = xx[order, :]
             noise_y = noise_y[order]
-            # Take the best amongst bottom 20% vectors. 
+            # Take the best amongst bottom 20% vectors.
             idx_best = np.argmin(noise_y[0:math.ceil(0.2*np.size(noise_y))])
             hyp[:, 1] = xx[idx_best, :]
-            
+
         # Fix zero widths.
         idx0 = widths_default == 0
         if np.any(idx0):
@@ -214,19 +275,18 @@ class GP:
                 std_hyp = np.std(hyp, axis=1, ddof=1)
                 widths_default[idx0] = std_hyp[idx0]
                 idx0 = widths_default == 0
-                
+
             if np.any(idx0):
                 widths_default[idx0] = np.minimum(1, UB[idx0] - LB[idx0])
-                
+
         t1 = time.time() - t1_s
-        
+
         # Check that hyperparameters are within bounds.
         eps_LB = np.reshape(LB, (-1, 1)) + np.spacing(np.reshape(LB, (-1, 1)))
         eps_UB = np.reshape(UB, (-1, 1)) - np.spacing(np.reshape(UB, (-1, 1)))
         hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
         # Perform optimization from most promising NOPTS hyperparameter vectors.
-        gradient = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)[1]
         objective_f_2 = lambda hyp_ : self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((opts_N,), np.inf)
 
@@ -236,13 +296,13 @@ class GP:
             res = sp.optimize.minimize(fun=objective_f_2, x0=hyp[:, i], jac=True, bounds=list(zip(LB, UB)))
             hyp[:, i] = res.x
             nll[i] = res.fun
-        
+
         # Take the best hyperparameter vector.
         hyp_start = hyp[:, np.argmin(nll)]
         t2 = time.time() - t2_s
 
         ## Sample from best hyperparameter vector using slice sampling
-        
+
         t3_s = time.time()
         # Effective number of samples (thin after)
         eff_s_N = s_N * thin
@@ -252,12 +312,12 @@ class GP:
         #widths_default = np.array([2.6, 2.6, 1.6, 4, 3.2, 2.6])
         #LB = np.array([-12, -11, -14, -20, -10, -12])
         #UB = np.array([5, 6, 4, 22, 10, 6])
-        
+
         #hyp_start = np.array([-0.6, -0.0, -0.3, -6.9, -0.1])
         #widths_default = np.array([2.7, 2.7, 2.7, 1.5, 0.7])
         #LB = np.array([-13, -13, -14, -14, -3])
         #UB = np.array([5, 5, 4, 1, 3])
-        
+
         options = {
             'display' : 'off',
             'diagnostics' : False
@@ -272,16 +332,16 @@ class GP:
         t3 = time.time() - t3_s
         print(hyp)
         print(t1, t2, t3)
-        
+
         # Recompute GP with finalized hyperparameters.
         self.update(hyp=hyp)
-        
+
     def __compute_log_priors(self, hyp, compute_grad):
         lp = 0
-        dlp = None 
+        dlp = None
         if compute_grad:
             dlp = np.zeros(hyp.shape)
-        
+
         mu = self.hyper_priors.mu
         sigma = np.abs(self.hyper_priors.sigma)
         df = self.hyper_priors.df
@@ -293,20 +353,20 @@ class GP:
         u_idx = ~np.isfinite(mu) & ~np.isfinite(sigma)
         g_idx = ~u_idx & ~sb_idx & (df == 0 | ~np.isfinite(df)) & np.isfinite(sigma)
         t_idx = ~u_idx & ~sb_t_idx & (df > 0) & np.isfinite(df)
-        
+
         # Quadratic form
         z2 = np.zeros(hyp.shape)
         z2[g_idx | t_idx] = ((hyp[g_idx | t_idx] - mu[g_idx | t_idx]) / sigma[g_idx | t_idx])**2
-        
+
         # Smooth box prior
         if np.any(sb_idx):
             # Normalization constant so that integral over pdf is 1.
             C = 1.0 + (b[sb_idx] - a[sb_idx]) / (sigma[sb_idx] * np.sqrt(2 * np.pi))
-            
+
             sb_idx_b = (hyp < a) & sb_idx
             sb_idx_a = (hyp > b) & sb_idx
             sb_idx_btw = (hyp >= a) & (hyp <= b) & sb_idx
-                                
+
             z2_tmp = np.zeros(hyp.shape)
             z2_tmp[sb_idx_b] = ((hyp[sb_idx_b] - a[sb_idx_b]) / sigma[sb_idx_b])**2
             z2_tmp[sb_idx_a] = ((hyp[sb_idx_a] - b[sb_idx_a]) / sigma[sb_idx_a])**2
@@ -321,20 +381,20 @@ class GP:
                     dlp[sb_idx_b] = -(hyp[sb_idx_b] - a[sb_idx_b]) / sigma[sb_idx_b]**2
                 if np.any(sb_idx_a):
                     dlp[sb_idx_a] = -(hyp[sb_idx_a] - b[sb_idx_a]) / sigma[sb_idx_a]**2
-        
+
         # Smooth box Student's t prior
         if np.any(sb_t_idx):
             # Normalization constant so that integral over pdf is 1.
             C = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * sp.special.gamma(0.5*(df[sb_t_idx]+1)) / (sp.special.gamma(0.5*df[sb_t_idx]) * sigma[sb_t_idx] * np.sqrt(df[sb_t_idx] * np.pi))
-            
+
             sb_t_idx_b = (hyp < a) & sb_t_idx
             sb_t_idx_a = (hyp > b) & sb_t_idx
             sb_t_idx_btw = (hyp >= a) & (hyp <= b) & sb_t_idx
-            
+
             z2_tmp = np.zeros(hyp.shape)
             z2_tmp[sb_t_idx_b] = ((hyp[sb_t_idx_b] - a[sb_t_idx_b]) / sigma[sb_t_idx_b])**2
             z2_tmp[sb_t_idx_a] = ((hyp[sb_t_idx_a] - b[sb_t_idx_a]) / sigma[sb_t_idx_a])**2
-            
+
             if np.any(sb_t_idx_b | sb_t_idx_a):
                 tmp_idx = sb_t_idx_b | sb_t_idx_a
                 lp += np.sum(sp.special.gammaln(0.5*(df[tmp_idx]+1)) - sp.special.gammaln(0.5*df[tmp_idx]))
@@ -343,19 +403,19 @@ class GP:
                 tmp_idx = sb_t_idx_btw
                 lp += np.sum(sp.special.gammaln(0.5*(df[tmp_idx]+1)) - sp.special.gammaln(0.5*df[tmp_idx]))
                 lp += np.sum(-0.5*np.log(np.pi*df[tmp_idx]) - np.log(C*sigma[tmp_idx]))
-            
+
             if compute_grad:
                 if np.any(sb_t_idx_b):
                     dlp[sb_t_idx_b] = -(df[sb_t_idx_b]+1) / df[sb_t_idx_b] / (1+z2_tmp[sb_t_idx_b] / df[sb_t_idx_b]) * (hyp[sb_t_idx_b] - a[sb_t_idx_b]) / sigma[sb_t_idx_b]**2
                 if np.any(sb_t_idx_a):
                     dlp[sb_t_idx_a] = -(df[sb_t_idx_a]+1) / df[sb_t_idx_a] / (1+z2_tmp[sb_t_idx_a] / df[sb_t_idx_a]) * (hyp[sb_t_idx_a] - b[sb_t_idx_a]) / sigma[sb_t_idx_a]**2
-        
+
         # Gaussian prior
         if np.any(g_idx):
             lp -= 0.5 * np.sum(np.log(2*np.pi*sigma[g_idx]**2) + z2[g_idx])
             if compute_grad:
                 dlp[g_idx] = -(hyp[g_idx] - mu[g_idx]) / sigma[g_idx]**2
-         
+
         # Student's t prior
         if np.any(t_idx):
             lp += np.sum(sp.special.gammaln(0.5*(df[t_idx]+1)) - sp.special.gammaln(0.5*df[t_idx]))
@@ -365,15 +425,15 @@ class GP:
 
         if compute_grad:
             return lp, dlp
-        
+
         return lp
-        
+
     def __compute_nlZ(self, hyp, compute_grad, compute_prior):
         if compute_grad:
             nlZ, dnlZ = self.__core_computation(hyp, 1, compute_grad)
         else:
             nlZ = self.__core_computation(hyp, 1, compute_grad)
-                    
+
         if compute_prior:
             if compute_grad:
                 P, dP = self.__compute_log_priors(hyp, compute_grad)
@@ -382,42 +442,62 @@ class GP:
             else:
                 P = self.__compute_log_priors(hyp, compute_grad)
                 nlZ -= P
-                
+
         if compute_grad:
             return nlZ, dnlZ
-        
+
         return nlZ
-        
+
     def __gp_obj_fun(self, hyp, compute_grad, swap_sign):
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(hyp, compute_grad, self.hyper_priors is not None)
         else:
-            nlZ = self.__compute_nlZ(hyp, compute_grad, self.hyper_priors is not None) 
+            nlZ = self.__compute_nlZ(hyp, compute_grad, self.hyper_priors is not None)
 
         # Swap sign of negative log marginal likelihood (e.g. for sampling)
         if swap_sign:
             nlZ *= -1
             if compute_grad:
                 dnlZ *= -1
-        
+
         if compute_grad:
             return nlZ, dnlZ
-        
+
         return nlZ
-        
+
     def predict(self, x_star, y_star = None, s2_star = 0, add_noise=False):
+        '''Predict the values of the gaussian process at given points.
+
+        Parameters
+        ==========
+        x_star : array_like
+            The points we want to predict the values at.
+        y_star : array_like, optional
+            True values at the points.
+        s2_star : array_like, optional
+            Noise at the points.
+        add_noise : bool, defaults to True
+            Whether to add noise to the prediction results.
+
+        Returns
+        =======
+        mu : array_like
+            Value of mu at the requested points.
+        s2 : array_like
+            Value noise the at the requested points.
+        '''
         if x_star.ndim == 1:
             x_star = np.reshape(x_star, (-1, 1))
         N, D = self.X.shape
         s_N = self.post.size
         N_star = x_star.shape[0]
-        
+
         # Preallocate space
         fmu = np.zeros((N_star, s_N))
         ymu = np.zeros((N_star, s_N))
         fs2 = np.zeros((N_star, s_N))
         ys2 = np.zeros((N_star, s_N))
- 
+
         for s in range(0, s_N):
             hyp = self.post[s].hyp
             alpha = self.post[s].alpha
@@ -425,7 +505,7 @@ class GP:
             L_chol = self.post[s].L_chol
             sW = self.post[s].sW
             sn2_mult = self.post[s].sn2_mult
-            
+
             cov_N = self.covariance.hyperparameter_count(D)
             mean_N = self.mean.hyperparameter_count(D)
             noise_N = self.noise.hyperparameter_count()
@@ -438,7 +518,7 @@ class GP:
                 fmu[:, s:s+1] = m_star + np.dot(Ks.T, alpha) # Conditional mean
             else:
                 fmu[:, s:s+1] = m_star
-                
+
             ymu[:, s] = fmu[:, s]
             if N > 0:
                 if L_chol:
@@ -448,7 +528,7 @@ class GP:
                     fs2[:, s:s+1] = kss + np.reshape(np.sum(Ks * np.dot(L, Ks), 0), (-1, 1))
             else:
                 fs2[:, s:s+1] = kss
-                
+
             fs2[:, s] = np.maximum(fs2[:, s], 0) # remove numerical noise, i.e. negative variances
             ys2[:, s:s+1] = fs2[:, s:s+1] + sn2_star * sn2_mult
 
@@ -460,10 +540,10 @@ class GP:
             fs2 = np.reshape(np.sum(fs2, 1) / s_N + vf, (-1, 1))
             vy = np.sum((ymu-ybar)**2, 1) / (s_N - 1)
             ys2 = np.reshape(np.sum(ys2, 1) / s_N + vy, (-1, 1))
-        
+
             fmu = fbar
             ymu = ybar
-        
+
         if add_noise:
             return ymu, ys2
         return fmu, fs2
@@ -471,15 +551,36 @@ class GP:
     # sigma doesn't work, requires gplite_quad implementation
     # quantile doesn't work, requires gplite_qpred implementation
     def plot(self, x0 = None, lb = None, ub = None, max_min_flag = None):
+        '''Plot the gaussian process profile centered around a given point.
+
+        The plot is a D-by-D panel matrix, in which panels on the diagonal
+        show the profile of the gaussian process prediction (mean and +/- 1 SD)
+        by varying one dimension at a time, whereas off-diagonal panels show
+        2-D contour plots of the GP mean and standard deviation (respectively,
+        above and below diagonal). In each panel, black lines indicate the
+        location of the reference point.
+
+        Parameters
+        ==========
+        x0 : array_like, optional
+            The reference point.
+        lb : array_like, optional
+            Lower bounds for the plotting.
+        ub : array_like, optional
+            Upper bounds for the plotting.
+        max_min_flag : bool, optional
+            If False then the minimum, and if True the maximum, of the
+            GP training input is used as the reference point.
+        '''
         delta_y = None
         if np.isscalar(lb) and ub is None:
             delta_y = lb
             lb = None
-            
+
         _, D = self.X.shape # Number of training points and dimension
         s_N = self.post.size # Hyperparameter samples
         x_N = 100 # Grid points per visualization
-        
+
         # Loop over hyperparameter samples.
         ell = np.zeros((D, s_N))
         for s in range(0, s_N):
@@ -490,7 +591,7 @@ class GP:
             lb = np.min(self.X, axis=0) - ellbar
         if ub is None:
             ub = np.max(self.X, axis=0) + ellbar
-            
+
         gutter = [0.05, 0.05]
         margins = [0.1, 0.01, 0.12, 0.01]
         linewidth = 1
@@ -506,11 +607,11 @@ class GP:
                 x0 = self.X[i, :]
 
         _, ax = plt.subplots(D, D, squeeze=False)
-     
+
         flo = fhi = None
         for i in range(0, D):
             ax[i, i].set_position(self.__tight_subplot(D, D, i, i, gutter, margins))
-            
+
             xx = None
             xx_vec = np.reshape(np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)), (-1, 1))
             if D > 1:
@@ -518,12 +619,12 @@ class GP:
                 xx[:, i:i+1] = xx_vec
             else:
                 xx = xx_vec
-            
+
             # do we need to add quantile prediction stuff etc here?
             fmu, fs2 = self.predict(xx, add_noise=False)
             flo = fmu - 1.96 * np.sqrt(fs2)
             fhi = fmu + 1.96 * np.sqrt(fs2)
-               
+
             if delta_y is not None:
                 # Probably doesn't work
                 fmu0, _ = self.predict(x0, add_noise=False)
@@ -537,29 +638,29 @@ class GP:
                 else:
                     lb[i] = x0[i] - 0.5 * dx
                     ub[i] = x0[i] + 0.5 * dx
-                    
+
                 xx_vec = np.reshape(np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)), (-1, 1))
                 if D > 1:
                     xx = np.tile(x0, (np.size(xx_vec), 1))
                     xx[:, i:i+1] = xx_vec
                 else:
                     xx = xx_vec
-                    
+
                 # do we need to add quantile prediction stuff etc here?
                 fmu, fs2 = self.predict(xx, add_noise=False)
                 flo = fmu - 1.96 * np.sqrt(fs2)
                 fhi = fmu + 1.96 * np.sqrt(fs2)
-            
+
             ax[i, i].plot(xx_vec, fmu, '-k', linewidth=linewidth)
             ax[i, i].plot(xx_vec, fhi, '-', color=(0.8, 0.8, 0.8), linewidth=linewidth)
             ax[i, i].plot(xx_vec, flo, '-', color=(0.8, 0.8, 0.8), linewidth=linewidth)
             ax[i, i].set_xlim(lb[i], ub[i])
             ax[i, i].set_ylim(ax[i, i].get_ylim())
-            
+
             # ax[i, i].tick_params(direction='out')
             ax[i, i].spines["top"].set_visible(False)
             ax[i, i].spines["right"].set_visible(False)
-            
+
             if D == 1:
                 ax[i, i].set_xlabel('x')
                 ax[i, i].set_ylabel('y')
@@ -576,13 +677,13 @@ class GP:
                 xx1_vec = np.reshape(np.linspace(lb[i], ub[i], x_N), (-1, 1)).T
                 xx2_vec = np.reshape(np.linspace(lb[j], ub[j], x_N), (-1, 1)).T
                 xx_vec = np.array(np.meshgrid(xx1_vec, xx2_vec)).T.reshape(-1, 2)
-                
+
                 xx = np.tile(x0, (x_N*x_N, 1))
                 xx[:, i] = xx_vec[:, 0]
                 xx[:, j] = xx_vec[:, 1]
-                 
+
                 fmu, fs2 = self.predict(xx, add_noise=False)
-                
+
                 for k in range(0, 2):
                     if k == 1:
                         i1 = j
@@ -591,11 +692,11 @@ class GP:
                     else:
                         i1 = 1
                         i2 = j
-                        mat = np.reshape(np.sqrt(fs2), (x_N, x_N))    
+                        mat = np.reshape(np.sqrt(fs2), (x_N, x_N))
                     ax[i1, i2].set_position(self.__tight_subplot(D, D, i1, i2, gutter, margins))
                     ax[i1, i2].spines["top"].set_visible(False)
                     ax[i1, i2].spines["right"].set_visible(False)
-                    
+
                     if k == 1:
                         Xt, Yt = np.meshgrid(xx1_vec, xx2_vec)
                         ax[i1, i2].contour(Xt, Yt, mat)
@@ -605,18 +706,19 @@ class GP:
                     ax[i1, i2].set_xlim(lb[i2], ub[i2])
                     ax[i1, i2].set_ylim(lb[i1], ub[i1])
                     ax[i1, i2].scatter(self.X[:, i2], self.X[:, i1], color="blue", s=10)
-                    
+
                     ax[i1, i2].hlines(x0[i1], ax[i1, i2].get_xlim()[0], ax[i1, i2].get_xlim()[1], colors='k', linewidth=linewidth)
                     ax[i1, i2].vlines(x0[i2], ax[i1, i2].get_ylim()[0], ax[i1, i2].get_ylim()[1], colors='k', linewidth=linewidth)
-                    
+
                 if j == 0:
                     ax[i, j].set_ylabel(r"$x_" + str(i+1) + r"$")
                 if i == D-1:
                     ax[i, j].set_xlabel(r"$x_" + str(j+1) + r"$")
 
         plt.show()
-        
-    def __tight_subplot(self, m, n, row, col, gutter = None, margins = None):
+
+    @staticmethod
+    def __tight_subplot(m, n, row, col, gutter = None, margins = None):
         if gutter is None:
             gutter = [.002, .002]
         if margins is None:
@@ -625,43 +727,58 @@ class GP:
         Rmargin = margins[1]
         Bmargin = margins[2]
         Tmargin = margins[3]
-        
+
         unit_height = (1 - Bmargin - Tmargin - (m-1)*gutter[1]) / m
         height = np.size(row) * unit_height + (np.size(row) - 1) * gutter[1]
-        
+
         unit_width = (1 - Lmargin - Rmargin - (n-1)*gutter[0]) / n
         width = np.size(col) * unit_width + (np.size(col) - 1) * gutter[0]
-        
+
         bottom = (m - np.max(row) - 1) * (unit_height + gutter[1]) + Bmargin
         left = np.min(col) * (unit_width + gutter[0]) + Lmargin
 
         pos_vec = [left, bottom, width, height]
-        
+
         return pos_vec
 
-    def random_function(self, X_star, add_noise=False):   
+    def random_function(self, X_star, add_noise=False):
+        '''Draws a random function from the gaussian process.
+
+        Parameters
+        ==========
+        X_star : array_like
+            The points at which to evaluate the drawn function.
+        add_noise : bool, defaults to False
+            Whether to add noise to the values of the drawn function.
+
+        Returns
+        =======
+
+        f_star : array_like,
+            The values of the drawn function at the requested points.
+        '''
         N_star = X_star.shape[0]
         N_s = np.size(self.post)
-        
-        cov_N = self.covariance.hyperparameter_count(self.D) 
-        mean_N = self.mean.hyperparameter_count(self.D) 
+
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
-     
+
         # Draw from hyperparameter samples.
         s = np.random.randint(0, N_s)
-        
+
         hyp = self.post[s].hyp
         alpha = self.post[s].hyp
         L = self.post[s].L
         L_chol = self.post[s].L_chol
         sW = self.post[s].sW
-        
+
         # Compute GP mena function at test points
-        m_star = np.reshape(self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], X_star), (-1, 1))  
-    
-        # Compute kernel matrix 
+        m_star = np.reshape(self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], X_star), (-1, 1))
+
+        # Compute kernel matrix
         K_star = self.covariance.compute(hyp[0:cov_N], X_star)
-        
+
         if self.y is None:
             # No data, draw from prior
             f_mu = m_star
@@ -669,30 +786,34 @@ class GP:
         else:
             # Compute cross-kernel matrix Ks
             Ks = self.covariance.compute(hyp[0:cov_N], self.X, X_star = X_star)
-            
+
             # Conditional mean
-            f_mu = m_star + np.dot(Ks.T, alpha) 
-            
-            if Lchol:
+            f_mu = m_star + np.dot(Ks.T, alpha)
+
+            if L_chol:
                 V = np.linalg.solve(L.T, np.tile(sW, (1, N_star)) * Ks)
                 C = K_star - np.dot(V.T, V) # Predictive variances
             else:
                 LKs = np.dot(L, Ks)
                 C = K_star + np.dot(Ks.T, LKs)
-            
+
         # Enforce symmetry if lost due to numerical errors.
-        C = (C+C.T)/2 
-        
+        C = (C+C.T)/2
+
         # Draw random function
         T = sp.linalg.cholesky(C)
         f_star = np.dot(T.T, np.random.standard_normal((T.shape[0], 1))) + f_mu
-        
+
+        # Add observation noise.
         if add_noise:
-            sn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2)
-            return y_star 
-        
+            # Get observation noise hyperparameters and evaluate noise at test points.
+            sn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], X_star, None, None)
+            sn2_mult = self.post[s].sn2_mult
+            y_star = f_star + np.sqrt(sn2*sn2_mult) * np.random.standard_normal(size=f_mu.size)
+            return y_star
+
         return f_star
-        
+
     def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
         N, d = self.X.shape
         cov_N = self.covariance.hyperparameter_count(d)
@@ -704,12 +825,12 @@ class GP:
             m, dm = self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], self.X, compute_grad=True)
             # This line is actually important due to behaviour of above, maybe change that in the future.
             m = m.reshape((-1, 1))
-            K, dK = self.covariance.compute(hyp[0:cov_N], self.X, compute_grad=True)   
+            K, dK = self.covariance.compute(hyp[0:cov_N], self.X, compute_grad=True)
         else:
             sn2 = self.noise.compute(hyp[cov_N:cov_N+noise_N], self.X, self.y, self.s2)
             m = np.reshape(self.mean.compute(hyp[cov_N+noise_N:cov_N+noise_N+mean_N], self.X), (-1, 1))
-            K = self.covariance.compute(hyp[0:cov_N], self.X)   
-        sn2_mult = 1 # Effective noise variance multiplier 
+            K = self.covariance.compute(hyp[0:cov_N], self.X)
+        sn2_mult = 1 # Effective noise variance multiplier
 
         L_chol = np.min(sn2) >= 1e-6
         if L_chol:
@@ -742,21 +863,21 @@ class GP:
                 break
             sl = 1
             pL = np.linalg.solve(-L, np.linalg.solve(L.T, np.eye(N)))
- 
+
         alpha = np.linalg.solve(L, np.linalg.solve(L.T, self.y - m)) / sl
 
         # Negative log marginal likelihood computation
         if compute_nlZ:
             nlZ = np.dot((self.y - m).T, alpha/2) + np.sum(np.log(np.diag(L))) + N * np.log(2*np.pi*sl)/2
-            
+
             if compute_nlZ_grad:
                 dnlZ = np.zeros(hyp.shape)
                 Q = np.linalg.solve(L, np.linalg.solve(L.T, np.eye(N))) / sl - np.dot(alpha, alpha.T)
-         
+
                 # Gradient of covariance hyperparameters.
                 for i in range(0, cov_N):
                     dnlZ[i] = np.sum(np.sum(Q * dK[:, :, i])) / 2
-                    
+
                 # Gradient of GP likelihood
                 if np.isscalar(sn2):
                     tr_Q = np.trace(Q)
@@ -766,17 +887,17 @@ class GP:
                     dg_Q = np.diag(Q)
                     for i in range(0, noise_N):
                         dnlZ[cov_N+i] = 0.5 * sn2_mult * np.sum(dsn2[:, i] * dg_Q)
-               
+
                 # Gradient of mean function.
                 if mean_N > 0:
                     dnlZ[cov_N + noise_N:] = np.dot(-dm.T, alpha)[:, 0]
-                    
+
                 return nlZ[0, 0], dnlZ
-                
+
             return nlZ[0, 0]
-     
+
         return Posterior(hyp, alpha, np.ones((N, 1)) / np.sqrt(np.min(sn2)*sn2_mult), pL, sn2_mult, L_chol)
-        
+
 class HyperPrior:
     def __init__(self, mu, sigma, df, a, b, LB, UB):
         self.mu = mu
@@ -786,7 +907,7 @@ class HyperPrior:
         self.b = b
         self.LB = LB
         self.UB = UB
-                
+
 class Posterior:
     def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
         self.hyp = hyp

@@ -1,3 +1,5 @@
+"""Lightweight Gaussian process regression package."""
+
 import gpyreg.covariance_functions
 import gpyreg.mean_functions
 import gpyreg.noise_functions
