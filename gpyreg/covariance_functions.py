@@ -3,14 +3,16 @@
 import numpy as np
 from scipy.spatial.distance import pdist, cdist, squareform
 
+
 class SquaredExponential:
-    '''Squared exponential kernel.'''
+    """Squared exponential kernel."""
+
     def __init__(self):
         pass
 
     @staticmethod
     def hyperparameter_count(d):
-        '''Counts the number of hyperparameters this covariance function has.
+        """Counts the number of hyperparameters this covariance function has.
 
         Parameters
         ----------
@@ -22,12 +24,12 @@ class SquaredExponential:
 
         count : int
             The amount of hyperparameters.
-        '''
+        """
         return d + 1
 
     @staticmethod
     def hyperparameter_info(d):
-        '''Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them in other parts of the program.
 
         Parameters
         ----------
@@ -38,11 +40,14 @@ class SquaredExponential:
         -------
         hyper_info : array_like
             A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
-        '''
-        return [('covariance_log_lengthscale', d), ('covariance_log_outputscale', 1)]
+        """
+        return [
+            ("covariance_log_lengthscale", d),
+            ("covariance_log_outputscale", 1),
+        ]
 
     def get_info(self, X, y):
-        '''Gives additional information on the hyperparameters.
+        """Gives additional information on the hyperparameters.
 
         Parameters
         ----------
@@ -55,12 +60,12 @@ class SquaredExponential:
         -------
         cov_info : CovarianceInfo
             The additional info represented as a ``CovarianceInfo`` object.
-        '''
+        """
         cov_N = self.hyperparameter_count(X.shape[1])
         return CovarianceInfo(cov_N, X, y)
 
-    def compute(self, hyp, X, X_star = None, compute_grad = False):
-        '''Computes the self-covariance matrix of the training points.
+    def compute(self, hyp, X, X_star=None, compute_grad=False):
+        """Computes the self-covariance matrix of the training points.
 
         Parameters
         ----------
@@ -77,40 +82,50 @@ class SquaredExponential:
             The self-covariance matrix.
         dK : array_like, optional
             The gradient of the self-covariance matrix.
-        '''
+        """
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
 
         if hyp.size != cov_N:
-            raise ValueError('Expected %d covariance function hyperparameters, %d passed instead.' % (cov_N, hyp.size))
+            raise ValueError(
+                "Expected %d covariance function hyperparameters, %d passed instead."
+                % (cov_N, hyp.size)
+            )
         if hyp.ndim != 1:
-            raise ValueError('Covariance function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError(
+                "Covariance function output is available only for one-sample hyperparameter inputs."
+            )
 
         ell = np.exp(hyp[0:D])
-        sf2 = np.exp(2*hyp[D])
+        sf2 = np.exp(2 * hyp[D])
 
         if X_star is None:
-            tmp = squareform(pdist(X @ np.diag(1 / ell), 'sqeuclidean'))
+            tmp = squareform(pdist(X @ np.diag(1 / ell), "sqeuclidean"))
         elif isinstance(X_star, str):
             tmp = np.zeros((N, 1))
         else:
-            tmp = cdist(X @ np.diag(1 / ell), X_star @ np.diag(1 / ell), 'sqeuclidean')
+            tmp = cdist(
+                X @ np.diag(1 / ell), X_star @ np.diag(1 / ell), "sqeuclidean"
+            )
 
-        K = sf2 * np.exp(-tmp/2)
+        K = sf2 * np.exp(-tmp / 2)
 
         if compute_grad:
             dK = np.zeros((N, N, cov_N))
             for i in range(0, D):
                 # Gradient of cov length scales
-                dK[:, :, i] = K * squareform(pdist(np.reshape(X[:, i] / ell[i], (-1, 1)), 'sqeuclidean'))
+                dK[:, :, i] = K * squareform(
+                    pdist(np.reshape(X[:, i] / ell[i], (-1, 1)), "sqeuclidean")
+                )
             # Gradient of cov output scale.
             dK[:, :, D] = 2 * K
             return K, dK
 
         return K
 
+
 class Matern:
-    '''Matern kernel.
+    """Matern kernel.
 
     Parameters
     ----------
@@ -119,14 +134,14 @@ class Matern:
 
         Currently the only supported degrees are 1, 3, 5.
 
-    '''
+    """
 
     def __init__(self, degree):
         self.degree = degree
 
     @staticmethod
     def hyperparameter_count(d):
-        '''Counts the number of hyperparameters this covariance function has.
+        """Counts the number of hyperparameters this covariance function has.
 
         Parameters
         ----------
@@ -138,12 +153,12 @@ class Matern:
 
         count : int
             The amount of hyperparameters.
-        '''
+        """
         return d + 1
 
     @staticmethod
     def hyperparameter_info(d):
-        '''Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them in other parts of the program.
 
         Parameters
         ----------
@@ -154,11 +169,14 @@ class Matern:
         -------
         hyper_info : array_like
             A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
-        '''
-        return [('covariance_log_lengthscale', d), ('covariance_log_outputscale', 1)]
+        """
+        return [
+            ("covariance_log_lengthscale", d),
+            ("covariance_log_outputscale", 1),
+        ]
 
     def get_info(self, X, y):
-        '''Gives additional information on the hyperparameters.
+        """Gives additional information on the hyperparameters.
 
         Parameters
         ----------
@@ -171,12 +189,12 @@ class Matern:
         -------
         cov_info : CovarianceInfo
             The additional info represented as a ``CovarianceInfo`` object.
-        '''
+        """
         cov_N = self.hyperparameter_count(X.shape[1])
         return CovarianceInfo(cov_N, X, y)
 
-    def compute(self, hyp, X, X_star = None, compute_grad = False):
-        '''Computes the self-covariance matrix of the training points.
+    def compute(self, hyp, X, X_star=None, compute_grad=False):
+        """Computes the self-covariance matrix of the training points.
 
         Parameters
         ----------
@@ -193,30 +211,37 @@ class Matern:
             The self-covariance matrix.
         dK : array_like, optional
             The gradient of the self-covariance matrix.
-        '''
+        """
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
 
         if hyp.size != cov_N:
-            raise ValueError('Expected %d covariance function hyperparameters, %d passed instead.' % (cov_N, hyp.size))
+            raise ValueError(
+                "Expected %d covariance function hyperparameters, %d passed instead."
+                % (cov_N, hyp.size)
+            )
         if hyp.ndim != 1:
-            raise ValueError('Covariance function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError(
+                "Covariance function output is available only for one-sample hyperparameter inputs."
+            )
 
         ell = np.exp(hyp[0:D])
-        sf2 = np.exp(2*hyp[D])
+        sf2 = np.exp(2 * hyp[D])
 
         f = df = None
         if self.degree == 1:
-            f = lambda t : 1
-            df = lambda t : 1 / t
+            f = lambda t: 1
+            df = lambda t: 1 / t
         elif self.degree == 3:
-            f = lambda t : 1 + t
-            df = lambda t : 1
+            f = lambda t: 1 + t
+            df = lambda t: 1
         elif self.degree == 5:
-            f = lambda t : 1 + t * (1+ t / 3)
-            df = lambda t : (1+t)/3
+            f = lambda t: 1 + t * (1 + t / 3)
+            df = lambda t: (1 + t) / 3
         else:
-            raise Exception('Only degrees 1, 3 and 5 are supported for the Matern covariance function.')
+            raise Exception(
+                "Only degrees 1, 3 and 5 are supported for the Matern covariance function."
+            )
 
         if X_star is None:
             tmp = squareform(pdist(X @ np.diag(np.sqrt(self.degree) / ell)))
@@ -232,13 +257,21 @@ class Matern:
         if compute_grad:
             dK = np.zeros((N, N, cov_N))
             for i in range(0, D):
-                Ki = squareform(pdist(np.reshape(np.sqrt(self.degree) / ell[i] * X[:, i], (-1, 1)), 'sqeuclidean'))
+                Ki = squareform(
+                    pdist(
+                        np.reshape(
+                            np.sqrt(self.degree) / ell[i] * X[:, i], (-1, 1)
+                        ),
+                        "sqeuclidean",
+                    )
+                )
                 dK[:, :, i] = sf2 * (df(tmp) * np.exp(-tmp)) * Ki
             # Gradient of cov output scale
             dK[:, :, D] = 2 * K
             return K, dK
 
         return K
+
 
 class CovarianceInfo:
     def __init__(self, cov_N, X, y):

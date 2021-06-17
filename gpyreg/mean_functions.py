@@ -2,16 +2,17 @@
 
 import numpy as np
 
+
 class ZeroMean:
-    '''Zero mean function.
-    '''
+    """Zero mean function.
+    """
 
     def __init__(self):
         pass
 
     @staticmethod
     def hyperparameter_count(_):
-        '''Counts the number of hyperparameters this mean function has.
+        """Counts the number of hyperparameters this mean function has.
 
         Parameters
         ----------
@@ -23,12 +24,12 @@ class ZeroMean:
 
         count : int
             The amount of hyperparameters.
-        '''
+        """
         return 0
 
     @staticmethod
     def hyperparameter_info(_):
-        '''Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them in other parts of the program.
 
         Parameters
         ----------
@@ -39,11 +40,11 @@ class ZeroMean:
         -------
         hyper_info : array_like
             A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
-        '''
+        """
         return []
 
     def get_info(self, X, y):
-        '''Gives additional information on the hyperparameters.
+        """Gives additional information on the hyperparameters.
 
         Parameters
         ----------
@@ -56,12 +57,12 @@ class ZeroMean:
         -------
         mean_info : MeanInfo
             The additional info represented as a ``MeanInfo`` object.
-        '''
+        """
         mean_N = self.hyperparameter_count(X.shape[1])
         return MeanInfo(mean_N, X, y, 0)
 
-    def compute(self, hyp, X, compute_grad = False):
-        '''Computes the mean function at test points.
+    def compute(self, hyp, X, compute_grad=False):
+        """Computes the mean function at test points.
 
         Parameters
         ----------
@@ -78,14 +79,19 @@ class ZeroMean:
             The mean values.
         dm : array_like, optional
             The gradient.
-        '''
+        """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
 
         if hyp.size != mean_N:
-            raise ValueError('Expected %d mean function hyperparameters, %d passed instead.' % (mean_N, hyp.size))
+            raise ValueError(
+                "Expected %d mean function hyperparameters, %d passed instead."
+                % (mean_N, hyp.size)
+            )
         if hyp.ndim != 1:
-            raise ValueError('Mean function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError(
+                "Mean function output is available only for one-sample hyperparameter inputs."
+            )
 
         m = np.zeros((N, 1))
 
@@ -94,16 +100,17 @@ class ZeroMean:
 
         return m
 
+
 class ConstantMean:
-    '''Constant mean function.
-    '''
+    """Constant mean function.
+    """
 
     def __init__(self):
         pass
 
     @staticmethod
     def hyperparameter_count(_):
-        '''Counts the numver of hyperparameters this mean function has.
+        """Counts the numver of hyperparameters this mean function has.
 
         Parameters
         ----------
@@ -114,12 +121,12 @@ class ConstantMean:
         -------
         count : int
             The amount of hyperparameters.
-        '''
+        """
         return 1
 
     @staticmethod
     def hyperparameter_info(_):
-        '''Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them in other parts of the program.
 
         Parameters
         ----------
@@ -130,11 +137,11 @@ class ConstantMean:
         -------
         hyper_info : array_like
             A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
-        '''
-        return [('mean_const', 1)]
+        """
+        return [("mean_const", 1)]
 
     def get_info(self, X, y):
-        '''Gives additional information on the hyperparameters.
+        """Gives additional information on the hyperparameters.
 
         Parameters
         ----------
@@ -147,12 +154,12 @@ class ConstantMean:
         -------
         mean_info : CovarianceInfo
             The additional info represented as a ``MeanInfo`` object.
-        '''
+        """
         mean_N = self.hyperparameter_count(X.shape[1])
         return MeanInfo(mean_N, X, y, 1)
 
-    def compute(self, hyp, X, compute_grad = False):
-        '''Computes the mean function at test points.
+    def compute(self, hyp, X, compute_grad=False):
+        """Computes the mean function at test points.
 
         Parameters
         ----------
@@ -169,14 +176,19 @@ class ConstantMean:
             The mean values.
         dm : array_like, optional
             The gradient.
-        '''
+        """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
 
         if hyp.size != mean_N:
-            raise ValueError('Expected %d mean function hyperparameters, %d passed instead.' % (mean_N, hyp.size))
+            raise ValueError(
+                "Expected %d mean function hyperparameters, %d passed instead."
+                % (mean_N, hyp.size)
+            )
         if hyp.ndim != 1:
-            raise ValueError('Mean function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError(
+                "Mean function output is available only for one-sample hyperparameter inputs."
+            )
 
         m0 = hyp[0]
         m = m0 * np.ones((N, 1))
@@ -186,16 +198,17 @@ class ConstantMean:
 
         return m
 
+
 class NegativeQuadratic:
-    '''Centered negative quadratic mean functions.
-    '''
+    """Centered negative quadratic mean functions.
+    """
 
     def __init__(self):
         pass
 
     @staticmethod
     def hyperparameter_count(d):
-        '''Counts the numver of hyperparameters this mean function has.
+        """Counts the numver of hyperparameters this mean function has.
 
         Parameters
         ----------
@@ -207,12 +220,12 @@ class NegativeQuadratic:
 
         count : int
             The amount of hyperparameters.
-        '''
+        """
         return 1 + 2 * d
 
     @staticmethod
     def hyperparameter_info(d):
-        '''Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them in other parts of the program.
 
         Parameters
         ----------
@@ -224,11 +237,11 @@ class NegativeQuadratic:
 
         hyper_info : array_like
             A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
-        '''
-        return [('mean_const', 1), ('mean_placeholder_hyperparams', 2*d)]
+        """
+        return [("mean_const", 1), ("mean_placeholder_hyperparams", 2 * d)]
 
     def get_info(self, X, y):
-        '''Gives additional information on the hyperparameters.
+        """Gives additional information on the hyperparameters.
 
         Parameters
         ----------
@@ -241,12 +254,12 @@ class NegativeQuadratic:
         -------
         cov_info : MeanInfo
             The additional info represented as a ``MeanInfo`` object.
-        '''
+        """
         mean_N = self.hyperparameter_count(X.shape[1])
         return MeanInfo(mean_N, X, y, 2)
 
-    def compute(self, hyp, X, compute_grad = False):
-        '''Computes the mean function at test points.
+    def compute(self, hyp, X, compute_grad=False):
+        """Computes the mean function at test points.
 
         Parameters
         ----------
@@ -263,29 +276,35 @@ class NegativeQuadratic:
             The mean values.
         dm : array_like, optional
             The gradient.
-        '''
+        """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
 
         if hyp.size != mean_N:
-            raise ValueError('Expected %d mean function hyperparameters, %d passed instead.' % (mean_N, hyp.size))
+            raise ValueError(
+                "Expected %d mean function hyperparameters, %d passed instead."
+                % (mean_N, hyp.size)
+            )
         if hyp.ndim != 1:
-            raise ValueError('Mean function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError(
+                "Mean function output is available only for one-sample hyperparameter inputs."
+            )
 
         m_0 = hyp[0]
-        x_m = hyp[1:(1+D)]
-        omega = np.exp(hyp[(1+D):(1+2*D)])
-        z_2 = ((X - x_m) / omega)**2
+        x_m = hyp[1 : (1 + D)]
+        omega = np.exp(hyp[(1 + D) : (1 + 2 * D)])
+        z_2 = ((X - x_m) / omega) ** 2
         m = m_0 - 0.5 * np.sum(z_2, 1)
 
         if compute_grad:
             dm = np.zeros((N, mean_N))
             dm[:, 0] = np.ones((N,))
-            dm[:, 1:D+1] = ((X - x_m) / omega**2)
-            dm[:, D+1:] = z_2
+            dm[:, 1 : D + 1] = (X - x_m) / omega ** 2
+            dm[:, D + 1 :] = z_2
             return m, dm
 
         return m
+
 
 class MeanInfo:
     def __init__(self, mean_N, X, y, idx):
@@ -321,20 +340,20 @@ class MeanInfo:
             self.x0[0] = np.quantile(y, 0.9)
 
             # xm
-            self.LB[1:1+D] = np.min(X) - 0.5 * w
-            self.UB[1:1+D] = np.max(X) + 0.5 * w
-            self.PLB[1:1+D] = np.min(X)
-            self.PUB[1:1+D] = np.max(X)
-            self.x0[1:1+D] = np.median(X)
+            self.LB[1 : 1 + D] = np.min(X) - 0.5 * w
+            self.UB[1 : 1 + D] = np.max(X) + 0.5 * w
+            self.PLB[1 : 1 + D] = np.min(X)
+            self.PUB[1 : 1 + D] = np.max(X)
+            self.x0[1 : 1 + D] = np.median(X)
 
             # omega
-            self.LB[1+D:mean_N] = np.log(w) + np.log(tol)
-            self.UB[1+D:mean_N] = np.log(w) + np.log(big)
-            self.PLB[1+D:mean_N] = np.log(w) + 0.5 * np.log(tol)
-            self.PUB[1+D:mean_N] = np.log(w)
+            self.LB[1 + D : mean_N] = np.log(w) + np.log(tol)
+            self.UB[1 + D : mean_N] = np.log(w) + np.log(big)
+            self.PLB[1 + D : mean_N] = np.log(w) + 0.5 * np.log(tol)
+            self.PUB[1 + D : mean_N] = np.log(w)
             # For future reference note that std behaviour in MATLAB and NumPy is slightly different.
             # https://stackoverflow.com/questions/27600207/why-does-numpy-std-give-a-different-result-to-matlab-std
-            self.x0[1+D:mean_N] = np.log(np.std(X, ddof=1))
+            self.x0[1 + D : mean_N] = np.log(np.std(X, ddof=1))
         # Plausible starting point
         i_nan = np.isnan(self.x0)
         self.x0[i_nan] = 0.5 * (self.PLB[i_nan] + self.PUB[i_nan])

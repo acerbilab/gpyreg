@@ -2,8 +2,9 @@
 
 import numpy as np
 
+
 class GaussianNoise:
-    '''Gaussian noise
+    """Gaussian noise
 
     Parameters
     ==========
@@ -15,8 +16,15 @@ class GaussianNoise:
         Whether to scale uncertainty in provided noise.
     rectified_linear_output_dependent_add : bool, defaults to False
         Whether to add rectified linear output-dependent noise.
-    '''
-    def __init__(self, constant_add = False, user_provided_add = False, scale_user_provided = False, rectified_linear_output_dependent_add = False):
+    """
+
+    def __init__(
+        self,
+        constant_add=False,
+        user_provided_add=False,
+        scale_user_provided=False,
+        rectified_linear_output_dependent_add=False,
+    ):
         self.parameters = np.zeros((3,))
         if constant_add:
             self.parameters[0] = 1
@@ -28,14 +36,14 @@ class GaussianNoise:
             self.parameters[2] = 1
 
     def hyperparameter_count(self):
-        '''Counts the number of hyperparameters this noise function has.
+        """Counts the number of hyperparameters this noise function has.
 
         Returns
         -------
 
         count : int
             The amount of hyperparameters.
-        '''
+        """
         noise_N = 0
         if self.parameters[0] == 1:
             noise_N += 1
@@ -46,25 +54,25 @@ class GaussianNoise:
         return noise_N
 
     def hyperparameter_info(self):
-        '''Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them in other parts of the program.
 
         Returns
         -------
         hyper_info : array_like
             A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
-        '''
+        """
         hyper_info = []
         if self.parameters[0] == 1:
-            hyper_info.append(('noise_log_scale', 1))
+            hyper_info.append(("noise_log_scale", 1))
         if self.parameters[1] == 2:
-            hyper_info.append(('noise_placeholder_hyperparams_1', 1))
+            hyper_info.append(("noise_placeholder_hyperparams_1", 1))
         if self.parameters[2] == 1:
-            hyper_info.append(('noise_placeholder_hyperparams_2', 2))
+            hyper_info.append(("noise_placeholder_hyperparams_2", 2))
 
         return hyper_info
 
     def get_info(self, X, y):
-        '''Gives additional information on the hyperparameters.
+        """Gives additional information on the hyperparameters.
 
         Parameters
         ----------
@@ -77,15 +85,17 @@ class GaussianNoise:
         -------
         noise_info : NoiseInfo
             The additional info represented as a ``NoiseInfo`` object.
-        '''
+        """
         _, D = X.shape
         noise_N = self.hyperparameter_count()
         tol = 1e-6
-        info = NoiseInfo(np.full((noise_N,), -np.inf),
-                         np.full((noise_N,), np.inf),
-                         np.full((noise_N,), -np.inf),
-                         np.full((noise_N,), np.inf),
-                         np.full((noise_N,), np.nan))
+        info = NoiseInfo(
+            np.full((noise_N,), -np.inf),
+            np.full((noise_N,), np.inf),
+            np.full((noise_N,), -np.inf),
+            np.full((noise_N,), np.inf),
+            np.full((noise_N,), np.nan),
+        )
 
         if np.size(y) <= 1:
             y = np.array([0, 1])
@@ -136,7 +146,7 @@ class GaussianNoise:
         return info
 
     def compute(self, hyp, X, y, s2, compute_grad=False):
-        '''Computes the noise function at test points.
+        """Computes the noise function at test points.
 
         Parameters
         ----------
@@ -157,14 +167,19 @@ class GaussianNoise:
             The variance of observation noise evaluated at test points.
         dsn2 : array_like, optional
             The gradient.
-        '''
+        """
         N, _ = X.shape
         noise_N = self.hyperparameter_count()
 
         if hyp.size != noise_N:
-            raise ValueError('Expected %d noise function hyperparameters, %d passed instead.' % (noise_N, hyp.size))
+            raise ValueError(
+                "Expected %d noise function hyperparameters, %d passed instead."
+                % (noise_N, hyp.size)
+            )
         if hyp.ndim != 1:
-            raise ValueError('Noise function output is available only for one-sample hyperparameter inputs.')
+            raise ValueError(
+                "Noise function output is available only for one-sample hyperparameter inputs."
+            )
 
         dsn2 = None
         if compute_grad:
@@ -178,7 +193,7 @@ class GaussianNoise:
         if self.parameters[0] == 0:
             sn2 = np.spacing(1.0)
         else:
-            sn2 = np.exp(2*hyp[i])
+            sn2 = np.exp(2 * hyp[i])
             if compute_grad:
                 dsn2[:, i] = 2 * sn2
             i += 1
@@ -194,19 +209,20 @@ class GaussianNoise:
         if self.parameters[2] == 1:
             if y is not None:
                 y_tresh = hyp[i]
-                w2 = np.exp(2*hyp[i+1])
+                w2 = np.exp(2 * hyp[i + 1])
                 zz = np.maximum(0, y_tresh - y)
 
                 sn2 += w2 @ zz ** 2
                 if compute_grad:
-                    dsn2[:, i] = 2 *  w2 * (y_tresh - y) * (zz > 0)
-                    dsn2[:, i+1] = 2 * w2 * zz**2
+                    dsn2[:, i] = 2 * w2 * (y_tresh - y) * (zz > 0)
+                    dsn2[:, i + 1] = 2 * w2 * zz ** 2
             i += 2
 
         if compute_grad:
             return sn2, dsn2
 
         return sn2
+
 
 class NoiseInfo:
     def __init__(self, LB, UB, PLB, PUB, x0):
