@@ -1,10 +1,7 @@
 # run: conda env create --file environment.yml
 name: gpyreg
 dependencies:
-  - python
-  - numpy
-  - scipy
-  - matplotlib
-  - pytest
-  - sphinx
-  - numpydoc
+  - python>=3.8
+  - pip
+  - pip:
+    - -r file:requirements.txt

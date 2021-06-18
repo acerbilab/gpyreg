@@ -7,6 +7,9 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 
+import gpyreg.covariance_functions
+import gpyreg.mean_functions
+
 from gpyreg.f_min_fill import f_min_fill
 from gpyreg.slice_sample import SliceSampler
 
@@ -260,7 +263,7 @@ class GP:
         # First evaluate GP log posterior on an informed space-filling design.
         t1_s = time.time()
         X0, y0 = f_min_fill(
-            objective_f_1, hyp0, LB, UB, PLB, PUB, self.hyper_priors
+            objective_f_1, hyp0, LB, UB, PLB, PUB, self.hyper_priors, init_N
         )
         hyp = X0[0:opts_N, :].T
         widths_default = np.std(X0, axis=0, ddof=1)
@@ -347,7 +350,7 @@ class GP:
         hyp = hyp_pre_thin[:, thin - 1 :: thin]
 
         t3 = time.time() - t3_s
-        print(hyp)
+        # print(hyp)
         print(t1, t2, t3)
 
         # Recompute GP with finalized hyperparameters.
@@ -672,6 +675,127 @@ class GP:
         if add_noise:
             return ymu, ys2
         return fmu, fs2
+
+    def quad(self, mu, sigma, compute_var=False, ss_flag=False):
+        """Bayesian quadrature for a gaussian process.
+
+        Parameters
+        ==========
+        mu : array_like
+        sigma : array_like
+        compute_var : bool, defaults to False
+            Whether to compute variance.
+        ss_flag : bool, defaults to False
+            Whether to return samples separately or to average over them.
+        """
+
+        if not isinstance(
+            self.covariance, gpyreg.covariance_functions.SquaredExponential
+        ):
+            raise Exception(
+                "Bayesian quadrature only supports the squared exponential kernel."
+            )
+
+        # Number of training points and dimension
+        N, D = self.X.shape
+        # Number of hyperparameter samples.
+        N_s = np.size(self.post)
+
+        # Number of GP hyperparameters.
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        # mean_N = self.mean.hyperparameter_count(self.D)
+        noise_N = self.noise.hyperparameter_count()
+
+        N_star = mu.shape[0]
+        if np.size(sigma) == 1:
+            sigma = np.tile(sigma, (N_star, 1))
+
+        quadratic_mean_fun = isinstance(
+            self.mean, gpyreg.mean_functions.NegativeQuadratic
+        )
+
+        F = np.zeros((N_star, N_s))
+        if compute_var:
+            F_var = np.zeros((N_star, N_s))
+
+        # Loop over hyperparameter samples.
+        for s in range(0, N_s):
+            hyp = self.post[s].hyp
+
+            # Extract GP hyperparameters
+            ell = np.exp(hyp[0:D])
+            ln_sf2 = 2 * hyp[D]
+            sum_lnell = np.sum(hyp[0:D])
+
+            # GP mean function hyperparameters
+            if isinstance(self.mean, gpyreg.mean_functions.ZeroMean):
+                m0 = 0
+            else:
+                m0 = hyp[cov_N + noise_N]
+
+            if quadratic_mean_fun:
+                xm = hyp[cov_N + noise_N + 1 : cov_N + noise_N + D + 1]
+                omega = np.exp(hyp[cov_N + noise_N + D + 1 :])
+
+            # GP posterior parameters
+            alpha = self.post[s].alpha
+            L = self.post[s].L
+            L_chol = self.post[s].L_chol
+
+            sn2 = np.exp(2 * hyp[cov_N])
+            sn2_eff = sn2 * self.post[s].sn2_mult
+
+            # Compute posterior mean of the integral
+            tau = np.sqrt(sigma ** 2 + ell ** 2)
+            lnnf = (
+                ln_sf2 + sum_lnell - np.sum(np.log(tau), 1)
+            )  # Covariance normalization factor
+            sum_delta2 = np.zeros((N_star, N))
+
+            for i in range(0, D):
+                sum_delta2 += (
+                    (mu[:, i] - np.reshape(self.X[:, i], (-1, 1))).T
+                    / tau[:, i : i + 1]
+                ) ** 2
+            z = np.exp(np.reshape(lnnf, (-1, 1)) - 0.5 * sum_delta2)
+            F[:, s : s + 1] = np.dot(z, alpha) + m0
+
+            if quadratic_mean_fun:
+                nu_k = -0.5 * np.sum(
+                    1
+                    / omega ** 2
+                    * (mu ** 2 + sigma ** 2 - 2 * mu * xm + xm ** 2),
+                    1,
+                )
+                F[:, s] += nu_k
+
+            # Compute posterior variance of the integral
+            if compute_var:
+                tau_kk = np.sqrt(2 * sigma ** 2 + ell ** 2)
+                nf_kk = np.exp(ln_sf2 + sum_lnell - np.sum(np.log(tau_kk), 1))
+                if L_chol:
+                    invKzk = (
+                        np.linalg.solve(L, np.linalg.solve(L.T, z.T)) / sn2_eff
+                    )
+                else:
+                    invKzk = np.dot(-L, z.T)
+                J_kk = nf_kk - np.sum(z * invKzk.T, 1)
+                F_var[:, s] = np.maximum(
+                    np.spacing(1), J_kk
+                )  # Correct for numerical error
+
+        # Unless predictions for samples are requested separately, average over samples
+        if N_s > 1 and not ss_flag:
+            F_bar = np.reshape(np.sum(F, 1), (-1, 1)) / N_s
+            if compute_var:
+                Fss_var = np.sum((F - F_bar) ** 2, 1) / (N_s - 1)
+                F_var = np.reshape(np.sum(F_var, 1) / N_s + Fss_var, (-1, 1))
+            F = F_bar
+
+        if compute_var:
+            return F, F_var
+
+        return F
 
     # sigma doesn't work, requires gplite_quad implementation
     # quantile doesn't work, requires gplite_qpred implementation

@@ -1,15 +1,12 @@
 """Module for helper functions for GP training."""
-# import time
+import warnings
 
 import numpy as np
 import scipy as sp
 
-from gpyreg.doe_lhs import lhs
 
-
-def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
+def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior, N):
     N0 = 1
-    N = 1024
     n_vars = np.max(
         [x0.shape[0], np.size(LB), np.size(UB), np.size(PLB), np.size(PUB)]
     )
@@ -19,9 +16,10 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
 
     if N > N0:
         # First test hyperparameters on a space-filling initial design
-        S = lhs(n_vars, samples=N - N0, criterion="maximin")
-        np.random.shuffle(S.T)  # Randomly permute columns
-
+        sampler = sp.stats.qmc.Sobol(d=n_vars, scramble=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            S = sampler.random(n=N - N0)
         sX = np.zeros((N - N0, n_vars))
 
         for i in range(0, n_vars):
@@ -80,14 +78,12 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior):
                 S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
                 sX[:, i] = sp.stats.t.ppf(S_scaled, df) * sigma + mu
 
-    # t_s = time.time()
     X = np.concatenate([[x0], sX])
     y = np.full((N,), np.inf)
     for i in range(0, N):
         y[i] = f(X[i, :])
 
     order = np.argsort(y)
-    # print(time.time() - t_s)
 
     return X[order, :], y[order]
 
