@@ -138,6 +138,82 @@ class GP:
         compute_posterior : bool, defaults to True
             Whether to compute the new posterior or not.
         """
+        rank_one_update = False
+        if X_new is not None and y_new is not None:
+            if X_new.ndim == 1:
+                X_new = np.reshape(X_new, (1, -1))
+            if y_new.ndim == 1:
+                y_new = np.reshape(y_new, (-1, 1))
+
+            if self.X is not None and self.y is not None and X_new.shape[0] == 1 and y_new.shape[0] == 1:
+                rank_one_update = True
+
+        if rank_one_update:
+            cov_N = self.covariance.hyperparameter_count(self.D)
+            # mean_N = self.mean.hyperparameter_count(self.D)
+            noise_N = self.noise.hyperparameter_count()
+
+            # Compute prediction for all samples.
+            m_star, v_star = self.predict(
+                X_new, y_new, add_noise=True, ss_flag=True
+            )
+            s_N = np.size(self.post)
+
+            # Loop over hyperparameter samples.
+            for s in range(0, s_N):
+                hyp_s = self.post[s].hyp
+
+                hyp_noise = hyp_s[cov_N : cov_N + noise_N]
+                sn2 = self.noise.compute(hyp_noise, X_new, y_new, 0)
+                sn2_eff = sn2 * self.post[s].sn2_mult
+
+                # Compute covariance and cross-covariance.
+                hyp_cov = hyp_s[0:cov_N]
+                K = self.covariance.compute(hyp_cov, X_new)
+                Ks = self.covariance.compute(hyp_cov, self.X, X_new)
+
+                L = self.post[s].L
+                L_chol = self.post[s].L_chol
+
+                if L_chol:  # High-noise parametrization
+                    alpha_update = (
+                        np.linalg.solve(L, np.linalg.solve(L.T, Ks)) / sn2_eff
+                    )
+                    new_L_column = np.linalg.solve(L.T, Ks) / sn2_eff
+                    self.post[s].L = np.block(
+                        [
+                            [L, new_L_column],
+                            [
+                                np.zeros((1, L.shape[0])),
+                                np.sqrt(
+                                    1
+                                    + K / sn2_eff
+                                    - np.dot(new_L_column.T, new_L_column)
+                                ),
+                            ],
+                        ]
+                    )
+                else:  # Low-noies parametrization
+                    alpha_update = np.dot(-L, Ks)
+                    v = -alpha_update / v_star[:, s]
+                    self.post[s].L = np.block(
+                        [
+                            [L + np.dot(v, alpha_update.T), -v],
+                            [-v.T, -1 / v_star[:, s]],
+                        ]
+                    )
+
+                self.post[s].sW = np.concatenate(
+                    (self.post[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
+                )
+
+                # alpha_update now contains (K + \sigma^2 I) \ k*
+                self.post[s].alpha = np.concatenate(
+                    (self.post[s].alpha, np.array([[0]]))
+                ) + (m_star[:, s] - y_new) / v_star[:, s] * np.concatenate(
+                    (alpha_update, np.array([[-1]]))
+                )
+
         if X_new is not None:
             if self.X is None:
                 self.X = X_new
@@ -154,7 +230,7 @@ class GP:
             else:
                 self.y = np.concatenate((self.y, y_new))
 
-        if hyp is not None:
+        if not rank_one_update and hyp is not None:
             _, s_N = hyp.shape
             self.post = np.empty((s_N,), dtype=Posterior)
 
@@ -578,7 +654,9 @@ class GP:
 
         return nlZ
 
-    def predict(self, x_star, y_star=None, s2_star=0, add_noise=False):
+    def predict(
+        self, x_star, y_star=None, s2_star=0, add_noise=False, ss_flag=False
+    ):
         """Predict the values of the gaussian process at given points.
 
         Parameters
@@ -661,7 +739,7 @@ class GP:
             ys2[:, s : s + 1] = fs2[:, s : s + 1] + sn2_star * sn2_mult
 
         # Unless predictions for samples are requested separately, average over samples.
-        if s_N > 1:
+        if s_N > 1 and not ss_flag:
             fbar = np.reshape(np.sum(fmu, 1), (-1, 1)) / s_N
             ybar = np.reshape(np.sum(ymu, 1), (-1, 1)) / s_N
             vf = np.sum((fmu - fbar) ** 2, 1) / (s_N - 1)

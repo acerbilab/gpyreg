@@ -57,8 +57,6 @@ x_star = np.array((xx.ravel(), yy.ravel())).T
 # ("latent" means that we do not add observation noise)
 fmu, fs2 = gp.predict(x_star, add_noise=False)
 
-# F, F_var = gp.quad(x_star, 1, compute_var=True)
-
 # Plot the GP
 gp.plot()
 

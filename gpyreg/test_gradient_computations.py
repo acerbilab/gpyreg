@@ -108,5 +108,31 @@ def test_gp_gradient_computations():
         )
     )
 
+    # Test rank-1 update.
+    idx = int(np.ceil(X.shape[0] / 2))
+    gp1 = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp1.update(X_new=X[0:idx, :], y_new=y[0:idx], hyp=hyp)
+
+    for i in range(idx, N):
+        gp1.update(X_new=X[i, :], y_new=y[i])
+
+    assert np.all(np.isclose(gp.X, gp1.X))
+    assert np.all(np.isclose(gp.y, gp1.y))
+
+    assert np.all(np.isclose(gp.post[0].hyp, gp1.post[0].hyp))
+    assert np.all(np.isclose(gp.post[0].alpha, gp1.post[0].alpha))
+
+    assert np.all(np.isclose(gp.post[0].sW, gp1.post[0].sW))
+    assert np.all(np.isclose(gp.post[0].L, gp1.post[0].L))
+
+    assert np.isclose(gp.post[0].sn2_mult, gp1.post[0].sn2_mult)
+    assert gp.post[0].L_chol and gp1.post[0].L_chol
+
     # Test plotting
     gp.plot()
