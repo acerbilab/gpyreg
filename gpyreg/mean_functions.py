@@ -235,7 +235,7 @@ class NegativeQuadratic:
         hyper_info : array_like
             A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
         """
-        return [("mean_const", 1), ("mean_placeholder_hyperparams", 2 * d)]
+        return [("mean_const", 1), ("mean_location", d), ("mean_log_scale", d)]
 
     def get_info(self, X, y):
         """Gives additional information on the hyperparameters.

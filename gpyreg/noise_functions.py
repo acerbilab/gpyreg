@@ -65,9 +65,9 @@ class GaussianNoise:
         if self.parameters[0] == 1:
             hyper_info.append(("noise_log_scale", 1))
         if self.parameters[1] == 2:
-            hyper_info.append(("noise_placeholder_hyperparams_1", 1))
+            hyper_info.append(("noise_provided_log_multiplier", 1))
         if self.parameters[2] == 1:
-            hyper_info.append(("noise_placeholder_hyperparams_2", 2))
+            hyper_info.append(("noise_rectified_log_multiplier", 2))
 
         return hyper_info
 

@@ -6,6 +6,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+cov_html/
 bin/
 build/
 develop-eggs/
