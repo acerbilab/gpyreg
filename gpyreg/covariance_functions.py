@@ -100,13 +100,11 @@ class SquaredExponential:
         sf2 = np.exp(2 * hyp[D])
 
         if X_star is None:
-            tmp = squareform(pdist(X @ np.diag(1 / ell), "sqeuclidean"))
+            tmp = squareform(pdist(X / ell, "sqeuclidean"))
         elif isinstance(X_star, str):
             tmp = np.zeros((N, 1))
         else:
-            tmp = cdist(
-                X @ np.diag(1 / ell), X_star @ np.diag(1 / ell), "sqeuclidean"
-            )
+            tmp = cdist(X / ell, X_star / ell, "sqeuclidean")
 
         K = sf2 * np.exp(-tmp / 2)
 

@@ -4,8 +4,7 @@ import numpy as np
 
 
 class ZeroMean:
-    """Zero mean function.
-    """
+    """Zero mean function."""
 
     def __init__(self):
         pass
@@ -102,8 +101,7 @@ class ZeroMean:
 
 
 class ConstantMean:
-    """Constant mean function.
-    """
+    """Constant mean function."""
 
     def __init__(self):
         pass
@@ -200,8 +198,7 @@ class ConstantMean:
 
 
 class NegativeQuadratic:
-    """Centered negative quadratic mean functions.
-    """
+    """Centered negative quadratic mean functions."""
 
     def __init__(self):
         pass

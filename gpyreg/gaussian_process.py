@@ -145,7 +145,12 @@ class GP:
             if y_new.ndim == 1:
                 y_new = np.reshape(y_new, (-1, 1))
 
-            if self.X is not None and self.y is not None and X_new.shape[0] == 1 and y_new.shape[0] == 1:
+            if (
+                self.X is not None
+                and self.y is not None
+                and X_new.shape[0] == 1
+                and y_new.shape[0] == 1
+            ):
                 rank_one_update = True
 
         if rank_one_update:
@@ -177,9 +182,16 @@ class GP:
 
                 if L_chol:  # High-noise parametrization
                     alpha_update = (
-                        np.linalg.solve(L, np.linalg.solve(L.T, Ks)) / sn2_eff
+                        sp.linalg.solve_triangular(
+                            L,
+                            sp.linalg.solve_triangular(L, Ks, trans=1),
+                            trans=0,
+                        )
+                        / sn2_eff
                     )
-                    new_L_column = np.linalg.solve(L.T, Ks) / sn2_eff
+                    new_L_column = (
+                        sp.linalg.solve_triangular(L, Ks, trans=1) / sn2_eff
+                    )
                     self.post[s].L = np.block(
                         [
                             [L, new_L_column],
@@ -722,7 +734,7 @@ class GP:
             ymu[:, s] = fmu[:, s]
             if N > 0:
                 if L_chol:
-                    V = np.linalg.solve(L.T, np.tile(sW, (1, N_star)) * Ks)
+                    V = sp.linalg.solve_triangular(L, np.tile(sW, (1, N_star)) * Ks, trans=1)
                     fs2[:, s : s + 1] = kss - np.reshape(
                         np.sum(V * V, 0), (-1, 1)
                     )  # predictive variance
@@ -853,7 +865,7 @@ class GP:
                 nf_kk = np.exp(ln_sf2 + sum_lnell - np.sum(np.log(tau_kk), 1))
                 if L_chol:
                     invKzk = (
-                        np.linalg.solve(L, np.linalg.solve(L.T, z.T)) / sn2_eff
+                        sp.linalg.solve(L, sp.linalg.solve(L, z.T, trans=1), trans=0) / sn2_eff
                     )
                 else:
                     invKzk = np.dot(-L, z.T)
@@ -1255,9 +1267,19 @@ class GP:
                     continue
                 break
             sl = 1
-            pL = np.linalg.solve(-L, np.linalg.solve(L.T, np.eye(N)))
+            if not compute_nlZ:
+                pL = sp.linalg.solve_triangular(
+                    -L,
+                    sp.linalg.solve_triangular(L, np.eye(N), trans=1),
+                    trans=0,
+                )
 
-        alpha = np.linalg.solve(L, np.linalg.solve(L.T, self.y - m)) / sl
+        alpha = (
+            sp.linalg.solve_triangular(
+                L, sp.linalg.solve_triangular(L, self.y - m, trans=1), trans=0
+            )
+            / sl
+        )
 
         # Negative log marginal likelihood computation
         if compute_nlZ:
@@ -1269,9 +1291,15 @@ class GP:
 
             if compute_nlZ_grad:
                 dnlZ = np.zeros(hyp.shape)
-                Q = np.linalg.solve(
-                    L, np.linalg.solve(L.T, np.eye(N))
-                ) / sl - np.dot(alpha, alpha.T)
+                Q = (
+                    sp.linalg.solve_triangular(
+                        L,
+                        sp.linalg.solve_triangular(L, np.eye(N), trans=1),
+                        trans=0,
+                    )
+                    / sl
+                    - np.dot(alpha, alpha.T)
+                )
 
                 # Gradient of covariance hyperparameters.
                 for i in range(0, cov_N):

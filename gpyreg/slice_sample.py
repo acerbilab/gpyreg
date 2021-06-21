@@ -480,8 +480,7 @@ class SliceSampler:
         return SamplingResult(samples, f_vals, exit_flag, log_priors, R, eff_N)
 
     def __diagnose(self, samples):
-        """Performs a quick and dirty diagnosis of convergence.
-        """
+        """Performs a quick and dirty diagnosis of convergence."""
         N = samples.shape[0]
         # split psrf
         split_samples = np.array(
@@ -525,8 +524,7 @@ class SliceSampler:
         return exit_flag, R, eff_N
 
     def __log_pdf_bound(self, x):
-        """Evaluate log pdf with bounds and prior.
-        """
+        """Evaluate log pdf with bounds and prior."""
         y = f_val = log_prior = None
 
         if np.any(x < self.LB) or np.any(x > self.UB):
@@ -561,8 +559,7 @@ class SliceSampler:
         return y, f_val, log_prior
 
     def __metropolis_step(self, x, log_f, log_Px, f_val, log_prior):
-        """Metropolis step.
-        """
+        """Metropolis step."""
         xx_new = self.metropolis_rnd()
         log_Px_new, f_val_new, log_prior_new = log_f(xx_new)
 
