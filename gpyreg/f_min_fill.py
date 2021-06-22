@@ -1,11 +1,28 @@
 """Module for helper functions for GP training."""
 import warnings
+import operator
+import re
 
 import numpy as np
 import scipy as sp
 
 
-def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N):
+def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
+    # Helper for comparing version numbers.
+    def ge_versions(version1, version2):
+        def normalize(v):
+            return [int(x) for x in re.sub(r"(\.0+)*$", "", v).split(".")]
+
+        return operator.ge(normalize(version1), normalize(version2))
+
+    if design is None:
+        # Check version number to make sure qmc exists.
+        # Remove in the future when Anaconda has SciPy 1.7.0
+        if ge_versions(sp.__version__, "1.7.0"):
+            design = "sobol"
+        else:
+            design = "random"
+
     N0 = 1
     n_vars = np.max(
         [x0.shape[0], np.size(LB), np.size(UB), np.size(PLB), np.size(PUB)]
@@ -16,10 +33,19 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N):
 
     if N > N0:
         # First test hyperparameters on a space-filling initial design
-        sampler = sp.stats.qmc.Sobol(d=n_vars, scramble=True)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            S = sampler.random(n=N - N0)
+        if design == "sobol":
+            sampler = sp.stats.qmc.Sobol(d=n_vars, scramble=True)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                S = sampler.random(n=N - N0)
+        elif design == "random":
+            S = np.random.uniform(size=(N - N0, n_vars))
+        else:
+            raise ValueError(
+                "Unknown design: got "
+                + design
+                + ' and expected either "sobol" or "random"'
+            )
         sX = np.zeros((N - N0, n_vars))
 
         for i in range(0, n_vars):

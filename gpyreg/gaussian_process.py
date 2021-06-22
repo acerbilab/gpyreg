@@ -131,8 +131,72 @@ class GP:
                     # Implicit flag for gaussian, is set to inf later.
                     self.hyper_priors["df"][i] = df
 
-    def set_hyperparameters(self, hyp_new):
-        pass
+    def get_hyperparameters(self, as_array=False):
+        if as_array:
+            hyp = np.zeros((np.size(self.post[0].hyp), np.size(self.post)))
+            for i in range(0, np.size(self.post)):
+                hyp[:, i] = self.post[i].hyp
+
+            return hyp
+
+        hyp = []
+        cov_hyper_info = self.covariance.hyperparameter_info(self.D)
+        mean_hyper_info = self.mean.hyperparameter_info(self.D)
+        noise_hyper_info = self.noise.hyperparameter_info()
+
+        for i in range(0, np.size(self.post)):
+            hyp_tmp = self.post[i].hyp
+            hyp_dict = {}
+            i = 0
+
+            for info in cov_hyper_info:
+                hyp_dict[info[0]] = hyp_tmp[i : i + info[1]]
+                i += info[1]
+
+            for info in noise_hyper_info:
+                hyp_dict[info[0]] = hyp_tmp[i : i + info[1]]
+                i += info[1]
+
+            for info in mean_hyper_info:
+                hyp_dict[info[0]] = hyp_tmp[i : i + info[1]]
+                i += info[1]
+
+            hyp.append(hyp_dict)
+
+        return hyp
+
+    def set_hyperparameters(self, hyp_new, compute_posterior=True):
+        if isinstance(hyp_new, np.ndarray):
+            self.update(hyp=hyp_new, compute_posterior=compute_posterior)
+        else:
+            cov_N = self.covariance.hyperparameter_count(self.D)
+            cov_hyper_info = self.covariance.hyperparameter_info(self.D)
+            mean_N = self.mean.hyperparameter_count(self.D)
+            mean_hyper_info = self.mean.hyperparameter_info(self.D)
+            noise_N = self.noise.hyperparameter_count()
+            noise_hyper_info = self.noise.hyperparameter_info()
+
+            hyp_N = cov_N + mean_N + noise_N
+            hyp_new_arr = np.zeros((hyp_N, len(hyp_new)))
+
+            for i in range(0, len(hyp_new)):
+                hyp_tmp = hyp_new[i]
+                j = 0
+
+                for info in cov_hyper_info:
+                    hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                    j += info[1]
+
+                for info in noise_hyper_info:
+                    hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                    j += info[1]
+
+                for info in mean_hyper_info:
+                    # print("here")
+                    hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                    j += info[1]
+
+            self.update(hyp=hyp_new_arr, compute_posterior=compute_posterior)
 
     def update(
         self,
@@ -474,7 +538,7 @@ class GP:
         hyp = hyp_pre_thin[:, thin - 1 :: thin]
 
         t3 = time.time() - t3_s
-        # print(hyp)
+        print(hyp)
         print(t1, t2, t3)
 
         # Recompute GP with finalized hyperparameters.

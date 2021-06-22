@@ -135,5 +135,11 @@ def test_gp_gradient_computations():
     assert np.isclose(gp.post[0].sn2_mult, gp1.post[0].sn2_mult)
     assert gp.post[0].L_chol and gp1.post[0].L_chol
 
+    # Test getting and setting hyperparameters.
+    hyp_dict = gp.get_hyperparameters()
+    gp1.set_hyperparameters(hyp_dict)
+
+    assert np.all(np.isclose(gp.post[0].hyp, gp1.post[0].hyp))
+
     # Test plotting
     gp.plot()
