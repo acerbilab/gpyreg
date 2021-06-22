@@ -74,35 +74,36 @@ def test_gp_gradient_computations():
 
     # Check GP hyperparameters log prior gradient computation.
     gp.set_priors({})
+
+    hyp1 = hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size))
     for i in range(0, cov_N + mean_N + noise_N):
-        prior_type = np.random.randint(0, 4)
-        if prior_type == 0:  # 'gaussian'
-            gp.hyper_priors.mu[i] = np.random.standard_normal()
-            gp.hyper_priors.sigma[i] = np.exp(np.random.standard_normal())
-            gp.hyper_priors.df[i] = 0
-        elif prior_type == 1:  #'student_t'
-            gp.hyper_priors.mu[i] = np.random.standard_normal()
-            gp.hyper_priors.sigma[i] = np.random.standard_normal()
-            gp.hyper_priors.df[i] = np.exp(np.random.standard_normal())
-        elif prior_type == 2:  # 'smoothbox'
-            gp.hyper_priors.a[i] = -10
-            gp.hyper_priors.b[i] = 10
-            gp.hyper_priors.sigma[i] = np.random.standard_normal()
-            gp.hyper_priors.df[i] = 0
-        elif prior_type == 3:  # 'smoothbox_student_t'
-            gp.hyper_priors.a[i] = -10
-            gp.hyper_priors.b[i] = 10
-            gp.hyper_priors.sigma[i] = np.random.standard_normal()
-            gp.hyper_priors.df[i] = np.exp(np.random.standard_normal())
+        prior_type = np.random.randint(1, 5)
+        if prior_type == 0:  # 'fixed'
+            gp.hyper_priors["LB"][i] = hyp1[i]
+            gp.hyper_priors["UB"][i] = hyp1[i]
+        elif prior_type == 1:  # 'gaussian'
+            gp.hyper_priors["mu"][i] = np.random.standard_normal()
+            gp.hyper_priors["sigma"][i] = np.exp(np.random.standard_normal())
+            gp.hyper_priors["df"][i] = 0
+        elif prior_type == 2:  #'student_t'
+            gp.hyper_priors["mu"][i] = np.random.standard_normal()
+            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
+            gp.hyper_priors["df"][i] = np.exp(np.random.standard_normal())
+        elif prior_type == 3:  # 'smoothbox'
+            gp.hyper_priors["a"][i] = -10
+            gp.hyper_priors["b"][i] = 10
+            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
+            gp.hyper_priors["df"][i] = 0
+        elif prior_type == 4:  # 'smoothbox_student_t'
+            gp.hyper_priors["a"][i] = -10
+            gp.hyper_priors["b"][i] = 10
+            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
+            gp.hyper_priors["df"][i] = np.exp(np.random.standard_normal())
     f = lambda hyp_: gp._GP__compute_log_priors(hyp_, False)
     f_grad = lambda hyp_: gp._GP__compute_log_priors(hyp_, True)[1]
     assert np.all(
         np.isclose(
-            check_grad(
-                f,
-                f_grad,
-                hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size)),
-            ),
+            check_grad(f, f_grad, hyp1),
             0.0,
             atol=1e-6,
         )

@@ -5,7 +5,7 @@ import numpy as np
 import scipy as sp
 
 
-def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior, N):
+def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N):
     N0 = 1
     n_vars = np.max(
         [x0.shape[0], np.size(LB), np.size(UB), np.size(PLB), np.size(PUB)]
@@ -23,29 +23,33 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior, N):
         sX = np.zeros((N - N0, n_vars))
 
         for i in range(0, n_vars):
-            mu = tprior.mu[i]
-            sigma = tprior.sigma[i]
-            a = tprior.a[i]
-            b = tprior.b[i]
+            mu = hprior["mu"][i]
+            sigma = hprior["sigma"][i]
+            a = hprior["a"][i]
+            b = hprior["b"][i]
 
             if not np.isfinite(mu) and not np.isfinite(
                 sigma
             ):  # Uniform distribution?
                 if np.isfinite(LB[i]) and np.isfinite(UB[i]):
-                    # Mixture of uniforms (full bounds and plausible bounds)
-                    w = 0.5 ** (
-                        1 / n_vars
-                    )  # Half of all starting points from inside the plausible box
-                    sX[:, i] = __uuinv(
-                        S[:, i], [LB[i], PLB[i], PUB[i], UB[i]], w
-                    )
+                    # Fixed dimension
+                    if LB[i] == UB[i]:
+                        sX[:, i] = LB[i]
+                    else:
+                        # Mixture of uniforms (full bounds and plausible bounds)
+                        w = 0.5 ** (
+                            1 / n_vars
+                        )  # Half of all starting points from inside the plausible box
+                        sX[:, i] = __uuinv(
+                            S[:, i], [LB[i], PLB[i], PUB[i], UB[i]], w
+                        )
                 else:
                     # All starting points from inside the plausible box
                     sX[:, i] = S[:, i] * (PUB[i] - PLB[i]) + PLB[i]
             elif np.isfinite(a) and np.isfinite(
                 b
             ):  # Smooth box student's t prior
-                df = tprior.df[i]
+                df = hprior["df"][i]
                 # Force fat tails
                 if not np.isfinite(df):
                     df = 3
@@ -65,7 +69,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, tprior, N):
                             S_scaled[j], df, sigma, a, b
                         )
             else:  # Student's t prior
-                df = tprior.df[i]
+                df = hprior["df"][i]
                 # Force fat tails
                 if not np.isfinite(df):
                     df = 3

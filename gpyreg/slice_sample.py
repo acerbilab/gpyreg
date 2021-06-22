@@ -422,8 +422,11 @@ class SliceSampler:
                     new_widths = np.fmin(
                         5
                         * np.sqrt(
-                            xx_sq_sum / burn_stored
-                            - (xx_sum / burn_stored) ** 2
+                            np.maximum(
+                                xx_sq_sum / burn_stored
+                                - (xx_sum / burn_stored) ** 2,
+                                0,
+                            )
                         ),
                         self.UB_out - self.LB_out,
                     )
