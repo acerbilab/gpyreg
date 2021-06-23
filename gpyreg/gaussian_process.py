@@ -130,22 +130,88 @@ class GP:
                     self.hyper_priors["sigma"][i] = sigma
                     # Implicit flag for gaussian, is set to inf later.
                     self.hyper_priors["df"][i] = df
+                else:
+                    raise ValueError("Unknown hyperprior type " + prior_type)
+            else:
+                raise ValueError("Unknown hyperprior name " + prior)
 
     def get_hyperparameters(self, as_array=False):
-        if as_array:
+        """Gets the current hyperparameters for the Gaussian process.
+
+        Parameters
+        ==========
+        as_array : bool, defaults to False
+            Whether to return the hyperparameters as an array, or a list
+            of dictionaries for each sample.
+
+        Returns
+        =======
+        hyp : object
+            The hyperparameteres in the form specified by as_array.
+        """
+        # If no hyperparameters have been set return an array/dict with NaN.
+        if self.post is None:
+            cov_N = self.covariance.hyperparameter_count(self.D)
+            mean_N = self.mean.hyperparameter_count(self.D)
+            noise_N = self.noise.hyperparameter_count()
+            hyp = np.full((cov_N + mean_N + noise_N, 1), np.nan)
+        else:
             hyp = np.zeros((np.size(self.post[0].hyp), np.size(self.post)))
             for i in range(0, np.size(self.post)):
                 hyp[:, i] = self.post[i].hyp
 
+        if as_array:
             return hyp
 
+        return self.hyperparameters_to_dict(hyp)
+
+    def set_hyperparameters(self, hyp_new, compute_posterior=True):
+        """Sets new hyperparameters for the Gaussian process.
+
+        Parameters
+        ==========
+        hyp_new : object
+            The new hyperparameters. This can be an array of size (hyp_N, N0) where
+            hyp_N is the number of hyperparametes, and N0 is the amount of samples,
+            a single dictionary with hyperparameter names and values, or a list of
+            dictionaries. The behaviour of passing a single dictionary and a list
+            with one dictionary is equivalent.
+        compute_posterior : bool, defaults to True
+            Whether to compute the posterior for the new hyperparameters.
+        """
+        if isinstance(hyp_new, np.ndarray):
+            self.update(hyp=hyp_new, compute_posterior=compute_posterior)
+        else:
+            hyp_new_arr = self.hyperparameters_from_dict(hyp_new)
+            self.update(hyp=hyp_new_arr, compute_posterior=compute_posterior)
+
+    def hyperparameters_to_dict(self, hyp_arr):
+        """Converts a hyperparameter array to a list of dictionaries
+        for each sample with hyperparameter names and values.
+
+        Parameters
+        ==========
+        hyp_arr : array_like
+            The hyperparameter array
+
+        Returns
+        =======
+        hyp_dict : object
+            The list of dictonaries for each sample with hyperparameter names and values.
+        """
         hyp = []
+        cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
+        mean_N = self.mean.hyperparameter_count(self.D)
         mean_hyper_info = self.mean.hyperparameter_info(self.D)
+        noise_N = self.noise.hyperparameter_count()
         noise_hyper_info = self.noise.hyperparameter_info()
 
-        for i in range(0, np.size(self.post)):
-            hyp_tmp = self.post[i].hyp
+        if hyp_arr.shape[0] != cov_N + mean_N + noise_N:
+            raise ValueError("Input hyperparameter array is the wrong shape!")
+
+        for i in range(0, hyp_arr.shape[1]):
+            hyp_tmp = hyp_arr[:, i]
             hyp_dict = {}
             i = 0
 
@@ -165,38 +231,49 @@ class GP:
 
         return hyp
 
-    def set_hyperparameters(self, hyp_new, compute_posterior=True):
-        if isinstance(hyp_new, np.ndarray):
-            self.update(hyp=hyp_new, compute_posterior=compute_posterior)
-        else:
-            cov_N = self.covariance.hyperparameter_count(self.D)
-            cov_hyper_info = self.covariance.hyperparameter_info(self.D)
-            mean_N = self.mean.hyperparameter_count(self.D)
-            mean_hyper_info = self.mean.hyperparameter_info(self.D)
-            noise_N = self.noise.hyperparameter_count()
-            noise_hyper_info = self.noise.hyperparameter_info()
+    def hyperparameters_from_dict(self, hyp_dict):
+        """Converts a list of hyperparameter dictionaries to a hyperparameter array.
 
-            hyp_N = cov_N + mean_N + noise_N
-            hyp_new_arr = np.zeros((hyp_N, len(hyp_new)))
+        Parameters
+        ==========
+        hyp_dict : object
+            A list of hyperparameter dictionaries with hyperparameter names and values.
+            One can also pass just one dictionary instead of a list with one element.
 
-            for i in range(0, len(hyp_new)):
-                hyp_tmp = hyp_new[i]
-                j = 0
+        Returns
+        =======
+        hyp_arr : array_like
+            The hyperparameter array.
+        """
+        if isinstance(hyp_dict, dict):
+            hyp_dict = [hyp_dict]
 
-                for info in cov_hyper_info:
-                    hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
-                    j += info[1]
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        cov_hyper_info = self.covariance.hyperparameter_info(self.D)
+        mean_N = self.mean.hyperparameter_count(self.D)
+        mean_hyper_info = self.mean.hyperparameter_info(self.D)
+        noise_N = self.noise.hyperparameter_count()
+        noise_hyper_info = self.noise.hyperparameter_info()
 
-                for info in noise_hyper_info:
-                    hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
-                    j += info[1]
+        hyp_N = cov_N + mean_N + noise_N
+        hyp_new_arr = np.zeros((hyp_N, len(hyp_dict)))
 
-                for info in mean_hyper_info:
-                    # print("here")
-                    hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
-                    j += info[1]
+        for i, hyp_tmp in enumerate(hyp_dict):
+            j = 0
 
-            self.update(hyp=hyp_new_arr, compute_posterior=compute_posterior)
+            for info in cov_hyper_info:
+                hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                j += info[1]
+
+            for info in noise_hyper_info:
+                hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                j += info[1]
+
+            for info in mean_hyper_info:
+                hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                j += info[1]
+
+        return hyp_new_arr
 
     def update(
         self,
@@ -345,7 +422,7 @@ class GP:
                         hyp[:, i], None, None, None, None, None
                     )
 
-    def fit(self, X=None, y=None, s2=None, options=None):
+    def fit(self, X=None, y=None, s2=None, hyp0=None, options=None):
         """Trains gaussian process hyperparameters.
 
         Parameters
@@ -373,10 +450,10 @@ class GP:
 
         Returns
         =======
-
-        hyp : object
-            In case ``n_samples`` is 0, we return the best result of optimization without sampling,
-            and if not then we return the ``SamplingResult``object from sampling.
+        hyp : array_like
+            The fitted hyperparameters.
+        sampling_result : dict
+            If sampling was performed this is a dictionary with info on the sampling run, and None otherwise.
         """
         ## Default options
         if options is None:
@@ -409,8 +486,6 @@ class GP:
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
-        hyp_N = cov_N + mean_N + noise_N
-        hyp0 = np.zeros((hyp_N,))
 
         LB = self.hyper_priors["LB"]
         UB = self.hyper_priors["UB"]
@@ -449,6 +524,18 @@ class GP:
         PUB = np.concatenate([cov_info.PUB, noise_info.PUB, mean_info.PUB])
         PLB = np.minimum(np.maximum(PLB, LB), UB)
         PUB = np.maximum(np.minimum(PUB, UB), LB)
+
+        # If we are not provided with an initial hyperparameter guess then either use the current hyperparameters
+        # if they exist, or use plausible lower and upper bounds to guess.
+        if hyp0 is None:
+            if self.post is not None:
+                hyp0 = self.get_hyperparameters(as_array=True)
+            else:
+                hyp0 = np.reshape(
+                    np.minimum(np.maximum((PLB + PUB) / 2, LB), UB), (-1, 1)
+                )
+        elif isinstance(hyp0, dict):
+            hyp0 = self.hyperparameters_from_dict(hyp0)
 
         ## Hyperparameter optimization
         objective_f_1 = lambda hyp_: self.__gp_obj_fun(hyp_, False, False)
@@ -518,7 +605,7 @@ class GP:
         # In case n_samples is 0, just return the optimized hyperparameter result.
         if s_N == 0:
             self.update(hyp=hyp_start)
-            return hyp_start
+            return hyp_start, None
 
         ## Sample from best hyperparameter vector using slice sampling
 
@@ -531,10 +618,10 @@ class GP:
         slicer = SliceSampler(
             sample_f, hyp_start, widths_default, LB, UB, options
         )
-        res = slicer.sample(eff_s_N, burn=burn_in)
+        sampling_result = slicer.sample(eff_s_N, burn=burn_in)
 
         # Thin samples
-        hyp_pre_thin = res.samples.T
+        hyp_pre_thin = sampling_result["samples"].T
         hyp = hyp_pre_thin[:, thin - 1 :: thin]
 
         t3 = time.time() - t3_s
@@ -543,7 +630,7 @@ class GP:
 
         # Recompute GP with finalized hyperparameters.
         self.update(hyp=hyp)
-        return res
+        return hyp, sampling_result
 
     def __compute_log_priors(self, hyp, compute_grad):
         lp = 0

@@ -207,8 +207,38 @@ class SliceSampler:
 
         Returns
         -------
-        res : SamplingResult
-          The sampling result represented as a ``SamplingResult`` object.
+        res : dict
+          The sampling result represented as a dictionary with attributes
+
+            **samples** : array_like
+                The actual sampled points.
+            **f_vals** : array_like
+                The sequence of values of the target log pdf at the sampled points.
+                If a prior is specified in ``log_prior``, then ``f_vals`` does NOT
+                include the contribution of the prior.
+            **exit_flag** : { 1, 0, -1, -2, -3 }
+                Possible values and the corresponding exit conditions are
+
+                    1, Target number of recorded samples reached,
+                      with no explicit violation of convergence (this does not ensure convergence).
+
+                    0, Target number of recorded samples reached,
+                      convergence status is unknown (no diagnostics have been run).
+
+                    -1, No explicit violation of convergence detected, but the number of
+                        effective (independent) samples in the sampled sequence is much
+                        lower than the number of requested samples N for at least one
+                        dimension.
+
+                    -2, Detected probable lack of convergence of the sampling procedure.
+
+                    -3, Detected lack of convergence of the sampling procedure.
+            **log_priors** : array_like
+                The sequence of the values of the log prior at the sampled points
+            **R** : array_like
+                Estimate of the potential scale reduction factor in each dimension.
+            **eff_N** : array_like
+                Estimate of the effective number of samples in each dimension.
 
         """
 
@@ -480,7 +510,16 @@ class SliceSampler:
             if diag_msg != "":
                 self.logger.info(diag_msg)
 
-        return SamplingResult(samples, f_vals, exit_flag, log_priors, R, eff_N)
+        sampling_result = {
+            "samples": samples,
+            "exit_flag": exit_flag,
+            "f_vals": f_vals,
+            "log_priors": log_priors,
+            "R": R,
+            "eff_N": eff_N,
+        }
+
+        return sampling_result
 
     def __diagnose(self, samples):
         """Performs a quick and dirty diagnosis of convergence."""
@@ -692,49 +731,3 @@ class SliceSampler:
         # This part in the original code was slightly different, along with the modulo check above.
         # However, looking at definitions this seems like the correct way.
         return m * n / (-1 + 2 * rho[0 : t - 2].sum())
-
-
-class SamplingResult:
-    """Results of a sampling run.
-
-    Attributes
-    ----------
-    samples : array_like
-        The actual samplesd points.
-    f_vals : array_like
-        The sequence of values of the target log pdf at the sampled points.
-        If a prior is specified in ``log_prior``, then ``f_vals`` does NOT
-        include the contribution of the prior.
-    exit_flag : { 1, 0, -1, -2, -3 }
-        Possible values and the corresponding exit conditions are
-
-            1, Target number of recorded samples reached,
-              with no explicit violation of convergence (this does not ensure convergence).
-
-            0, Target number of recorded samples reached,
-              convergence status is unknown (no diagnostics have been run).
-
-            -1, No explicit violation of convergence detected, but the number of
-                effective (independent) samples in the sampled sequence is much
-                lower than the number of requested samples N for at least one
-                dimension.
-
-            -2, Detected probable lack of convergence of the sampling procedure.
-
-            -3, Detected lack of convergence of the sampling procedure.
-    log_priors : array_like
-        The sequence of the values of the log prior at the sampled points
-    R : array_like
-        Estimate of the potential scale reduction factor in each dimension.
-    eff_N : array_like
-        Estimate of the effective number of samples in each dimension.
-
-    """
-
-    def __init__(self, samples, f_vals, exit_flag, log_priors, R, eff_N):
-        self.samples = samples
-        self.f_vals = f_vals
-        self.exit_flag = exit_flag
-        self.log_priors = log_priors
-        self.R = R
-        self.eff_N = eff_N
