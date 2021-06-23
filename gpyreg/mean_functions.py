@@ -28,7 +28,8 @@ class ZeroMean:
 
     @staticmethod
     def hyperparameter_info(_):
-        """Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting
+        them in other parts of the program.
 
         Parameters
         ----------
@@ -38,7 +39,9 @@ class ZeroMean:
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
+            A list of tuples containing hyperparameter names along with
+            how many parameters with such a name there are, in the order
+            they are used in computations.
         """
         return []
 
@@ -84,12 +87,13 @@ class ZeroMean:
 
         if hyp.size != mean_N:
             raise ValueError(
-                "Expected %d mean function hyperparameters, %d passed instead."
-                % (mean_N, hyp.size)
+                "Expected %d mean function hyperparameters, %d "
+                "passed instead." % (mean_N, hyp.size)
             )
         if hyp.ndim != 1:
             raise ValueError(
-                "Mean function output is available only for one-sample hyperparameter inputs."
+                "Mean function output is available only for "
+                "one-sample hyperparameter inputs."
             )
 
         m = np.zeros((N, 1))
@@ -124,7 +128,8 @@ class ConstantMean:
 
     @staticmethod
     def hyperparameter_info(_):
-        """Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting
+        them in other parts of the program.
 
         Parameters
         ----------
@@ -134,7 +139,9 @@ class ConstantMean:
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
+            A list of tuples containing hyperparameter names along with
+            how many parameters with such a name there are, in the order
+            they are used in computations.
         """
         return [("mean_const", 1)]
 
@@ -180,12 +187,13 @@ class ConstantMean:
 
         if hyp.size != mean_N:
             raise ValueError(
-                "Expected %d mean function hyperparameters, %d passed instead."
-                % (mean_N, hyp.size)
+                "Expected %d mean function hyperparameters, %d "
+                "passed instead." % (mean_N, hyp.size)
             )
         if hyp.ndim != 1:
             raise ValueError(
-                "Mean function output is available only for one-sample hyperparameter inputs."
+                "Mean function output is available only for "
+                "one-sample hyperparameter inputs."
             )
 
         m0 = hyp[0]
@@ -222,7 +230,8 @@ class NegativeQuadratic:
 
     @staticmethod
     def hyperparameter_info(d):
-        """Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting
+        them in other parts of the program.
 
         Parameters
         ----------
@@ -233,7 +242,9 @@ class NegativeQuadratic:
         -------
 
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
+            A list of tuples containing hyperparameter names along with
+            how many parameters with such a name there are, in the order
+            they are used in computations.
         """
         return [("mean_const", 1), ("mean_location", d), ("mean_log_scale", d)]
 
@@ -279,12 +290,13 @@ class NegativeQuadratic:
 
         if hyp.size != mean_N:
             raise ValueError(
-                "Expected %d mean function hyperparameters, %d passed instead."
-                % (mean_N, hyp.size)
+                "Expected %d mean function hyperparameters, %d "
+                "passed instead." % (mean_N, hyp.size)
             )
         if hyp.ndim != 1:
             raise ValueError(
-                "Mean function output is available only for one-sample hyperparameter inputs."
+                "Mean function output is available only for one-sample "
+                "hyperparameter inputs."
             )
 
         m_0 = hyp[0]
@@ -324,8 +336,8 @@ class MeanInfo:
         elif idx == 1:
             self.LB[0] = np.min(y) - 0.5 * h
             self.UB[0] = np.max(y) + 0.5 * h
-            # For future reference note that quantile behaviour in MATLAB and NumPy is slightly different.
-            # https://stackoverflow.com/questions/58424704/output-produced-by-python-numpy-percentile-not-same-as-matlab-prctile
+            # For future reference note that quantile behaviour in
+            # MATLAB and NumPy is slightly different.
             self.PLB[0] = np.quantile(y, 0.1)
             self.PUB[0] = np.quantile(y, 0.9)
             self.x0[0] = np.median(y)
@@ -348,8 +360,8 @@ class MeanInfo:
             self.UB[1 + D : mean_N] = np.log(w) + np.log(big)
             self.PLB[1 + D : mean_N] = np.log(w) + 0.5 * np.log(tol)
             self.PUB[1 + D : mean_N] = np.log(w)
-            # For future reference note that std behaviour in MATLAB and NumPy is slightly different.
-            # https://stackoverflow.com/questions/27600207/why-does-numpy-std-give-a-different-result-to-matlab-std
+            # For future reference note that std behaviour in
+            # MATLAB and NumPy is slightly different.
             self.x0[1 + D : mean_N] = np.log(np.std(X, ddof=1))
         # Plausible starting point
         i_nan = np.isnan(self.x0)

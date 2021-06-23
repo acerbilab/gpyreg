@@ -54,12 +54,15 @@ class GaussianNoise:
         return noise_N
 
     def hyperparameter_info(self):
-        """Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting
+        them in other parts of the program.
 
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
+            A list of tuples containing hyperparameter names along with
+            how many parameters with such a name there are, in the order
+            they are used in computations.
         """
         hyper_info = []
         if self.parameters[0] == 1:
@@ -157,9 +160,11 @@ class GaussianNoise:
         y : array_like
             Vector of test targets.
         s2 : array_like
-            Estimated noise variance associated with each training input vector.
+            Estimated noise variance associated with each training input
+            vector.
         compute_grad : bool, defaults to False
-            Whether to compute the gradient with respect to the hyperparameters.
+            Whether to compute the gradient with respect to the
+            hyperparameters.
 
         Returns
         -------
@@ -173,12 +178,13 @@ class GaussianNoise:
 
         if hyp.size != noise_N:
             raise ValueError(
-                "Expected %d noise function hyperparameters, %d passed instead."
-                % (noise_N, hyp.size)
+                "Expected %d noise function hyperparameters, %d "
+                "passed instead." % (noise_N, hyp.size)
             )
         if hyp.ndim != 1:
             raise ValueError(
-                "Noise function output is available only for one-sample hyperparameter inputs."
+                "Noise function output is available only for "
+                "one-sample hyperparameter inputs."
             )
 
         dsn2 = None

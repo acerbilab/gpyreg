@@ -13,7 +13,7 @@ from scipy.stats import (
 
 from gpyreg.slice_sample import SliceSampler
 
-options = {"display": "off", "diagnostics": False}
+options = {"display": "off", "diagnostics": True}
 threshold = 0.1
 
 

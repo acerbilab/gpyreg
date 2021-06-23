@@ -29,7 +29,8 @@ class SquaredExponential:
 
     @staticmethod
     def hyperparameter_info(d):
-        """Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them
+        in other parts of the program.
 
         Parameters
         ----------
@@ -39,7 +40,9 @@ class SquaredExponential:
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
+            A list of tuples containing hyperparameter names along with how
+            many parameters with such a name there are, in the order they
+            are used in computations.
         """
         return [
             ("covariance_log_lengthscale", d),
@@ -88,12 +91,13 @@ class SquaredExponential:
 
         if hyp.size != cov_N:
             raise ValueError(
-                "Expected %d covariance function hyperparameters, %d passed instead."
-                % (cov_N, hyp.size)
+                "Expected %d covariance function hyperparameters, %d "
+                "passed instead." % (cov_N, hyp.size)
             )
         if hyp.ndim != 1:
             raise ValueError(
-                "Covariance function output is available only for one-sample hyperparameter inputs."
+                "Covariance function output is available only for "
+                "one-sample hyperparameter inputs."
             )
 
         ell = np.exp(hyp[0:D])
@@ -156,7 +160,8 @@ class Matern:
 
     @staticmethod
     def hyperparameter_info(d):
-        """Gives information on the names of hyperparameters for setting them in other parts of the program.
+        """Gives information on the names of hyperparameters for setting them
+        in other parts of the program.
 
         Parameters
         ----------
@@ -166,7 +171,9 @@ class Matern:
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how many parameters with such a name there are, in the order they are used in computations.
+            A list of tuples containing hyperparameter names along with how
+            many parameters with such a name there are, in the order they
+            are used in computations.
         """
         return [
             ("covariance_log_lengthscale", d),
@@ -215,12 +222,13 @@ class Matern:
 
         if hyp.size != cov_N:
             raise ValueError(
-                "Expected %d covariance function hyperparameters, %d passed instead."
-                % (cov_N, hyp.size)
+                "Expected %d covariance function hyperparameters "
+                ", %d passed instead." % (cov_N, hyp.size)
             )
         if hyp.ndim != 1:
             raise ValueError(
-                "Covariance function output is available only for one-sample hyperparameter inputs."
+                "Covariance function output is available only for "
+                "one-sample hyperparameter inputs."
             )
 
         ell = np.exp(hyp[0:D])
@@ -238,7 +246,8 @@ class Matern:
             df = lambda t: (1 + t) / 3
         else:
             raise Exception(
-                "Only degrees 1, 3 and 5 are supported for the Matern covariance function."
+                "Only degrees 1, 3 and 5 are supported for the "
+                "Matern covariance function."
             )
 
         if X_star is None:

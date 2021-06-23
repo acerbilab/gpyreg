@@ -58,7 +58,8 @@ class GP:
         noise_hyper_info = self.noise.hyperparameter_info()
 
         hyp_N = cov_N + mean_N + noise_N
-        # Set up a hyperprior dictionary with default values which can be updated individually later.
+        # Set up a hyperprior dictionary with default values which can
+        # be updated individually later.
         self.hyper_priors = {
             "mu": np.full((hyp_N,), np.nan),
             "sigma": np.full((hyp_N,), np.nan),
@@ -70,11 +71,13 @@ class GP:
         }
 
         for prior in priors:
-            # Indices for the lower and upper range of this particular hyperprior.
+            # Indices for the lower and upper range of this particular
+            # hyperprior.
             lower = 0
             upper = None
 
-            # Go through all possible hyperparameter names and find the one we are interested in.
+            # Go through all possible hyperparameter names and find the
+            # one we are interested in.
             # Also update lower and upper as we go.
 
             for info in cov_hyper_info:
@@ -171,10 +174,11 @@ class GP:
         Parameters
         ==========
         hyp_new : object
-            The new hyperparameters. This can be an array of size (hyp_N, N0) where
-            hyp_N is the number of hyperparametes, and N0 is the amount of samples,
-            a single dictionary with hyperparameter names and values, or a list of
-            dictionaries. The behaviour of passing a single dictionary and a list
+            The new hyperparameters. This can be an array of size
+            (hyp_N, N0) where hyp_N is the number of hyperparametes, and
+            N0 is the amount of samples, a single dictionary with
+            hyperparameter names and values, or a list of dictionaries.
+            The behaviour of passing a single dictionary and a list
             with one dictionary is equivalent.
         compute_posterior : bool, defaults to True
             Whether to compute the posterior for the new hyperparameters.
@@ -197,7 +201,8 @@ class GP:
         Returns
         =======
         hyp_dict : object
-            The list of dictonaries for each sample with hyperparameter names and values.
+            The list of dictonaries for each sample with hyperparameter
+            names and values.
         """
         hyp = []
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -232,13 +237,15 @@ class GP:
         return hyp
 
     def hyperparameters_from_dict(self, hyp_dict):
-        """Converts a list of hyperparameter dictionaries to a hyperparameter array.
+        """Converts a list of hyperparameter dictionaries to a hyperparameter
+        array.
 
         Parameters
         ==========
         hyp_dict : object
-            A list of hyperparameter dictionaries with hyperparameter names and values.
-            One can also pass just one dictionary instead of a list with one element.
+            A list of hyperparameter dictionaries with hyperparameter names
+            and values. One can also pass just one dictionary instead of a
+            list with one element.
 
         Returns
         =======
@@ -292,7 +299,8 @@ class GP:
         y_new : array_like, optional
             New training targets, that will be concatenated with the old ones.
         s2_new : array_like, optional
-            New input-dependent noise that will be concatenated with the old ones.
+            New input-dependent noise that will be concatenated with the
+            old ones.
         hyp : array_like, optional
             New hyperparameters that will replace the old ones.
         compute_posterior : bool, defaults to True
@@ -453,7 +461,8 @@ class GP:
         hyp : array_like
             The fitted hyperparameters.
         sampling_result : dict
-            If sampling was performed this is a dictionary with info on the sampling run, and None otherwise.
+            If sampling was performed this is a dictionary with info on the
+            sampling run, and None otherwise.
         """
         ## Default options
         if options is None:
@@ -525,8 +534,9 @@ class GP:
         PLB = np.minimum(np.maximum(PLB, LB), UB)
         PUB = np.maximum(np.minimum(PUB, UB), LB)
 
-        # If we are not provided with an initial hyperparameter guess then either use the current hyperparameters
-        # if they exist, or use plausible lower and upper bounds to guess.
+        # If we are not provided with an initial hyperparameter guess then
+        # either use the current hyperparameters if they exist, or use
+        # plausible lower and upper bounds to guess.
         if hyp0 is None:
             if self.post is not None:
                 hyp0 = self.get_hyperparameters(as_array=True)
@@ -582,13 +592,13 @@ class GP:
         eps_UB = np.reshape(UB, (-1, 1)) - np.spacing(np.reshape(UB, (-1, 1)))
         hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
-        # Perform optimization from most promising NOPTS hyperparameter vectors.
+        # Perform optimization from most promising NOPTS hyperparameter
+        # vectors.
         objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((opts_N,), np.inf)
 
         t2_s = time.time()
         for i in range(0, opts_N):
-            # res = sp.optimize.minimize(fun=objective_f_1, x0=hyp[:, i], bounds=list(zip(LB, UB)))
             res = sp.optimize.minimize(
                 fun=objective_f_2,
                 x0=hyp[:, i],
@@ -602,7 +612,8 @@ class GP:
         hyp_start = hyp[:, np.argmin(nll)]
         t2 = time.time() - t2_s
 
-        # In case n_samples is 0, just return the optimized hyperparameter result.
+        # In case n_samples is 0, just return the optimized hyperparameter
+        # result.
         if s_N == 0:
             self.update(hyp=hyp_start)
             return hyp_start, None
@@ -885,7 +896,8 @@ class GP:
         add_noise : bool, defaults to True
             Whether to add noise to the prediction results.
         separate_samples : bool, defaults to False
-            Whether to return the results separately for each hyperparameter sample or averaged.
+            Whether to return the results separately for each hyperparameter
+            sample or averaged.
 
         Returns
         =======
@@ -957,7 +969,8 @@ class GP:
             )  # remove numerical noise, i.e. negative variances
             ys2[:, s : s + 1] = fs2[:, s : s + 1] + sn2_star * sn2_mult
 
-        # Unless predictions for samples are requested separately, average over samples.
+        # Unless predictions for samples are requested separately
+        # average over samples.
         if s_N > 1 and not separate_samples:
             fbar = np.reshape(np.sum(fmu, 1), (-1, 1)) / s_N
             ybar = np.reshape(np.sum(ymu, 1), (-1, 1)) / s_N
@@ -983,14 +996,16 @@ class GP:
         compute_var : bool, defaults to False
             Whether to compute variance.
         separate_samples : bool, defaults to False
-            Whether to return the results separately for each hyperparameter sample or averaged.
+            Whether to return the results separately for each hyperparameter
+            sample or averaged.
         """
 
         if not isinstance(
             self.covariance, gpyreg.covariance_functions.SquaredExponential
         ):
             raise Exception(
-                "Bayesian quadrature only supports the squared exponential kernel."
+                "Bayesian quadrature only supports the squared exponential "
+                "kernel."
             )
 
         # Number of training points and dimension
@@ -1084,7 +1099,8 @@ class GP:
                     np.spacing(1), J_kk
                 )  # Correct for numerical error
 
-        # Unless predictions for samples are requested separately, average over samples
+        # Unless predictions for samples are requested separately
+        # average over samples
         if N_s > 1 and not separate_samples:
             F_bar = np.reshape(np.sum(F, 1), (-1, 1)) / N_s
             if compute_var:
@@ -1398,7 +1414,8 @@ class GP:
 
         # Add observation noise.
         if add_noise:
-            # Get observation noise hyperparameters and evaluate noise at test points.
+            # Get observation noise hyperparameters and evaluate noise
+            # at test points.
             sn2 = self.noise.compute(
                 hyp[cov_N : cov_N + noise_N], X_star, None, None
             )
@@ -1429,7 +1446,8 @@ class GP:
                 self.X,
                 compute_grad=True,
             )
-            # This line is actually important due to behaviour of above, maybe change that in the future.
+            # This line is actually important due to behaviour of above
+            # Maybe change that in the future.
             m = m.reshape((-1, 1))
             K, dK = self.covariance.compute(
                 hyp[0:cov_N], self.X, compute_grad=True

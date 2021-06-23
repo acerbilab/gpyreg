@@ -62,10 +62,13 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
                     if LB[i] == UB[i]:
                         sX[:, i] = LB[i]
                     else:
-                        # Mixture of uniforms (full bounds and plausible bounds)
-                        w = 0.5 ** (
-                            1 / n_vars
-                        )  # Half of all starting points from inside the plausible box
+                        # Mixture of uniforms
+                        # (full bounds and plausible bounds)
+
+                        # Half of all starting points from inside the
+                        # plausible box
+                        w = 0.5 ** (1 / n_vars)
+
                         sX[:, i] = __uuinv(
                             S[:, i], [LB[i], PLB[i], PUB[i], UB[i]], w
                         )
@@ -145,7 +148,8 @@ def __uuinv(p, B, w):
 
 
 def smoothbox_cdf(x, sigma, a, b):
-    """Computes the value of the cumulative distribution function for the smooth box distribution.
+    """Computes the value of the cumulative distribution function
+    for the smooth box distribution.
 
     Parameters
     ==========
@@ -171,7 +175,8 @@ def smoothbox_cdf(x, sigma, a, b):
 
 
 def smoothbox_student_t_cdf(x, df, sigma, a, b):
-    """Computes the value of the cumulative distribution function for the smooth box student t distribution.
+    """Computes the value of the cumulative distribution function
+    for the smooth box student t distribution.
 
     Parameters
     ==========
@@ -202,7 +207,8 @@ def smoothbox_student_t_cdf(x, df, sigma, a, b):
 
 
 def smoothbox_ppf(q, sigma, a, b):
-    """Computes the value of the percent point function for the smooth box distribution.
+    """Computes the value of the percent point function for
+    the smooth box distribution.
 
     Parameters
     ==========
@@ -228,7 +234,8 @@ def smoothbox_ppf(q, sigma, a, b):
 
 
 def smoothbox_student_t_ppf(q, df, sigma, a, b):
-    """Computes the value of the percent point function for the smooth box student t distribution.
+    """Computes the value of the percent point function for
+    the smooth box student t distribution.
 
     Parameters
     ==========

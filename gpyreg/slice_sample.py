@@ -7,30 +7,33 @@ import numpy as np
 
 
 class SliceSampler:
-    """Class for drawing random samples from a target distribution with a given
-    log probability density function using the coordinate-wise slice sampling method.
+    """Class for drawing random samples from a target distribution with a
+    given log probability density function using the coordinate-wise
+    slice sampling method.
 
     Parameters
     ----------
     log_f : callable
-        The log pdf of the target distribution. It takes one argument as input
-        that has the same type and size as ``x0`` and returns the target
-        log density function (minus a constant; that is, the normalization constant
-        of the pdf need not be known).
+        The log pdf of the target distribution. It takes one argument as
+        input that has the same type and size as ``x0`` and returns the
+        target log density function (minus a constant; that is, the
+        normalization constant of the pdf need not be known).
 
         Note that ``log_f`` can return either a scalar
-        (the value of the log probability density at ``x``) or a row vector (the
-        value of the log probability density at ``x`` for each data point; each column
-        corresponds to a different data point). In the latter case, the total log pdf
-        is obtained by summing the log pdf per each individual data point. Also, ``f_vals``
-        in the object returned by ``sample`` is a matrix (each row corresponds to a
-        sampled point, each column to a different data point). Knowing the log pdf of
-        the sampled points per each data point can be useful to compute estimates of
-        predictive error such as the widely applicable information criterion (WAIC);
-        see [3]_.
+        (the value of the log probability density at ``x``) or a row vector
+        (the value of the log probability density at ``x`` for each data
+        point; each column corresponds to a different data point). In the
+        latter case, the total log pdf is obtained by summing the log pdf
+        per each individual data point. Also, ``f_vals`` in the object
+        returned by ``sample`` is a matrix (each row corresponds to a
+        sampled point, each column to a different data point). Knowing the
+        log pdf of the sampled points per each data point can be useful to
+        compute estimates of predictive error such as the widely applicable
+        information criterion (WAIC); see [3]_.
     x0 : ndarray, shape (n,)
-        Initial value of the random sample sequence. It must be within the domain of
-        the target distribution. The number of independent variables is 'n'.
+        Initial value of the random sample sequence. It must be within the
+        domain of the target distribution. The number of independent
+        variables is 'n'.
     widths : array_like, optional
         A parameter for typical widths. Either a scalar or a 1D array.
         If it is a scalar, all dimensions are assumed to have the same
@@ -41,15 +44,19 @@ class SliceSampler:
         use an adaptive widths method during the burn-in period, so
         the choice of typical widths is not crucial.
     LB : array_like, optional
-        An array of lower bounds on the domain of the target density function, which is
-        assumed to be zero outside the range ``LB <= x <= UB``. If not given we
-        assume no lower bounds. Set ``LB[i] = -inf`` if ``x[i]`` is unbounded
-        below. If ``LB[i] == UB[i]``, the variable is assumed to be fixed on that dimension.
+        An array of lower bounds on the domain of the target density
+        function, which is assumed to be zero outside the range
+        ``LB <= x <= UB``. If not given we assume no lower bounds.
+        Set ``LB[i] = -inf`` if ``x[i]`` is unbounded below. If
+        ``LB[i] == UB[i]``, the variable is assumed to be fixed on
+        that dimension.
     UB : array_like, optional
-        An array of upper bounds on the domain of the target density function, which is
-        assumed to be zero outside the range ``LB <= x <= UB``. If not given we
-        assume no upper bounds. Set ``UB[i] = inf`` if ``x[i]`` is unbounded
-        above. If ``LB[i] == UB[i]``, the variable is assumed to be fixed on that dimension.
+        An array of upper bounds on the domain of the target density
+        function, which is assumed to be zero outside the range
+        ``LB <= x <= UB``. If not given we assume no upper bounds.
+        Set ``UB[i] = inf`` if ``x[i]`` is unbounded above. If
+        ``LB[i] == UB[i]``, the variable is assumed to be fixed on that
+        dimension.
     options : dict, optional
         A dictionary of sampler options. The possible options are:
 
@@ -76,7 +83,8 @@ class SliceSampler:
     Notes
     -----
 
-    Inspired by a MATLAB implementation of slice sampling by Iain Murray. See pseudo-code in [2]_.
+    Inspired by a MATLAB implementation of slice sampling by Iain Murray.
+    See pseudo-code in [2]_.
 
     References
     ----------
@@ -84,11 +92,12 @@ class SliceSampler:
        31(3), p705-67.
     .. [2] D. J. MacKay (2003), Information theory, inference and learning
        algorithms, Cambridge university press, p374-7.
-    .. [3] S. Watanabe (2010), Asymptotic equivalence of Bayes cross validation
-       and widely applicable information criterion in singular learning
-       theory, The Journal of Machine Learning Research, 11, p3571-94.
-    .. [4] A. Gelman, et al (2013), Bayesian data analysis. Vol. 2. Boca Raton,
-       FL, USA: Chapman & Hall/CRC.
+    .. [3] S. Watanabe (2010), Asymptotic equivalence of Bayes cross
+       validation and widely applicable information criterion in singular
+       learning theory, The Journal of Machine Learning Research,
+       11, p3571-94.
+    .. [4] A. Gelman, et al (2013), Bayesian data analysis. Vol. 2.
+       Boca Raton, FL, USA: Chapman & Hall/CRC.
 
     """
 
@@ -140,12 +149,14 @@ class SliceSampler:
             self.UB
         ) != np.shape(self.x0):
             raise ValueError(
-                "LB and UB need to be None, scalars, or 1D arrays of the same size as X0."
+                "LB and UB need to be None, scalars, or 1D arrays of "
+                "the same size as X0."
             )
 
         if not np.all(self.UB >= self.LB):
             raise ValueError(
-                "All upper bounds UB need to be equal or greater than lower bounds LB."
+                "All upper bounds UB need to be equal or greater than "
+                "lower bounds LB."
             )
 
         if (
@@ -199,11 +210,14 @@ class SliceSampler:
         N : int
             The number of samples to return.
         thin : int, optional
-            The thinning parameter will omit ``thin-1`` out of ``thin`` values in the generated sequence (after burn-in).
+            The thinning parameter will omit ``thin-1`` out of ``thin`` values
+            in the generated sequence (after burn-in).
         burn : int, optional
-            The burn parameter omits the first ``burn`` points before starting recording points for the generated sequence.
-            In case this is the first time sampling, the default value of burn is ``round(N/3)`` (that is, one third of the number of recorded samples),
-            while otherwise it is 0.
+            The burn parameter omits the first ``burn`` points before starting
+            recording points for the generated sequence.
+            In case this is the first time sampling, the default value of burn
+            is ``round(N/3)`` (that is, one third of the number of recorded
+            samples), while otherwise it is 0.
 
         Returns
         -------
@@ -213,36 +227,44 @@ class SliceSampler:
             **samples** : array_like
                 The actual sampled points.
             **f_vals** : array_like
-                The sequence of values of the target log pdf at the sampled points.
-                If a prior is specified in ``log_prior``, then ``f_vals`` does NOT
-                include the contribution of the prior.
+                The sequence of values of the target log pdf at the sampled
+                points. If a prior is specified in ``log_prior``, then
+                ``f_vals`` does NOT include the contribution of the prior.
             **exit_flag** : { 1, 0, -1, -2, -3 }
                 Possible values and the corresponding exit conditions are
 
                     1, Target number of recorded samples reached,
-                      with no explicit violation of convergence (this does not ensure convergence).
+                      with no explicit violation of convergence
+                      (this does not ensure convergence).
 
                     0, Target number of recorded samples reached,
-                      convergence status is unknown (no diagnostics have been run).
+                      convergence status is unknown (no diagnostics have
+                      been run).
 
-                    -1, No explicit violation of convergence detected, but the number of
-                        effective (independent) samples in the sampled sequence is much
-                        lower than the number of requested samples N for at least one
-                        dimension.
+                    -1, No explicit violation of convergence detected, but
+                      the number of effective (independent) samples in the
+                      sampled sequence is much lower than the number of
+                      requested samples N for at least one dimension.
 
-                    -2, Detected probable lack of convergence of the sampling procedure.
+                    -2, Detected probable lack of convergence of the sampling
+                      procedure.
 
-                    -3, Detected lack of convergence of the sampling procedure.
+                    -3, Detected lack of convergence of the sampling
+                      procedure.
             **log_priors** : array_like
-                The sequence of the values of the log prior at the sampled points
+                The sequence of the values of the log prior at the sampled
+                points.
             **R** : array_like
-                Estimate of the potential scale reduction factor in each dimension.
+                Estimate of the potential scale reduction factor in each
+                dimension.
             **eff_N** : array_like
-                Estimate of the effective number of samples in each dimension.
+                Estimate of the effective number of samples in each
+                dimension.
 
         """
 
-        # Reference to x0 so it is updated as we go along, allowing us to use this function multiple times.
+        # Reference to x0 so it is updated as we go along, allowing us to
+        # use this function multiple times.
         xx = self.x0
         D = xx.size
 
@@ -260,7 +282,10 @@ class SliceSampler:
             and self.func_count == 0
         ):
             self.logger.warning(
-                "WIDTHS not specified and adaptation is ON (OPTIONS.Adaptive == 1), but OPTIONS.Burnin is set to 0. SLICESAMPLEBND will attempt to use default values for WIDTHS."
+                "WIDTHS not specified and adaptation is ON (OPTIONS."
+                "Adaptive == 1), but OPTIONS.Burnin is set to 0. "
+                "SLICESAMPLEBND will attempt to use default values for "
+                "WIDTHS."
             )
 
         # Effective samples
@@ -283,12 +308,14 @@ class SliceSampler:
 
         if not np.isscalar(burn) or burn < 0:
             raise ValueError(
-                "The burn-in samples option needs to be a non-negative integer."
+                "The burn-in samples option needs to be a non-negative "
+                "integer."
             )
 
         if np.any(~np.isfinite(log_Px)):
             raise ValueError(
-                "The initial starting point X0 needs to evaluate to a real number (not Inf or NaN)."
+                "The initial starting point X0 needs to evaluate to a "
+                "real number (not Inf or NaN)."
             )
 
         # Force xx into vector for ease of use
@@ -344,7 +371,8 @@ class SliceSampler:
 
                 if self.step_out:
                     steps = 0
-                    # Typo in early book editions: said compare to u, should be u'
+                    # Typo in early book editions: said compare to u
+                    # should be u'
                     while logdist_vec(x_l)[0] > log_uprime:
                         x_l[dd] -= self.widths[dd]
                         steps += 1
@@ -385,13 +413,15 @@ class SliceSampler:
                     elif xprime[dd] < xx[dd]:
                         x_l[dd] = xprime[dd]
                     else:
+                        # Maybe even raise an exception?
                         self.logger.warning(
-                            "WARNING: Shrunk to current position and still not acceptable!"
+                            "WARNING: Shrunk to current position and still "
+                            " not acceptable!"
                         )
-                        # raise Exception('BUG DETECTED: Shrunk to current position and still not acceptable.')
                         break
 
-                # Width adaptation (only during burn-in, might break detailed balance)
+                # Width adaptation (only during burn-in, might break
+                # detailed balance)
                 if i < burn and self.adaptive:
                     delta = self.UB[dd] - self.LB[dd]
                     if shrink > 3:
@@ -448,7 +478,8 @@ class SliceSampler:
                 # End of burn-in, update widths if using adaptive method.
                 if i == burn - 1 and self.adaptive:
                     burn_stored = np.floor(burn / 2)
-                    # There can be numerical error here but then width has already shrunk to 0?
+                    # There can be numerical error here but then width
+                    # has already shrunk to 0?
                     new_widths = np.fmin(
                         5
                         * np.sqrt(
@@ -465,8 +496,9 @@ class SliceSampler:
                     if self.base_widths is None:
                         self.widths = new_widths
                     else:
-                        # Max between new widths and geometric mean with user-supplied
-                        # widths (i.e. bias towards keeping larger widths)
+                        # Max between new widths and geometric mean with
+                        # user-supplied widths (i.e. bias towards keeping
+                        # larger widths)
                         self.widths = np.maximum(
                             new_widths, np.sqrt(new_widths * self.base_widths)
                         )
@@ -501,11 +533,20 @@ class SliceSampler:
             exit_flag, R, eff_N = self.__diagnose(samples)
             diag_msg = ""
             if exit_flag in (-2, -3):
-                diag_msg = " * Try sampling for longer, by increasing N or the thinning factor"
+                diag_msg = (
+                    " * Try sampling for longer, by increasing N "
+                    " or the thinning factor"
+                )
             elif exit_flag == -1:
-                diag_msg = " * Try increasing thinning factor to obtain more uncorrelated samples"
+                diag_msg = (
+                    " * Try increasing thinning factor to obtain "
+                    "more uncorrelated samples"
+                )
             elif exit_flag == 0:
-                diag_msg = " * No violations of convergence have been detected (this does NOT guarantee convergence)"
+                diag_msg = (
+                    " * No violations of convergence have been "
+                    "detected (this does NOT guarantee convergence)"
+                )
 
             if diag_msg != "":
                 self.logger.info(diag_msg)
@@ -538,20 +579,21 @@ class SliceSampler:
         exit_flag = 0
         if np.any(R > 1.5):
             diag_msg = (
-                " * Detected lack of convergence! (max R = %.2f >> 1, mean R = %.2f)"
-                % (np.max(R), np.mean(R))
+                " * Detected lack of convergence! (max R = %.2f >> 1"
+                ", mean R = %.2f)" % (np.max(R), np.mean(R))
             )
             exit_flag = -3
         elif np.any(R > 1.1):
             diag_msg = (
-                " * Detected probable lack of convergence! (max R = %.2f > 1, mean R = %.2f)"
-                % (np.max(R), np.mean(R))
+                " * Detected probable lack of convergence! (max R = %.2f"
+                " > 1, mean R = %.2f)" % (np.max(R), np.mean(R))
             )
             exit_flag = -2
 
         if np.any(eff_N < N / 10.0):
             diag_msg = (
-                " * Low number of effective samples! (min eff_N = %.1f, mean eff_N = %.1f, requested N = %d)"
+                " * Low number of effective samples! (min eff_N = %.1f"
+                ", mean eff_N = %.1f, requested N = %d)"
                 % (np.min(eff_N), np.mean(eff_N), N)
             )
             if exit_flag == 0:
@@ -577,7 +619,8 @@ class SliceSampler:
                 if np.isnan(log_prior):
                     y = -np.inf
                     self.logger.warning(
-                        "Prior density function returned NaN. Trying to continue."
+                        "Prior density function returned NaN. "
+                        "Trying to continue."
                     )
                     return y, f_val, log_prior
 
@@ -623,7 +666,9 @@ class SliceSampler:
         ----------
         x : array_like
           An array containing the 2 or more traces of a stochastic parameter.
-          That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
+          That is, an array of dimension m x n x k, where m is the number of
+          traces, n the number of samples, and k the dimension of the
+          stochastic.
 
         return_var : bool
           Flag for returning the marginal posterior variance instead of R-hat.
@@ -639,14 +684,16 @@ class SliceSampler:
         The Gelman-Rubin diagnostic tests for lack of convergence by comparing
         the variance between multiple chains to the variance within each chain.
         If convergence has been achieved, the between-chain and within-chain
-        variances should be identical. To be most effective in detecting evidence
-        for nonconvergence, each chain should have been initialized to starting
-        values that are dispersed relative to the target distribution.
+        variances should be identical. To be most effective in detecting
+        evidence for nonconvergence, each chain should have been initialized
+        to starting values that are dispersed relative to the target
+        distribution.
 
         """
         if np.shape(x) < (2,):
             raise ValueError(
-                "Gelman-Rubin diagnostic requires multiple chains of the same length."
+                "Gelman-Rubin diagnostic requires multiple chains of the "
+                "same length."
             )
 
         try:
@@ -671,7 +718,8 @@ class SliceSampler:
             return s2
 
         # Pooled posterior variance estimate
-        # It seems that in the comment is not in the definition of this diagnostic test.
+        # It seems that the part in the comment is not in the definition of
+        # this diagnostic test.
         V = s2  # + B_over_n / m
 
         # Calculate PSRF
@@ -686,7 +734,9 @@ class SliceSampler:
         ----------
         x : array_like
           An array containing the 2 or more traces of a stochastic parameter.
-          That is, an array of dimension m x n x k, where m is the number of traces, n the number of samples, and k the dimension of the stochastic.
+          That is, an array of dimension m x n x k, where m is the number of
+          traces, n the number of samples, and k the dimension of the
+          stochastic.
 
         Returns
         -------
@@ -696,7 +746,8 @@ class SliceSampler:
         """
         if np.shape(x) < (2,):
             raise ValueError(
-                "Calculation of effective sample size requires multiple chains of the same length."
+                "Calculation of effective sample size requires multiple "
+                "chains of the same length."
             )
 
         try:
@@ -719,7 +770,8 @@ class SliceSampler:
             / (m * (n - t))
         )
         rho = np.ones(n)
-        # Iterate until the sum of consecutive estimates of autocorrelation is negative
+        # Iterate until the sum of consecutive estimates of autocorrelation
+        # is negative
         while not negative_autocorr and (t < n):
             rho[t] = 1.0 - variogram(t) / (2.0 * s2)
 
@@ -728,6 +780,7 @@ class SliceSampler:
 
             t += 1
 
-        # This part in the original code was slightly different, along with the modulo check above.
+        # This part in the original code was slightly different, along with
+        # the modulo check above.
         # However, looking at definitions this seems like the correct way.
         return m * n / (-1 + 2 * rho[0 : t - 2].sum())
