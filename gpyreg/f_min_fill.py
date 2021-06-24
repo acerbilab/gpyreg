@@ -23,13 +23,13 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
         else:
             design = "random"
 
-    N0 = x0.shape[1]
+    N0 = x0.shape[0]
     n_vars = np.max(
-        [x0.shape[0], np.size(LB), np.size(UB), np.size(PLB), np.size(PUB)]
+        [x0.shape[1], np.size(LB), np.size(UB), np.size(PLB), np.size(PUB)]
     )
 
     # Force provided points to be inside bounds
-    x0 = np.minimum(np.maximum(x0.T, LB), UB).T
+    x0 = np.minimum(np.maximum(x0, LB), UB)
 
     if N > N0:
         # First test hyperparameters on a space-filling initial design
@@ -111,7 +111,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
                 S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
                 sX[:, i] = sp.stats.t.ppf(S_scaled, df) * sigma + mu
 
-    X = np.concatenate([x0.T, sX])
+    X = np.concatenate([x0, sX])
     y = np.full((N,), np.inf)
     for i in range(0, N):
         y[i] = f(X[i, :])

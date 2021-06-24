@@ -39,17 +39,29 @@ class GP:
         self.s2 = s2
         self.X = None
         self.y = None
-        self.hyper_priors = None
         self.post = None
+        self.set_priors()
 
     def __repr__(self):
         dimension = "Dimension: " + str(self.D) + "\n"
+        
+        cov_N = self.covariance.hyperparameter_count(self.D)
         cov = "Covariance function: " + self.covariance.__class__.__name__
         if self.covariance.__class__.__name__ == "Matern":
             cov += "(degree=" + str(self.covariance.degree) + ")\n"
+        if cov_N == 1:
+            cov += ", " + str(cov_N) + " parameter\n"
         else:
-            cov += "\n"
-        mean = "Mean function: " + self.mean.__class__.__name__ + "\n"
+            cov += ", " + str(cov_N) + " parameters\n"
+            
+        mean_N = self.mean.hyperparameter_count(self.D)
+        mean = "Mean function: " + self.mean.__class__.__name__
+        if mean_N == 1:
+            mean += ", " + str(mean_N) + " parameter\n"
+        else:
+            mean += ", " + str(mean_N) + " parameters\n"
+
+        noise_N = self.noise.hyperparameter_count()
         noise = "Noise function: " + self.noise.__class__.__name__
         if np.any(self.noise.parameters):
             noise += "("
@@ -72,11 +84,18 @@ class GP:
                 if add_flag:
                     noise += ", "
                 noise += "rectified_linear_output_dependent_add=True"
-
-            noise += ")\n"
+                
+            noise += ")"
+            
+        if noise_N == 1:
+            noise += ", " + str(noise_N) + " parameter\n"
+        else:
+            noise += ", " + str(noise_N) + " parameters\n"
+            
+            
         priors = "Hyperparameter priors: "
-        if self.hyper_priors is None:
-            priors += "missing\n"
+        if self.no_prior:
+            priors += "none\n"
         else:
             priors += "present\n"
         samples = "Hyperparameter samples: "
@@ -101,9 +120,6 @@ class GP:
         mean_hyper_info = self.mean.hyperparameter_info(self.D)
         noise_hyper_info = self.noise.hyperparameter_info()
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
-
-        if self.hyper_priors is None:
-            return None
 
         hyper_priors = {}
         i = 0
@@ -142,23 +158,32 @@ class GP:
 
             if prior_type is not None and prior_params is not None:
                 hyper_priors[info[0]] = (prior_type, prior_params)
+            else:
+                hyper_priors[info[0]] = None
 
             i += info[1]
 
         return hyper_priors
 
-    def set_priors(self, priors):
+    def set_priors(self, priors=None):
         """Sets the hyperparameter priors.
 
         Parameters
         ==========
         priors : dict, optional
             A dictionary of hyperparameter names and tuples of their values.
-            If None is given, clear priors.
+            If None is given, there will be no prior.
+
+        Returns
+        =======
+        missing : list
+            A list of missing hyperparameter priors that should have been
+            given. If not empty, the elements have been set to no prior.
         """
 
+        self.no_prior = False
         if priors is None:
-            self.hyper_priors = None
+            self.no_prior = True
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -166,6 +191,7 @@ class GP:
         mean_hyper_info = self.mean.hyperparameter_info(self.D)
         noise_N = self.noise.hyperparameter_count()
         noise_hyper_info = self.noise.hyperparameter_info()
+        hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
         # Set up a hyperprior dictionary with default values which can
@@ -180,40 +206,27 @@ class GP:
             "UB": np.full((hyp_N,), np.nan),
         }
 
-        for prior in priors:
-            # Indices for the lower and upper range of this particular
-            # hyperprior.
-            lower = 0
-            upper = None
+        non_trivial_flag = False
+        lower = 0
+        missing = []
 
-            # Go through all possible hyperparameter names and find the
-            # one we are interested in.
-            # Also update lower and upper as we go.
+        for info in hyper_info:
+            if self.no_prior:
+                vals = None
+            else:
+                try:
+                    vals = priors[info[0]]
+                except KeyError:
+                    missing.append(info[0])
+                    vals = None
 
-            for info in cov_hyper_info:
-                if prior == info[0]:
-                    upper = lower + info[1]
-                    break
-                lower += info[1]
-
-            if upper is None:
-                for info in noise_hyper_info:
-                    if prior == info[0]:
-                        upper = lower + info[1]
-                        break
-                    lower += info[1]
-
-            if upper is None:
-                for info in mean_hyper_info:
-                    if prior == info[0]:
-                        upper = lower + info[1]
-                        break
-                    lower += info[1]
-
-            # If we found something update the hyperprior.
-            if upper is not None:
-                prior_type, prior_params = priors[prior]
+            # None indicates no prior
+            if vals is not None:
+                non_trivial_flag = True
+                upper = lower + info[1]
+                prior_type, prior_params = vals
                 i = range(lower, upper)
+
                 if prior_type == "fixed":
                     val = prior_params
                     self.hyper_priors["LB"][i] = val
@@ -245,8 +258,11 @@ class GP:
                     self.hyper_priors["df"][i] = df
                 else:
                     raise ValueError("Unknown hyperprior type " + prior_type)
-            else:
-                raise ValueError("Unknown hyperprior name " + prior)
+
+            lower += info[1]
+
+        self.no_prior = non_trivial_flag is not True
+        return missing
 
     def get_hyperparameters(self, as_array=False):
         """Gets the current hyperparameters for the Gaussian process.
@@ -269,9 +285,9 @@ class GP:
             noise_N = self.noise.hyperparameter_count()
             hyp = np.full((cov_N + mean_N + noise_N, 1), np.nan)
         else:
-            hyp = np.zeros((np.size(self.post[0].hyp), np.size(self.post)))
+            hyp = np.zeros((np.size(self.post), np.size(self.post[0].hyp)))
             for i in range(0, np.size(self.post)):
-                hyp[:, i] = self.post[i].hyp
+                hyp[i, :] = self.post[i].hyp
 
         if as_array:
             return hyp
@@ -285,7 +301,7 @@ class GP:
         ==========
         hyp_new : object
             The new hyperparameters. This can be an array of size
-            (hyp_N, N0) where hyp_N is the number of hyperparametes, and
+            (N0, hyp_n) where hyp_N is the number of hyperparametes, and
             N0 is the amount of samples, a single dictionary with
             hyperparameter names and values, or a list of dictionaries.
             The behaviour of passing a single dictionary and a list
@@ -294,6 +310,17 @@ class GP:
             Whether to compute the posterior for the new hyperparameters.
         """
         if isinstance(hyp_new, np.ndarray):
+            cov_N = self.covariance.hyperparameter_count(self.D)
+            mean_N = self.mean.hyperparameter_count(self.D)
+            noise_N = self.noise.hyperparameter_count()
+
+            if hyp_new.ndim == 1:
+                hyp_new = np.reshape(hyp_new, (1, -1))
+
+            if hyp_new.shape[1] != cov_N + mean_N + noise_N:
+                raise ValueError(
+                    "Input hyperparameter array is the wrong shape!"
+                )
             self.update(hyp=hyp_new, compute_posterior=compute_posterior)
         else:
             hyp_new_arr = self.hyperparameters_from_dict(hyp_new)
@@ -306,7 +333,7 @@ class GP:
         Parameters
         ==========
         hyp_arr : array_like
-            The hyperparameter array
+            An 1D or 2D array containing hyperparameters.
 
         Returns
         =======
@@ -322,11 +349,14 @@ class GP:
         noise_N = self.noise.hyperparameter_count()
         noise_hyper_info = self.noise.hyperparameter_info()
 
-        if hyp_arr.shape[0] != cov_N + mean_N + noise_N:
+        if hyp_arr.ndim == 1:
+            hyp_arr = np.reshape(hyp_arr, (1, -1))
+
+        if hyp_arr.shape[1] != cov_N + mean_N + noise_N:
             raise ValueError("Input hyperparameter array is the wrong shape!")
 
-        for i in range(0, hyp_arr.shape[1]):
-            hyp_tmp = hyp_arr[:, i]
+        for i in range(0, hyp_arr.shape[0]):
+            hyp_tmp = hyp_arr[i, :]
             hyp_dict = {}
             i = 0
 
@@ -373,21 +403,21 @@ class GP:
         noise_hyper_info = self.noise.hyperparameter_info()
 
         hyp_N = cov_N + mean_N + noise_N
-        hyp_new_arr = np.zeros((hyp_N, len(hyp_dict)))
+        hyp_new_arr = np.zeros((len(hyp_dict), hyp_N))
 
         for i, hyp_tmp in enumerate(hyp_dict):
             j = 0
 
             for info in cov_hyper_info:
-                hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                hyp_new_arr[i, j : j + info[1]] = hyp_tmp[info[0]]
                 j += info[1]
 
             for info in noise_hyper_info:
-                hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                hyp_new_arr[i, j : j + info[1]] = hyp_tmp[info[0]]
                 j += info[1]
 
             for info in mean_hyper_info:
-                hyp_new_arr[j : j + info[1], i] = hyp_tmp[info[0]]
+                hyp_new_arr[i, j : j + info[1]] = hyp_tmp[info[0]]
                 j += info[1]
 
         return hyp_new_arr
@@ -528,16 +558,16 @@ class GP:
                 self.s2 = np.concatenate((self.s2, s2_new))
 
         if not rank_one_update and hyp is not None:
-            _, s_N = hyp.shape
+            s_N, _ = hyp.shape
             self.post = np.empty((s_N,), dtype=Posterior)
 
             if compute_posterior and self.X is not None and self.y is not None:
                 for i in range(0, s_N):
-                    self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
+                    self.post[i] = self.__core_computation(hyp[i, :], 0, 0)
             else:
                 for i in range(0, s_N):
                     self.post[i] = Posterior(
-                        hyp[:, i], None, None, None, None, None
+                        hyp[i, :], None, None, None, None, None
                     )
 
     def fit(self, X=None, y=None, s2=None, hyp0=None, options=None):
@@ -652,7 +682,7 @@ class GP:
                 hyp0 = self.get_hyperparameters(as_array=True)
             else:
                 hyp0 = np.reshape(
-                    np.minimum(np.maximum((PLB + PUB) / 2, LB), UB), (-1, 1)
+                    np.minimum(np.maximum((PLB + PUB) / 2, LB), UB), (1, -1)
                 )
         elif isinstance(hyp0, dict):
             hyp0 = self.hyperparameters_from_dict(hyp0)
@@ -665,7 +695,7 @@ class GP:
         X0, y0 = f_min_fill(
             objective_f_1, hyp0, LB, UB, PLB, PUB, self.hyper_priors, init_N
         )
-        hyp = X0[0:opts_N, :].T
+        hyp = X0[0:opts_N, :]
         widths_default = np.std(X0, axis=0, ddof=1)
 
         # Extract a good low-noise starting point for the 2nd optimization.
@@ -682,7 +712,7 @@ class GP:
             idx_best = np.argmin(
                 noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
             )
-            hyp[:, 1] = xx[idx_best, :]
+            hyp[1, :] = xx[idx_best, :]
 
         # Fix zero widths.
         idx0 = widths_default == 0
@@ -698,8 +728,8 @@ class GP:
         t1 = time.time() - t1_s
 
         # Check that hyperparameters are within bounds.
-        eps_LB = np.reshape(LB, (-1, 1)) + np.spacing(np.reshape(LB, (-1, 1)))
-        eps_UB = np.reshape(UB, (-1, 1)) - np.spacing(np.reshape(UB, (-1, 1)))
+        eps_LB = np.reshape(LB, (1, -1)) + np.spacing(np.reshape(LB, (1, -1)))
+        eps_UB = np.reshape(UB, (1, -1)) - np.spacing(np.reshape(UB, (1, -1)))
         hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
         # Perform optimization from most promising NOPTS hyperparameter
@@ -711,21 +741,21 @@ class GP:
         for i in range(0, opts_N):
             res = sp.optimize.minimize(
                 fun=objective_f_2,
-                x0=hyp[:, i],
+                x0=hyp[i, :],
                 jac=True,
                 bounds=list(zip(LB, UB)),
             )
-            hyp[:, i] = res.x
+            hyp[i, :] = res.x
             nll[i] = res.fun
 
         # Take the best hyperparameter vector.
-        hyp_start = hyp[:, np.argmin(nll)]
+        hyp_start = hyp[np.argmin(nll), :]
         t2 = time.time() - t2_s
 
         # In case n_samples is 0, just return the optimized hyperparameter
         # result.
         if s_N == 0:
-            hyp_start = np.reshape(hyp_start, (-1, 1))
+            hyp_start = np.reshape(hyp_start, (1, -1))
             self.update(hyp=hyp_start)
             return hyp_start, None
 
@@ -743,10 +773,11 @@ class GP:
         sampling_result = slicer.sample(eff_s_N, burn=burn_in)
 
         # Thin samples
-        hyp_pre_thin = sampling_result["samples"].T
-        hyp = hyp_pre_thin[:, thin - 1 :: thin]
+        hyp_pre_thin = sampling_result["samples"]
+        hyp = hyp_pre_thin[thin - 1 :: thin, :]
 
         t3 = time.time() - t3_s
+        print(hyp)
         print(t1, t2, t3)
 
         # Recompute GP with finalized hyperparameters.
@@ -1011,11 +1042,11 @@ class GP:
     def __gp_obj_fun(self, hyp, compute_grad, swap_sign):
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(
-                hyp, compute_grad, self.hyper_priors is not None
+                hyp, compute_grad, self.no_prior is not True
             )
         else:
             nlZ = self.__compute_nlZ(
-                hyp, compute_grad, self.hyper_priors is not None
+                hyp, compute_grad, self.no_prior is not True
             )
 
         # Swap sign of negative log marginal likelihood (e.g. for sampling)
