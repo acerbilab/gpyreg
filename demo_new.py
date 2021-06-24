@@ -40,6 +40,7 @@ gp_priors = {
     "mean_const": ("smoothbox", (np.min(y), np.max(y), 1.0)),
 }
 
+
 # Assign the hyperparameter priors to the gp model
 gp.set_priors(gp_priors)
 

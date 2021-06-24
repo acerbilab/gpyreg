@@ -15,10 +15,11 @@ y[y < 0] = -np.abs(3 * y[y < 0]) ** 2
 # Define the GP model
 gp = gpr.GP(
     D=D,
-    covariance=gpr.covariance_functions.Matern(3),
+    covariance=gpr.covariance_functions.Matern(degree=3),
     mean=gpr.mean_functions.NegativeQuadratic(),
     noise=gpr.noise_functions.GaussianNoise(
-        constant_add=True, user_provided_add=True
+        constant_add=True,
+        user_provided_add=True
     ),
     s2=s2,
 )

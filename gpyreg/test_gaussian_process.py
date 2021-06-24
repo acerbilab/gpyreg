@@ -143,3 +143,52 @@ def test_gp_gradient_computations():
 
     # Test plotting
     gp.plot()
+
+
+def incomplete_test_fitting():
+    np.random.seed(123456)
+    N = 500
+    D = 1
+    X = np.random.standard_normal(size=(N, D))
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=False),
+    )
+
+    cov_N = gp.covariance.hyperparameter_count(D)
+    mean_N = gp.mean.hyperparameter_count(D)
+    noise_N = gp.noise.hyperparameter_count()
+
+    N_s = 1
+    hyp = np.random.standard_normal(size=(cov_N + noise_N + mean_N, N_s))
+    hyp[D, :] *= 0.2
+    hyp[D + 1 : D + 1 + noise_N, :] *= 0.3
+    print(hyp)
+
+    gp.update(X_new=X, hyp=hyp, compute_posterior=False)
+    y = gp.random_function(X)
+    gp.update(y_new=y, hyp=hyp, compute_posterior=True)
+    gp.plot()
+
+    gp1 = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=False),
+    )
+
+    gp_train = {"n_samples": 0}
+    gp_priors = {
+        # "noise_log_scale": ("student_t", (np.log(1e-3), 1.0, 7)),
+    }
+
+    gp1.set_priors(gp_priors)
+    gp1.fit(X=X, y=y, options=gp_train)
+    hyp2 = gp1.get_hyperparameters(as_array=True)
+    print(hyp2)
+    print(gp1._GP__compute_nlZ(hyp[:, 0], False, False))
+    print(gp1._GP__compute_nlZ(hyp2[:, 0], False, False))
+    gp1.plot()

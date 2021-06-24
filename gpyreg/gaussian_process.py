@@ -42,14 +42,124 @@ class GP:
         self.hyper_priors = None
         self.post = None
 
+    def __str__(self):
+        dimension = "Dimension: " + str(self.D) + "\n"
+        cov = "Covariance function: " + self.covariance.__class__.__name__
+        if self.covariance.__class__.__name__ == "Matern":
+            cov += "(degree=" + str(self.covariance.degree) + ")\n"
+        else:
+            cov += "\n"
+        mean = "Mean function: " + self.mean.__class__.__name__ + "\n"
+        noise = "Noise function: " + self.noise.__class__.__name__
+        if np.any(self.noise.parameters):
+            noise += "("
+            add_flag = False
+            if self.noise.parameters[0] == 1:
+                noise += "constant_add=True"
+                add_flag = True
+
+            if self.noise.parameters[1] == 1:
+                if add_flag:
+                    noise += ", "
+                noise += "user_provided_add=True"
+
+            if self.noise.parameters[1] == 2:
+                if add_flag:
+                    noise += ", "
+                noise += "scale_user_provided=True"
+
+            if self.noise.parameters[2] == 1:
+                if add_flag:
+                    noise += ", "
+                noise += "rectified_linear_output_dependent_add=True"
+
+            noise += ")\n"
+        priors = "Hyperparameter priors: "
+        if self.hyper_priors is None:
+            priors += "missing\n"
+        else:
+            priors += "present\n"
+        samples = "Hyperparameter samples: "
+        if self.post is None:
+            samples += "0"
+        else:
+            samples += str(np.size(self.post))
+
+        total = dimension + cov + mean + noise + priors + samples
+        return total
+
+    def get_priors(self):
+        """Gets the current hyperparameter priors.
+
+        Returns
+        =======
+        hyper_priors : dict
+            A dictionary of the current hyperparameter priors.
+        """
+
+        cov_hyper_info = self.covariance.hyperparameter_info(self.D)
+        mean_hyper_info = self.mean.hyperparameter_info(self.D)
+        noise_hyper_info = self.noise.hyperparameter_info()
+        hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
+
+        if self.hyper_priors is None:
+            return None
+
+        hyper_priors = {}
+        i = 0
+
+        mu = self.hyper_priors["mu"]
+        sigma = self.hyper_priors["sigma"]
+        df = self.hyper_priors["df"]
+        LB = self.hyper_priors["LB"]
+        UB = self.hyper_priors["UB"]
+        a = self.hyper_priors["a"]
+        b = self.hyper_priors["b"]
+
+        for info in hyper_info:
+            prior_type = prior_params = None
+            if LB[i] == UB[i]:
+                prior_type = "fixed"
+                prior_params = LB[i]
+            elif (
+                np.isfinite(a[i])
+                and np.isfinite(b[i])
+                and np.isfinite(sigma[i])
+            ):
+                if df[i] == 0 or df[i] == np.inf:
+                    prior_type = "smoothbox"
+                    prior_params = (a[i], b[i], sigma[i])
+                elif df[i] > 0:
+                    prior_type = "smoothbox_student_t"
+                    prior_params = (a[i], b[i], sigma[i], df[i])
+            elif np.isfinite(mu[i]) and np.isfinite(sigma[i]):
+                if df[i] == 0 or df[i] == np.inf:
+                    prior_type = "gaussian"
+                    prior_params = (mu[i], sigma[i])
+                elif df[i] > 0:
+                    prior_type = "student_t"
+                    prior_params = (mu[i], sigma[i], df[i])
+
+            if prior_type is not None and prior_params is not None:
+                hyper_priors[info[0]] = (prior_type, prior_params)
+
+            i += info[1]
+
+        return hyper_priors
+
     def set_priors(self, priors):
         """Sets the hyperparameter priors.
 
         Parameters
         ==========
-        priors : dict
+        priors : dict, optional
             A dictionary of hyperparameter names and tuples of their values.
+            If None is given, clear priors.
         """
+
+        if priors is None:
+            self.hyper_priors = None
+
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
@@ -421,7 +531,7 @@ class GP:
             _, s_N = hyp.shape
             self.post = np.empty((s_N,), dtype=Posterior)
 
-            if compute_posterior:
+            if compute_posterior and self.X is not None and self.y is not None:
                 for i in range(0, s_N):
                     self.post[i] = self.__core_computation(hyp[:, i], 0, 0)
             else:
@@ -615,6 +725,7 @@ class GP:
         # In case n_samples is 0, just return the optimized hyperparameter
         # result.
         if s_N == 0:
+            hyp_start = np.reshape(hyp_start, (-1, 1))
             self.update(hyp=hyp_start)
             return hyp_start, None
 
@@ -636,7 +747,6 @@ class GP:
         hyp = hyp_pre_thin[:, thin - 1 :: thin]
 
         t3 = time.time() - t3_s
-        print(hyp)
         print(t1, t2, t3)
 
         # Recompute GP with finalized hyperparameters.
@@ -833,6 +943,50 @@ class GP:
             return lp, dlp
 
         return lp
+
+    def log_likelihood(self, hyp, compute_grad=False):
+        """Computes (positive) log likelihood for given hyperparameters.
+
+        Parameters
+        ==========
+        hyp : object
+            Either an 1D array or a dictionary of hyperparameters.
+        compute_grad : bool, defaults to False
+            Whether to compute the gradient with respect to hyperparameters.
+
+        Returns
+        =======
+        lZ : float
+            The positive log likelihood.
+        dlZ : array_like, optional
+            The gradient.
+        """
+        if isinstance(hyp, dict):
+            hyp = self.hyperparameters_from_dict(hyp)
+        return -self.__compute_nlZ(hyp, compute_grad, False)
+
+    def log_posterior(self, hyp, compute_grad=False):
+        """Computes (positive) log likelihood with added log prior for
+        given hyperparameters.
+
+        Parameters
+        ==========
+        hyp : object
+            Either an 1D array or a dictionary of hyperparameters.
+        compute_grad : bool, defaults to False
+            Whether to compute the gradient with respect to hyperparameters.
+
+        Returns
+        =======
+        lZ_plus_posterior : float
+            The positive log likelihood with added log prior.
+        dlZ_plus_d_posterior : array_like, optional
+            The gradient.
+        """
+        if isinstance(hyp, dict):
+            hyp = self.hyperparameters_from_dict(hyp)
+
+        return -self.__compute_nlZ(hyp, compute_grad, True)
 
     def __compute_nlZ(self, hyp, compute_grad, compute_prior):
         if compute_grad:
@@ -1376,7 +1530,7 @@ class GP:
         L_chol = self.post[s].L_chol
         sW = self.post[s].sW
 
-        # Compute GP mena function at test points
+        # Compute GP mean function at test points
         m_star = np.reshape(
             self.mean.compute(
                 hyp[cov_N + noise_N : cov_N + noise_N + mean_N], X_star
@@ -1390,7 +1544,7 @@ class GP:
         if self.y is None:
             # No data, draw from prior
             f_mu = m_star
-            C = K_star + np.spacing(1) * np.eye(N_star)
+            C = K_star + np.spacing(500) * np.eye(N_star)
         else:
             # Compute cross-kernel matrix Ks
             Ks = self.covariance.compute(hyp[0:cov_N], self.X, X_star=X_star)
