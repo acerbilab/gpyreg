@@ -976,7 +976,8 @@ class GP:
         return lp
 
     def log_likelihood(self, hyp, compute_grad=False):
-        """Computes (positive) log likelihood for given hyperparameters.
+        """Computes (positive) log marginal likelihood of the GP for given 
+        hyperparameters.
 
         Parameters
         ==========
@@ -988,7 +989,7 @@ class GP:
         Returns
         =======
         lZ : float
-            The positive log likelihood.
+            The positive log marginal likelihood.
         dlZ : array_like, optional
             The gradient.
         """
@@ -997,8 +998,9 @@ class GP:
         return -self.__compute_nlZ(hyp, compute_grad, False)
 
     def log_posterior(self, hyp, compute_grad=False):
-        """Computes (positive) log likelihood with added log prior for
-        given hyperparameters.
+        """Computes (positive) log marginal likelihood of the GP with added 
+        log prior for given hyperparameters (that is, the unnormalized log 
+        posterior).
 
         Parameters
         ==========
@@ -1010,7 +1012,7 @@ class GP:
         Returns
         =======
         lZ_plus_posterior : float
-            The positive log likelihood with added log prior.
+            The positive log marginal likelihood with added log prior.
         dlZ_plus_d_posterior : array_like, optional
             The gradient.
         """
