@@ -42,7 +42,7 @@ class GP:
         self.hyper_priors = None
         self.post = None
 
-    def __str__(self):
+    def __repr__(self):
         dimension = "Dimension: " + str(self.D) + "\n"
         cov = "Covariance function: " + self.covariance.__class__.__name__
         if self.covariance.__class__.__name__ == "Matern":
