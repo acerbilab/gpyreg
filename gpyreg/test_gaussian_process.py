@@ -46,16 +46,16 @@ def test_gp_gradient_computations():
     noise_N = gp.noise.hyperparameter_count()
 
     N_s = np.random.randint(1, 3)
-    hyp = np.random.standard_normal(size=(cov_N + noise_N + mean_N, N_s))
-    hyp[D, :] *= 0.2
-    hyp[D + 1 : D + 1 + noise_N, :] *= 0.3
+    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    hyp[:, D] *= 0.2
+    hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(X_new=X, hyp=hyp, compute_posterior=False)
     y = gp.random_function(X)
 
     gp.update(y_new=y, hyp=hyp)
 
-    hyp0 = hyp[:, 0]
+    hyp0 = hyp[0, :]
 
     # Check GP marginal likelihood gradient computation.
     f = lambda hyp_: gp._GP__compute_nlZ(hyp_, False, False)
@@ -77,7 +77,7 @@ def test_gp_gradient_computations():
 
     hyp1 = hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size))
     for i in range(0, cov_N + mean_N + noise_N):
-        prior_type = np.random.randint(1, 5)
+        prior_type = np.random.randint(1, 6)
         if prior_type == 0:  # 'fixed'
             gp.hyper_priors["LB"][i] = hyp1[i]
             gp.hyper_priors["UB"][i] = hyp1[i]
@@ -99,6 +99,9 @@ def test_gp_gradient_computations():
             gp.hyper_priors["b"][i] = 10
             gp.hyper_priors["sigma"][i] = np.random.standard_normal()
             gp.hyper_priors["df"][i] = np.exp(np.random.standard_normal())
+        else:  # None
+            pass
+
     f = lambda hyp_: gp._GP__compute_log_priors(hyp_, False)
     f_grad = lambda hyp_: gp._GP__compute_log_priors(hyp_, True)[1]
     assert np.all(
@@ -140,7 +143,7 @@ def test_gp_gradient_computations():
     gp1.set_hyperparameters(hyp_dict)
 
     assert np.all(np.isclose(gp.post[0].hyp, gp1.post[0].hyp))
-
+    
     # Test plotting
     gp.plot()
 

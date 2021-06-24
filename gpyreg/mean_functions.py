@@ -69,7 +69,7 @@ class ZeroMean:
         Parameters
         ----------
         hyp : array_like
-            Vector of hyperparameters.
+            An 1D array of hyperparameters.
         X : array_like
             Matrix of test points.
         compute_grad : bool, defaults to False

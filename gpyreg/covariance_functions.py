@@ -72,6 +72,8 @@ class SquaredExponential:
 
         Parameters
         ----------
+        hyp : array_like
+            An 1D array of hyperparameters.
         X : array_like
             Matrix of training inputs.
         X_star : array_like, optional

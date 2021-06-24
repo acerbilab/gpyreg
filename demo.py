@@ -25,8 +25,13 @@ gp = gpr.GP(
 )
 
 # Define the priors of the GP hyperparameters (supported priors
-# are 'gaussian', 'studentt', 'smoothbox', 'smoothbox_studentt')
+# are 'gaussian', 'student_t', 'smoothbox', 'smoothbox_student_t')
 gp_priors = {
+    "covariance_log_lengthscale": None,
+    "covariance_log_outputscale": None,
+    "mean_const": None,
+    "mean_location": None,
+    "mean_log_scale": None,
     "noise_log_scale": ("student_t", (np.log(1e-3), 1.0, 7)),
 }
 
