@@ -142,10 +142,98 @@ def test_gp_gradient_computations():
     hyp_dict = gp.get_hyperparameters()
     gp1.set_hyperparameters(hyp_dict)
 
-    assert np.all(np.isclose(gp.post[0].hyp, gp1.post[0].hyp))
-    
+    assert np.all(
+        np.isclose(
+            gp.get_hyperparameters(as_array=True),
+            gp1.get_hyperparameters(as_array=True),
+        )
+    )
+
     # Test plotting
     gp.plot()
+
+
+def test_getters_setters():
+    N = 20
+    D = 2
+    X = np.random.uniform(low=-3, high=3, size=(N, D))
+    y = np.sin(np.sum(X, 1)) + np.random.normal(scale=0.1, size=N)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    hyp_dict_list = gp.get_hyperparameters()
+    assert len(hyp_dict_list) == 1
+
+    hyp_dict = hyp_dict_list[0]
+    assert np.all(np.isnan(hyp_dict["covariance_log_lengthscale"]))
+    assert np.all(np.isnan(hyp_dict["covariance_log_outputscale"]))
+    assert np.all(np.isnan(hyp_dict["noise_log_scale"]))
+    assert np.all(np.isnan(hyp_dict["mean_const"]))
+
+    assert np.all(np.isnan(gp.get_hyperparameters(as_array=True)))
+
+    prior = gp.get_priors()
+    assert prior["covariance_log_lengthscale"] is None
+    assert prior["covariance_log_outputscale"] is None
+    assert prior["noise_log_scale"] is None
+    assert prior["mean_const"] is None
+
+    gp_priors_mistaken = {
+        "covariance_log_outputscal": ("student_t", (0, np.log(10), 3)),
+        "covariance_log_lengthscale": (
+            "gaussian",
+            (np.log(np.std(X, ddof=1)), np.log(10)),
+        ),
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": ("smoothbox", (np.min(y), np.max(y), 1.0)),
+    }
+
+    mistaken = gp.set_priors(gp_priors_mistaken)
+    assert len(mistaken) == 1 and mistaken[0] == "covariance_log_outputscale"
+
+    gp_priors = {
+        "covariance_log_outputscale": ("student_t", (0, np.log(10), 3)),
+        "covariance_log_lengthscale": (
+            "gaussian",
+            (np.log(np.std(X, ddof=1)), np.log(10)),
+        ),
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": ("smoothbox", (np.min(y), np.max(y), 1.0)),
+    }
+
+    gp.set_priors(gp_priors)
+    prior = gp.get_priors()
+    assert gp_priors == prior
+
+    hyp_arr = np.array(
+        [[-0.4630094, -0.78566179, -0.2209450, -7.2947503, 0.03713608]]
+    )
+    hyp = gp.hyperparameters_to_dict(hyp_arr)
+    gp.set_hyperparameters(hyp)
+    assert np.allclose(gp.get_hyperparameters(as_array=True), hyp_arr)
+
+    gp.set_hyperparameters(hyp_arr)
+    assert np.allclose(gp.get_hyperparameters(as_array=True), hyp_arr)
+
+    gp_train = {"n_samples": 10}
+    hyp, _ = gp.fit(X=X, y=y, options=gp_train)
+
+    assert np.allclose(gp.get_hyperparameters(as_array=True), hyp)
+
+    hyp_dict_list = gp.get_hyperparameters()
+    for i, hyp_dict in enumerate(hyp_dict_list):
+        assert np.allclose(hyp_dict["covariance_log_lengthscale"], hyp[i, 0:2])
+        assert np.allclose(hyp_dict["covariance_log_outputscale"], hyp[i, 2])
+        assert np.allclose(hyp_dict["noise_log_scale"], hyp[i, 3])
+        assert np.allclose(hyp_dict["mean_const"], hyp[i, 4])
+
+    prior = gp.get_priors()
+    assert gp_priors == prior
 
 
 def incomplete_test_fitting():
@@ -166,14 +254,14 @@ def incomplete_test_fitting():
     noise_N = gp.noise.hyperparameter_count()
 
     N_s = 1
-    hyp = np.random.standard_normal(size=(cov_N + noise_N + mean_N, N_s))
-    hyp[D, :] *= 0.2
-    hyp[D + 1 : D + 1 + noise_N, :] *= 0.3
+    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    hyp[:, D] *= 0.2
+    hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
     print(hyp)
 
-    gp.update(X_new=X, hyp=hyp, compute_posterior=False)
+    gp.update(hyp=hyp, compute_posterior=False)
     y = gp.random_function(X)
-    gp.update(y_new=y, hyp=hyp, compute_posterior=True)
+    gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
     gp.plot()
 
     gp1 = gpr.GP(
@@ -192,6 +280,6 @@ def incomplete_test_fitting():
     gp1.fit(X=X, y=y, options=gp_train)
     hyp2 = gp1.get_hyperparameters(as_array=True)
     print(hyp2)
-    print(gp1._GP__compute_nlZ(hyp[:, 0], False, False))
-    print(gp1._GP__compute_nlZ(hyp2[:, 0], False, False))
+    print(gp1._GP__compute_nlZ(hyp[0, :], False, False))
+    print(gp1._GP__compute_nlZ(hyp2[0, :], False, False))
     gp1.plot()

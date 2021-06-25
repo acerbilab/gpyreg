@@ -44,7 +44,7 @@ class GP:
 
     def __repr__(self):
         dimension = "Dimension: " + str(self.D) + "\n"
-        
+
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov = "Covariance function: " + self.covariance.__class__.__name__
         if self.covariance.__class__.__name__ == "Matern":
@@ -53,7 +53,7 @@ class GP:
             cov += ", " + str(cov_N) + " parameter\n"
         else:
             cov += ", " + str(cov_N) + " parameters\n"
-            
+
         mean_N = self.mean.hyperparameter_count(self.D)
         mean = "Mean function: " + self.mean.__class__.__name__
         if mean_N == 1:
@@ -84,15 +84,14 @@ class GP:
                 if add_flag:
                     noise += ", "
                 noise += "rectified_linear_output_dependent_add=True"
-                
+
             noise += ")"
-            
+
         if noise_N == 1:
             noise += ", " + str(noise_N) + " parameter\n"
         else:
             noise += ", " + str(noise_N) + " parameters\n"
-            
-            
+
         priors = "Hyperparameter priors: "
         if self.no_prior:
             priors += "none\n"
@@ -283,7 +282,7 @@ class GP:
             cov_N = self.covariance.hyperparameter_count(self.D)
             mean_N = self.mean.hyperparameter_count(self.D)
             noise_N = self.noise.hyperparameter_count()
-            hyp = np.full((cov_N + mean_N + noise_N, 1), np.nan)
+            hyp = np.full((1, cov_N + mean_N + noise_N), np.nan)
         else:
             hyp = np.zeros((np.size(self.post), np.size(self.post[0].hyp)))
             for i in range(0, np.size(self.post)):
@@ -976,7 +975,7 @@ class GP:
         return lp
 
     def log_likelihood(self, hyp, compute_grad=False):
-        """Computes (positive) log marginal likelihood of the GP for given 
+        """Computes (positive) log marginal likelihood of the GP for given
         hyperparameters.
 
         Parameters
@@ -998,8 +997,8 @@ class GP:
         return -self.__compute_nlZ(hyp, compute_grad, False)
 
     def log_posterior(self, hyp, compute_grad=False):
-        """Computes (positive) log marginal likelihood of the GP with added 
-        log prior for given hyperparameters (that is, the unnormalized log 
+        """Computes (positive) log marginal likelihood of the GP with added
+        log prior for given hyperparameters (that is, the unnormalized log
         posterior).
 
         Parameters
