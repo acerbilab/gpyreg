@@ -36,10 +36,13 @@ class GP:
         self.covariance = covariance
         self.mean = mean
         self.noise = noise
-        self.s2 = s2
+        self.s2 = None
+        if s2 is not None:
+            self.s2 = s2.copy()
         self.X = None
         self.y = None
-        self.post = None
+        self.posteriors = None
+        self.set_bounds()
         self.set_priors()
 
     def __repr__(self):
@@ -98,13 +101,163 @@ class GP:
         else:
             priors += "present\n"
         samples = "Hyperparameter samples: "
-        if self.post is None:
+        if self.posteriors is None:
             samples += "0"
         else:
-            samples += str(np.size(self.post))
+            samples += str(np.size(self.posteriors))
 
         total = dimension + cov + mean + noise + priors + samples
         return total
+
+    def set_bounds(self, bounds=None):
+        """Sets the hyperparameter priors.
+
+        Parameters
+        ==========
+        bounds : dict, optional
+            A dictionary of hyperparameter names and tuples of their lower and
+            upper bounds. If None is given, the the lower bounds will be set
+            to -inf and upper bounds to +inf.
+
+        Returns
+        =======
+        missing : list
+            A list of missing hyperparameter bounds that should have been
+            given.
+        """
+
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        cov_hyper_info = self.covariance.hyperparameter_info(self.D)
+        mean_N = self.mean.hyperparameter_count(self.D)
+        mean_hyper_info = self.mean.hyperparameter_info(self.D)
+        noise_N = self.noise.hyperparameter_count()
+        noise_hyper_info = self.noise.hyperparameter_info()
+        hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
+
+        hyp_N = cov_N + mean_N + noise_N
+        self.lower_bounds = np.full((hyp_N,), -np.inf)
+        self.upper_bounds = np.full((hyp_N,), np.inf)
+
+        if bounds is None:
+            return []
+
+        lower = 0
+        missing = []
+
+        for info in hyper_info:
+            try:
+                vals = bounds[info[0]]
+            except KeyError:
+                missing.append(info[0])
+                vals = None
+
+            # None indicates no bounds.
+            if vals is not None:
+                upper = lower + info[1]
+                lb, ub = vals
+                i = range(lower, upper)
+                self.lower_bounds[i] = lb
+                self.upper_bounds[i] = ub
+
+            lower += info[1]
+
+        return missing
+
+    def get_bounds(self):
+        """Gets the current hyperparameter lower and upper bounds.
+
+        Returns
+        =======
+        bounds_dict : dict
+            A dictionary of the current hyperparameters and their bounds.
+        """
+        return self.bounds_to_dict(self.lower_bounds, self.upper_bounds)
+
+    def bounds_to_dict(self, lower_bounds, upper_bounds):
+        """Converts the given hyperparemeter lower and upper bounds to
+        a dictionary.
+
+        Parameters
+        ==========
+        lower_bounds : array_like
+            An 1D array of lower bounds. Must be the same size as
+            the array for the upper bounds.
+        upper_bounds : array_like
+            An 1D array of upper bounds. Must be the same size as
+            the array for the lower bounds.
+        Returns
+        =======
+        bounds_dict : dict
+            A dictionary of the current hyperparemters and the given
+            bounds.
+        """
+
+        cov_hyper_info = self.covariance.hyperparameter_info(self.D)
+        mean_hyper_info = self.mean.hyperparameter_info(self.D)
+        noise_hyper_info = self.noise.hyperparameter_info()
+        hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
+
+        bounds_dict = {}
+        lower = 0
+
+        for info in hyper_info:
+            upper = lower + info[1]
+            i = range(lower, upper)
+
+            # Check if we can compress the bounds dictionary.
+            lower_same = np.all(lower_bounds[i] == lower_bounds[lower])
+            upper_same = np.all(upper_bounds[i] == upper_bounds[lower])
+            if lower_same and upper_same:
+                i = lower
+
+            bounds_dict[info[0]] = (lower_bounds[i], upper_bounds[i])
+            lower += info[1]
+
+        return bounds_dict
+
+    def get_recommended_bounds(self):
+        """Gets the recommended hyperparameter lower and upper bounds.
+
+        Returns
+        =======
+        bounds_dict : dict
+            A dictionary of the hyperparameters and their recommended bounds.
+        """
+        if self.X or self.y is None:
+            raise Exception("GP does not have X or y set!")
+
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        mean_N = self.mean.hyperparameter_count(self.D)
+        noise_N = self.noise.hyperparameter_count()
+
+        cov_info = self.covariance.get_info(self.X, self.y)
+        mean_info = self.mean.get_info(self.X, self.y)
+        noise_info = self.noise.get_info(self.X, self.y)
+
+        lb = self.lower_bounds.copy()
+        ub = self.upper_bounds.copy()
+
+        lb_cov = lb[0:cov_N]
+        lb_noise = lb[cov_N : cov_N + noise_N]
+        lb_mean = lb[cov_N + noise_N : cov_N + noise_N + mean_N]
+
+        lb_cov[np.isinf(lb_cov)] = cov_info.LB[np.isinf(lb_cov)]
+        lb_noise[np.isinf(lb_noise)] = noise_info.LB[np.isinf(lb_noise)]
+        lb_mean[np.isinf(lb_mean)] = mean_info.LB[np.isinf(lb_mean)]
+
+        ub_cov = ub[0:cov_N]
+        ub_noise = ub[cov_N : cov_N + noise_N]
+        ub_mean = ub[cov_N + noise_N : cov_N + noise_N + mean_N]
+
+        ub_cov[np.isinf(ub_cov)] = cov_info.UB[np.isinf(ub_cov)]
+        ub_noise[np.isinf(ub_noise)] = noise_info.UB[np.isinf(ub_noise)]
+        ub_mean[np.isinf(ub_mean)] = mean_info.UB[np.isinf(ub_mean)]
+
+        lb = np.concatenate([lb_cov, lb_noise, lb_mean])
+        ub = np.concatenate([ub_cov, ub_noise, ub_mean])
+        ub = np.maximum(lb, ub)
+
+        return self.bounds_to_dict(lb, ub)
 
     def get_priors(self):
         """Gets the current hyperparameter priors.
@@ -121,22 +274,32 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyper_priors = {}
-        i = 0
+        lower = 0
 
-        mu = self.hyper_priors["mu"]
-        sigma = self.hyper_priors["sigma"]
-        df = self.hyper_priors["df"]
-        LB = self.hyper_priors["LB"]
-        UB = self.hyper_priors["UB"]
-        a = self.hyper_priors["a"]
-        b = self.hyper_priors["b"]
+        mu = self.hyper_priors["mu"].copy()
+        sigma = self.hyper_priors["sigma"].copy()
+        df = self.hyper_priors["df"].copy()
+        a = self.hyper_priors["a"].copy()
+        b = self.hyper_priors["b"].copy()
 
         for info in hyper_info:
+            upper = lower + info[1]
+            i = range(lower, upper)
+
+            # Check if all the priors of this hyperparameter are equal
+            # If they are, we can compress the prior dictionary.
+            mu_same = np.all((mu[i] == mu[lower])) or np.all(np.isnan(mu[i]))
+            sigma_same = np.all((sigma[i] == sigma[lower])) or np.all(
+                np.isnan(sigma[i])
+            )
+            df_same = np.all((df[i] == df[lower])) or np.all(np.isnan(df[i]))
+            a_same = np.all((a[i] == a[lower])) or np.all(np.isnan(a[i]))
+            b_same = np.all((b[i] == b[lower])) or np.all(np.isnan(b[i]))
+            if mu_same and sigma_same and df_same and a_same and b_same:
+                i = lower
+
             prior_type = prior_params = None
-            if LB[i] == UB[i]:
-                prior_type = "fixed"
-                prior_params = LB[i]
-            elif (
+            if (
                 np.isfinite(a[i])
                 and np.isfinite(b[i])
                 and np.isfinite(sigma[i])
@@ -160,7 +323,7 @@ class GP:
             else:
                 hyper_priors[info[0]] = None
 
-            i += info[1]
+            lower += info[1]
 
         return hyper_priors
 
@@ -201,8 +364,6 @@ class GP:
             "df": np.full((hyp_N,), np.nan),
             "a": np.full((hyp_N,), np.nan),
             "b": np.full((hyp_N,), np.nan),
-            "LB": np.full((hyp_N,), np.nan),
-            "UB": np.full((hyp_N,), np.nan),
         }
 
         non_trivial_flag = False
@@ -226,10 +387,6 @@ class GP:
                 prior_type, prior_params = vals
                 i = range(lower, upper)
 
-                if prior_type == "fixed":
-                    val = prior_params
-                    self.hyper_priors["LB"][i] = val
-                    self.hyper_priors["UB"][i] = val
                 if prior_type == "gaussian":
                     mu, sigma = prior_params
                     self.hyper_priors["mu"][i] = mu
@@ -278,15 +435,18 @@ class GP:
             The hyperparameteres in the form specified by as_array.
         """
         # If no hyperparameters have been set return an array/dict with NaN.
-        if self.post is None:
+        if self.posteriors is None:
             cov_N = self.covariance.hyperparameter_count(self.D)
             mean_N = self.mean.hyperparameter_count(self.D)
             noise_N = self.noise.hyperparameter_count()
             hyp = np.full((1, cov_N + mean_N + noise_N), np.nan)
         else:
-            hyp = np.zeros((np.size(self.post), np.size(self.post[0].hyp)))
-            for i in range(0, np.size(self.post)):
-                hyp[i, :] = self.post[i].hyp
+            hyp = np.zeros(
+                (np.size(self.posteriors), np.size(self.posteriors[0].hyp))
+            )
+            for i in range(0, np.size(self.posteriors)):
+                # Copy for avoiding reference issues.
+                hyp[i, :] = self.posteriors[i].hyp.copy()
 
         if as_array:
             return hyp
@@ -348,6 +508,8 @@ class GP:
         noise_N = self.noise.hyperparameter_count()
         noise_hyper_info = self.noise.hyperparameter_info()
 
+        hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
+
         if hyp_arr.ndim == 1:
             hyp_arr = np.reshape(hyp_arr, (1, -1))
 
@@ -355,19 +517,12 @@ class GP:
             raise ValueError("Input hyperparameter array is the wrong shape!")
 
         for i in range(0, hyp_arr.shape[0]):
-            hyp_tmp = hyp_arr[i, :]
+            # Make sure there are no accidents with references etc.
+            hyp_tmp = hyp_arr[i, :].copy()
             hyp_dict = {}
             i = 0
 
-            for info in cov_hyper_info:
-                hyp_dict[info[0]] = hyp_tmp[i : i + info[1]]
-                i += info[1]
-
-            for info in noise_hyper_info:
-                hyp_dict[info[0]] = hyp_tmp[i : i + info[1]]
-                i += info[1]
-
-            for info in mean_hyper_info:
+            for info in hyper_info:
                 hyp_dict[info[0]] = hyp_tmp[i : i + info[1]]
                 i += info[1]
 
@@ -401,21 +556,15 @@ class GP:
         noise_N = self.noise.hyperparameter_count()
         noise_hyper_info = self.noise.hyperparameter_info()
 
+        hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
+
         hyp_N = cov_N + mean_N + noise_N
         hyp_new_arr = np.zeros((len(hyp_dict), hyp_N))
 
         for i, hyp_tmp in enumerate(hyp_dict):
             j = 0
 
-            for info in cov_hyper_info:
-                hyp_new_arr[i, j : j + info[1]] = hyp_tmp[info[0]]
-                j += info[1]
-
-            for info in noise_hyper_info:
-                hyp_new_arr[i, j : j + info[1]] = hyp_tmp[info[0]]
-                j += info[1]
-
-            for info in mean_hyper_info:
+            for info in hyper_info:
                 hyp_new_arr[i, j : j + info[1]] = hyp_tmp[info[0]]
                 j += info[1]
 
@@ -445,13 +594,25 @@ class GP:
         compute_posterior : bool, defaults to True
             Whether to compute the new posterior or not.
         """
-        rank_one_update = False
-        if X_new is not None and y_new is not None:
+
+        # Create local copies so we won't get trouble
+        # with references later.
+        if X_new is not None:
+            X_new = X_new.copy()
             if X_new.ndim == 1:
                 X_new = np.reshape(X_new, (1, -1))
+        if y_new is not None:
+            y_new = y_new.copy()
             if y_new.ndim == 1:
                 y_new = np.reshape(y_new, (-1, 1))
+        if s2_new is not None:
+            s2_new = s2_new.copy()
+        if hyp is not None:
+            hyp = hyp.copy()
 
+        # Check whether to do a rank-1 update.
+        rank_one_update = False
+        if X_new is not None and y_new is not None:
             if (
                 self.X is not None
                 and self.y is not None
@@ -470,23 +631,23 @@ class GP:
             m_star, v_star = self.predict(
                 X_new, y_new, add_noise=True, separate_samples=True
             )
-            s_N = np.size(self.post)
+            s_N = np.size(self.posteriors)
 
             # Loop over hyperparameter samples.
             for s in range(0, s_N):
-                hyp_s = self.post[s].hyp
+                hyp_s = self.posteriors[s].hyp
 
                 hyp_noise = hyp_s[cov_N : cov_N + noise_N]
                 sn2 = self.noise.compute(hyp_noise, X_new, y_new, 0)
-                sn2_eff = sn2 * self.post[s].sn2_mult
+                sn2_eff = sn2 * self.posteriors[s].sn2_mult
 
                 # Compute covariance and cross-covariance.
                 hyp_cov = hyp_s[0:cov_N]
                 K = self.covariance.compute(hyp_cov, X_new)
                 Ks = self.covariance.compute(hyp_cov, self.X, X_new)
 
-                L = self.post[s].L
-                L_chol = self.post[s].L_chol
+                L = self.posteriors[s].L
+                L_chol = self.posteriors[s].L_chol
 
                 if L_chol:  # High-noise parametrization
                     alpha_update = (
@@ -500,7 +661,7 @@ class GP:
                     new_L_column = (
                         sp.linalg.solve_triangular(L, Ks, trans=1) / sn2_eff
                     )
-                    self.post[s].L = np.block(
+                    self.posteriors[s].L = np.block(
                         [
                             [L, new_L_column],
                             [
@@ -516,20 +677,20 @@ class GP:
                 else:  # Low-noies parametrization
                     alpha_update = np.dot(-L, Ks)
                     v = -alpha_update / v_star[:, s]
-                    self.post[s].L = np.block(
+                    self.posteriors[s].L = np.block(
                         [
                             [L + np.dot(v, alpha_update.T), -v],
                             [-v.T, -1 / v_star[:, s]],
                         ]
                     )
 
-                self.post[s].sW = np.concatenate(
-                    (self.post[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
+                self.posteriors[s].sW = np.concatenate(
+                    (self.posteriors[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
                 )
 
                 # alpha_update now contains (K + \sigma^2 I) \ k*
-                self.post[s].alpha = np.concatenate(
-                    (self.post[s].alpha, np.array([[0]]))
+                self.posteriors[s].alpha = np.concatenate(
+                    (self.posteriors[s].alpha, np.array([[0]]))
                 ) + (m_star[:, s] - y_new) / v_star[:, s] * np.concatenate(
                     (alpha_update, np.array([[-1]]))
                 )
@@ -541,10 +702,6 @@ class GP:
                 self.X = np.concatenate((self.X, X_new))
 
         if y_new is not None:
-            # Change from 1D to 2D internally.
-            if y_new is not None and y_new.ndim == 1:
-                y_new = np.reshape(y_new, (-1, 1))
-
             if self.y is None:
                 self.y = y_new
             else:
@@ -558,14 +715,16 @@ class GP:
 
         if not rank_one_update and hyp is not None:
             s_N, _ = hyp.shape
-            self.post = np.empty((s_N,), dtype=Posterior)
+            self.posteriors = np.empty((s_N,), dtype=Posterior)
 
             if compute_posterior and self.X is not None and self.y is not None:
                 for i in range(0, s_N):
-                    self.post[i] = self.__core_computation(hyp[i, :], 0, 0)
+                    self.posteriors[i] = self.__core_computation(
+                        hyp[i, :], 0, 0
+                    )
             else:
                 for i in range(0, s_N):
-                    self.post[i] = Posterior(
+                    self.posteriors[i] = Posterior(
                         hyp[i, :], None, None, None, None, None
                     )
 
@@ -594,6 +753,9 @@ class GP:
                     Thinning parameter for slice sampling.
                 **burn** : int, defaults to ``thin * n_samples``
                     Burn parameter for slice sampling.
+                **use_recommended_bounds** : bool, defaults to True
+                    Whether to only use user provided lower and upper bounds
+                    or to try to choose them intelligently.
 
         Returns
         =======
@@ -612,6 +774,7 @@ class GP:
         df_base = options.get("df_base", 7)
         s_N = options.get("n_samples", 10)
         burn_in = options.get("burn", thin * s_N)
+        use_recommended_bounds = options.get("use_recommended_bounds", True)
 
         # Initialize GP if requested.
         if X is not None:
@@ -632,11 +795,8 @@ class GP:
             s2 = self.s2
 
         cov_N = self.covariance.hyperparameter_count(self.D)
-        mean_N = self.mean.hyperparameter_count(self.D)
+        # mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
-
-        LB = self.hyper_priors["LB"]
-        UB = self.hyper_priors["UB"]
 
         ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
 
@@ -645,27 +805,10 @@ class GP:
         noise_info = self.noise.get_info(X, y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
-
-        # Set covariance/noise/mean function hyperparameter lower bounds.
-        LB_cov = LB[0:cov_N]
-        LB_noise = LB[cov_N : cov_N + noise_N]
-        LB_mean = LB[cov_N + noise_N : cov_N + noise_N + mean_N]
-        LB_cov[np.isnan(LB_cov)] = cov_info.LB[np.isnan(LB_cov)]
-        LB_noise[np.isnan(LB_noise)] = noise_info.LB[np.isnan(LB_noise)]
-        LB_mean[np.isnan(LB_mean)] = mean_info.LB[np.isnan(LB_mean)]
-
-        # Set covariance/noise/mean function hyperparameter upper bounds.
-        UB_cov = UB[0:cov_N]
-        UB_noise = UB[cov_N : cov_N + noise_N]
-        UB_mean = UB[cov_N + noise_N : cov_N + noise_N + mean_N]
-        UB_cov[np.isnan(UB_cov)] = cov_info.UB[np.isnan(UB_cov)]
-        UB_noise[np.isnan(UB_noise)] = noise_info.UB[np.isnan(UB_noise)]
-        UB_mean[np.isnan(UB_mean)] = mean_info.UB[np.isnan(UB_mean)]
-
-        # Create lower and upper bounds
-        LB = np.concatenate([LB_cov, LB_noise, LB_mean])
-        UB = np.concatenate([UB_cov, UB_noise, UB_mean])
-        UB = np.maximum(LB, UB)
+        if use_recommended_bounds:
+            self.set_bounds(self.get_recommended_bounds())
+        LB = self.lower_bounds
+        UB = self.upper_bounds
 
         # Plausible bounds for generation of starting points
         PLB = np.concatenate([cov_info.PLB, noise_info.PLB, mean_info.PLB])
@@ -677,7 +820,7 @@ class GP:
         # either use the current hyperparameters if they exist, or use
         # plausible lower and upper bounds to guess.
         if hyp0 is None:
-            if self.post is not None:
+            if self.posteriors is not None:
                 hyp0 = self.get_hyperparameters(as_array=True)
             else:
                 hyp0 = np.reshape(
@@ -727,8 +870,12 @@ class GP:
         t1 = time.time() - t1_s
 
         # Check that hyperparameters are within bounds.
-        eps_LB = np.reshape(LB, (1, -1)) + np.spacing(np.reshape(LB, (1, -1)))
-        eps_UB = np.reshape(UB, (1, -1)) - np.spacing(np.reshape(UB, (1, -1)))
+        # Note that with infinite upper and lower bounds we have to be careful
+        # with spacing since it returns NaN.
+        eps_LB = np.reshape(LB, (1, -1))
+        eps_LB[np.isfinite(eps_LB)] += np.spacing(eps_LB[np.isfinite(eps_LB)])
+        eps_UB = np.reshape(UB, (1, -1))
+        eps_UB[np.isfinite(eps_UB)] -= np.spacing(eps_UB[np.isfinite(eps_UB)])
         hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
         # Perform optimization from most promising NOPTS hyperparameter
@@ -794,8 +941,8 @@ class GP:
         df = self.hyper_priors["df"]
         a = self.hyper_priors["a"]
         b = self.hyper_priors["b"]
-        lb = self.hyper_priors["LB"]
-        ub = self.hyper_priors["UB"]
+        lb = self.lower_bounds
+        ub = self.upper_bounds
 
         f_idx = lb == ub
         sb_idx = (
@@ -1095,7 +1242,7 @@ class GP:
         if x_star.ndim == 1:
             x_star = np.reshape(x_star, (-1, 1))
         N, D = self.X.shape
-        s_N = self.post.size
+        s_N = self.posteriors.size
         N_star = x_star.shape[0]
 
         # Preallocate space
@@ -1105,12 +1252,12 @@ class GP:
         ys2 = np.zeros((N_star, s_N))
 
         for s in range(0, s_N):
-            hyp = self.post[s].hyp
-            alpha = self.post[s].alpha
-            L = self.post[s].L
-            L_chol = self.post[s].L_chol
-            sW = self.post[s].sW
-            sn2_mult = self.post[s].sn2_mult
+            hyp = self.posteriors[s].hyp
+            alpha = self.posteriors[s].alpha
+            L = self.posteriors[s].L
+            L_chol = self.posteriors[s].L_chol
+            sW = self.posteriors[s].sW
+            sn2_mult = self.posteriors[s].sn2_mult
 
             cov_N = self.covariance.hyperparameter_count(D)
             mean_N = self.mean.hyperparameter_count(D)
@@ -1197,7 +1344,7 @@ class GP:
         # Number of training points and dimension
         N, D = self.X.shape
         # Number of hyperparameter samples.
-        N_s = np.size(self.post)
+        N_s = np.size(self.posteriors)
 
         # Number of GP hyperparameters.
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -1218,7 +1365,7 @@ class GP:
 
         # Loop over hyperparameter samples.
         for s in range(0, N_s):
-            hyp = self.post[s].hyp
+            hyp = self.posteriors[s].hyp
 
             # Extract GP hyperparameters
             ell = np.exp(hyp[0:D])
@@ -1236,12 +1383,12 @@ class GP:
                 omega = np.exp(hyp[cov_N + noise_N + D + 1 :])
 
             # GP posterior parameters
-            alpha = self.post[s].alpha
-            L = self.post[s].L
-            L_chol = self.post[s].L_chol
+            alpha = self.posteriors[s].alpha
+            L = self.posteriors[s].L
+            L_chol = self.posteriors[s].L_chol
 
             sn2 = np.exp(2 * hyp[cov_N])
-            sn2_eff = sn2 * self.post[s].sn2_mult
+            sn2_eff = sn2 * self.posteriors[s].sn2_mult
 
             # Compute posterior mean of the integral
             tau = np.sqrt(sigma ** 2 + ell ** 2)
@@ -1329,14 +1476,14 @@ class GP:
             lb = None
 
         _, D = self.X.shape  # Number of training points and dimension
-        s_N = self.post.size  # Hyperparameter samples
+        s_N = self.posteriors.size  # Hyperparameter samples
         x_N = 100  # Grid points per visualization
 
         # Loop over hyperparameter samples.
         ell = np.zeros((D, s_N))
         for s in range(0, s_N):
             ell[:, s] = np.exp(
-                self.post[s].hyp[0:D]
+                self.posteriors[s].hyp[0:D]
             )  # Extract length scale from HYP
         ellbar = np.sqrt(np.mean(ell ** 2, 1)).T
 
@@ -1547,7 +1694,7 @@ class GP:
             The values of the drawn function at the requested points.
         """
         N_star = X_star.shape[0]
-        N_s = np.size(self.post)
+        N_s = np.size(self.posteriors)
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
@@ -1556,11 +1703,11 @@ class GP:
         # Draw from hyperparameter samples.
         s = np.random.randint(0, N_s)
 
-        hyp = self.post[s].hyp
-        alpha = self.post[s].hyp
-        L = self.post[s].L
-        L_chol = self.post[s].L_chol
-        sW = self.post[s].sW
+        hyp = self.posteriors[s].hyp
+        alpha = self.posteriors[s].hyp
+        L = self.posteriors[s].L
+        L_chol = self.posteriors[s].L_chol
+        sW = self.posteriors[s].sW
 
         # Compute GP mean function at test points
         m_star = np.reshape(
@@ -1605,10 +1752,12 @@ class GP:
             sn2 = self.noise.compute(
                 hyp[cov_N : cov_N + noise_N], X_star, None, None
             )
-            sn2_mult = self.post[s].sn2_mult
+            sn2_mult = self.posteriors[s].sn2_mult
+            if sn2_mult is None:
+                sn2_mult = 1
             y_star = f_star + np.sqrt(
                 sn2 * sn2_mult
-            ) * np.random.standard_normal(size=f_mu.size)
+            ) * np.random.standard_normal(size=f_mu.shape)
             return y_star
 
         return f_star
@@ -1632,6 +1781,7 @@ class GP:
                 self.X,
                 compute_grad=True,
             )
+
             # This line is actually important due to behaviour of above
             # Maybe change that in the future.
             m = m.reshape((-1, 1))
@@ -1673,6 +1823,7 @@ class GP:
                 sn2_mat = sn2 * np.eye(N)
             else:
                 sn2_mat = np.diag(sn2.ravel())
+
             for i in range(0, 10):
                 try:
                     L = sp.linalg.cholesky(K + sn2_mult * sn2_mat)

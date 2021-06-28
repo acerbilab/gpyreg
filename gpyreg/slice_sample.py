@@ -104,34 +104,36 @@ class SliceSampler:
     def __init__(self, log_f, x0, widths=None, LB=None, UB=None, options=None):
         D = x0.size
         self.log_f = log_f
-        self.x0 = x0
+        self.x0 = x0.copy()
 
         if LB is None:
             self.LB = np.tile(-np.inf, D)
             self.LB_out = np.tile(-np.inf, D)
         else:
-            self.LB = LB
             if np.size(LB) == 1:
                 self.LB = np.tile(LB, D)
+            else:
+                self.LB = LB.copy()
         self.LB_out = self.LB + np.spacing(self.LB)
 
         if UB is None:
             self.UB = np.tile(np.inf, D)
             self.UB_out = np.tile(np.inf, D)
         else:
-            self.UB = UB
             if np.size(UB) == 1:
                 self.UB = np.tile(UB, D)
+            else:
+                self.UB = UB.copy()
         self.UB_out = self.UB + np.spacing(self.UB)
 
         if widths is None:
-            self.widths = (self.UB - self.LB) / 2
-            self.base_widths = widths
+            self.widths = ((self.UB - self.LB) / 2).copy()
+            self.base_widths = None
         else:
             if np.size(widths) == 1:
                 self.widths = np.tile(widths, D)
             else:
-                self.widths = widths
+                self.widths = widths.copy()
             self.base_widths = self.widths.copy()
 
         self.widths[np.isinf(self.widths)] = 10

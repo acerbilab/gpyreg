@@ -78,10 +78,7 @@ def test_gp_gradient_computations():
     hyp1 = hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size))
     for i in range(0, cov_N + mean_N + noise_N):
         prior_type = np.random.randint(1, 6)
-        if prior_type == 0:  # 'fixed'
-            gp.hyper_priors["LB"][i] = hyp1[i]
-            gp.hyper_priors["UB"][i] = hyp1[i]
-        elif prior_type == 1:  # 'gaussian'
+        if prior_type == 1:  # 'gaussian'
             gp.hyper_priors["mu"][i] = np.random.standard_normal()
             gp.hyper_priors["sigma"][i] = np.exp(np.random.standard_normal())
             gp.hyper_priors["df"][i] = 0
@@ -129,14 +126,14 @@ def test_gp_gradient_computations():
     assert np.all(np.isclose(gp.X, gp1.X))
     assert np.all(np.isclose(gp.y, gp1.y))
 
-    assert np.all(np.isclose(gp.post[0].hyp, gp1.post[0].hyp))
-    assert np.all(np.isclose(gp.post[0].alpha, gp1.post[0].alpha))
+    assert np.all(np.isclose(gp.posteriors[0].hyp, gp1.posteriors[0].hyp))
+    assert np.all(np.isclose(gp.posteriors[0].alpha, gp1.posteriors[0].alpha))
 
-    assert np.all(np.isclose(gp.post[0].sW, gp1.post[0].sW))
-    assert np.all(np.isclose(gp.post[0].L, gp1.post[0].L))
+    assert np.all(np.isclose(gp.posteriors[0].sW, gp1.posteriors[0].sW))
+    assert np.all(np.isclose(gp.posteriors[0].L, gp1.posteriors[0].L))
 
-    assert np.isclose(gp.post[0].sn2_mult, gp1.post[0].sn2_mult)
-    assert gp.post[0].L_chol and gp1.post[0].L_chol
+    assert np.isclose(gp.posteriors[0].sn2_mult, gp1.posteriors[0].sn2_mult)
+    assert gp.posteriors[0].L_chol and gp1.posteriors[0].L_chol
 
     # Test getting and setting hyperparameters.
     hyp_dict = gp.get_hyperparameters()
@@ -165,6 +162,16 @@ def test_getters_setters():
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
+
+    bounds = gp.get_bounds()
+    assert np.all(bounds["covariance_log_lengthscale"][0] == -np.inf)
+    assert np.all(bounds["covariance_log_lengthscale"][1] == np.inf)
+    assert np.all(bounds["covariance_log_outputscale"][0] == -np.inf)
+    assert np.all(bounds["covariance_log_outputscale"][1] == np.inf)
+    assert np.all(bounds["noise_log_scale"][0] == -np.inf)
+    assert np.all(bounds["noise_log_scale"][1] == np.inf)
+    assert np.all(bounds["mean_const"][0] == -np.inf)
+    assert np.all(bounds["mean_const"][1] == np.inf)
 
     hyp_dict_list = gp.get_hyperparameters()
     assert len(hyp_dict_list) == 1
@@ -215,25 +222,44 @@ def test_getters_setters():
     )
     hyp = gp.hyperparameters_to_dict(hyp_arr)
     gp.set_hyperparameters(hyp)
-    assert np.allclose(gp.get_hyperparameters(as_array=True), hyp_arr)
+    assert np.all(gp.get_hyperparameters(as_array=True) == hyp_arr)
 
     gp.set_hyperparameters(hyp_arr)
-    assert np.allclose(gp.get_hyperparameters(as_array=True), hyp_arr)
+    assert np.all(gp.get_hyperparameters(as_array=True) == hyp_arr)
 
     gp_train = {"n_samples": 10}
     hyp, _ = gp.fit(X=X, y=y, options=gp_train)
 
-    assert np.allclose(gp.get_hyperparameters(as_array=True), hyp)
+    assert np.all(gp.get_hyperparameters(as_array=True) == hyp)
 
     hyp_dict_list = gp.get_hyperparameters()
     for i, hyp_dict in enumerate(hyp_dict_list):
-        assert np.allclose(hyp_dict["covariance_log_lengthscale"], hyp[i, 0:2])
-        assert np.allclose(hyp_dict["covariance_log_outputscale"], hyp[i, 2])
-        assert np.allclose(hyp_dict["noise_log_scale"], hyp[i, 3])
-        assert np.allclose(hyp_dict["mean_const"], hyp[i, 4])
+        assert np.all(hyp_dict["covariance_log_lengthscale"] == hyp[i, 0:2])
+        assert np.all(hyp_dict["covariance_log_outputscale"] == hyp[i, 2])
+        assert np.all(hyp_dict["noise_log_scale"] == hyp[i, 3])
+        assert np.all(hyp_dict["mean_const"] == hyp[i, 4])
 
     prior = gp.get_priors()
     assert gp_priors == prior
+
+    bounds = gp.get_bounds()
+    assert np.all(
+        bounds["covariance_log_lengthscale"][0] == gp.lower_bounds[0:2]
+    )
+    assert np.all(
+        bounds["covariance_log_outputscale"][0] == gp.lower_bounds[2]
+    )
+    assert np.all(bounds["noise_log_scale"][0] == gp.lower_bounds[3])
+    assert np.all(bounds["mean_const"][0] == gp.lower_bounds[4])
+
+    assert np.all(
+        bounds["covariance_log_lengthscale"][1] == gp.upper_bounds[0:2]
+    )
+    assert np.all(
+        bounds["covariance_log_outputscale"][1] == gp.upper_bounds[2]
+    )
+    assert np.all(bounds["noise_log_scale"][1] == gp.upper_bounds[3])
+    assert np.all(bounds["mean_const"][1] == gp.upper_bounds[4])
 
 
 def incomplete_test_fitting():
@@ -246,7 +272,7 @@ def incomplete_test_fitting():
         D=D,
         covariance=gpr.covariance_functions.SquaredExponential(),
         mean=gpr.mean_functions.ConstantMean(),
-        noise=gpr.noise_functions.GaussianNoise(constant_add=False),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
 
     cov_N = gp.covariance.hyperparameter_count(D)
@@ -260,15 +286,17 @@ def incomplete_test_fitting():
     print(hyp)
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X)
+    y = gp.random_function(X, add_noise=True)
     gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
     gp.plot()
+
+    aaa
 
     gp1 = gpr.GP(
         D=D,
         covariance=gpr.covariance_functions.SquaredExponential(),
         mean=gpr.mean_functions.ConstantMean(),
-        noise=gpr.noise_functions.GaussianNoise(constant_add=False),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
 
     gp_train = {"n_samples": 0}

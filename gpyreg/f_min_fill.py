@@ -34,10 +34,11 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
     if N > N0:
         # First test hyperparameters on a space-filling initial design
         if design == "sobol":
-            sampler = sp.stats.qmc.Sobol(d=n_vars, scramble=True)
+            sampler = sp.stats.qmc.Sobol(d=n_vars, scramble=False)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                S = sampler.random(n=N - N0)
+                # Get rid of first zero.
+                S = sampler.random(n=N - N0 + 1)[1:, :]
         elif design == "random":
             S = np.random.uniform(size=(N - N0, n_vars))
         else:
@@ -104,12 +105,15 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
                     df = 3
                 df = np.minimum(df, 3)
                 if df == 0:
-                    df = np.inf
-
-                tcdf_lb = sp.stats.t.cdf((LB[i] - mu) / sigma, df)
-                tcdf_ub = sp.stats.t.cdf((UB[i] - mu) / sigma, df)
-                S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
-                sX[:, i] = sp.stats.t.ppf(S_scaled, df) * sigma + mu
+                    tcdf_lb = sp.stats.norm.cdf((LB[i] - mu) / sigma, df)
+                    tcdf_ub = sp.stats.norm.cdf((UB[i] - mu) / sigma, df)
+                    S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
+                    sX[:, i] = sp.stats.norm.ppf(S_scaled) * sigma + mu
+                else:
+                    tcdf_lb = sp.stats.t.cdf((LB[i] - mu) / sigma, df)
+                    tcdf_ub = sp.stats.t.cdf((UB[i] - mu) / sigma, df)
+                    S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
+                    sX[:, i] = sp.stats.t.ppf(S_scaled, df) * sigma + mu
 
     X = np.concatenate([x0, sX])
     y = np.full((N,), np.inf)
