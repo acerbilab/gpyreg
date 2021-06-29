@@ -10,7 +10,11 @@ import matplotlib.pyplot as plt
 import gpyreg.covariance_functions
 import gpyreg.mean_functions
 
-from gpyreg.f_min_fill import f_min_fill
+from gpyreg.f_min_fill import (
+    f_min_fill,
+    smoothbox_cdf,
+    smoothbox_student_t_cdf,
+)
 from gpyreg.slice_sample import SliceSampler
 
 
@@ -42,6 +46,10 @@ class GP:
         self.X = None
         self.y = None
         self.posteriors = None
+        # This is necessary as a flag for set_bounds to not do anything
+        # before set_priors has been called.
+        self.no_priors = None
+        self.normalization_constants = None
         self.set_bounds()
         self.set_priors()
 
@@ -161,6 +169,11 @@ class GP:
 
             lower += info[1]
 
+        # Make sure set_priors has been called so we can
+        # recompute these.
+        if self.no_prior is not None:
+            self.__recompute_normalization_constants()
+
         return missing
 
     def get_bounds(self):
@@ -223,7 +236,7 @@ class GP:
         bounds_dict : dict
             A dictionary of the hyperparameters and their recommended bounds.
         """
-        if self.X or self.y is None:
+        if self.X is None or self.y is None:
             raise Exception("GP does not have X or y set!")
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -418,6 +431,7 @@ class GP:
             lower += info[1]
 
         self.no_prior = non_trivial_flag is not True
+        self.__recompute_normalization_constants()
         return missing
 
     def get_hyperparameters(self, as_array=False):
@@ -930,6 +944,47 @@ class GP:
         self.update(hyp=hyp)
         return hyp, sampling_result
 
+    def __recompute_normalization_constants(self):
+        self.normalization_constants = np.full(self.lower_bounds.shape, 1.0)
+
+        for i in range(0, np.size(self.lower_bounds)):
+            mu = self.hyper_priors["mu"][i]
+            sigma = np.abs(self.hyper_priors["sigma"])[i]
+            df = self.hyper_priors["df"][i]
+            a = self.hyper_priors["a"][i]
+            b = self.hyper_priors["b"][i]
+            lb = self.lower_bounds[i]
+            ub = self.upper_bounds[i]
+
+            # Fixed dimension
+            if lb == ub:
+                continue
+
+            # No boundaries
+            if not np.isfinite(lb) and not np.isfinite(ub):
+                continue
+
+            # Uniform
+            if not np.isfinite(mu) and not np.isfinite(sigma):
+                continue
+
+            if np.isfinite(a) and np.isfinite(b):
+                if df == 0 or not np.isfinite(df):
+                    cdf_lb = smoothbox_cdf(lb, sigma, a, b)
+                    cdf_ub = smoothbox_cdf(ub, sigma, a, b)
+                else:
+                    cdf_lb = smoothbox_student_t_cdf(lb, df, sigma, a, b)
+                    cdf_ub = smoothbox_student_t_cdf(ub, df, sigma, a, b)
+            else:
+                if df == 0 or not np.isfinite(df):
+                    cdf_lb = sp.stats.norm.cdf(lb, loc=mu, scale=sigma)
+                    cdf_ub = sp.stats.norm.cdf(ub, loc=mu, scale=sigma)
+                else:
+                    cdf_lb = sp.stats.t.cdf(lb, df, loc=mu, scale=sigma)
+                    cdf_ub = sp.stats.t.cdf(ub, df, loc=mu, scale=sigma)
+
+            self.normalization_constants[i] = cdf_ub - cdf_lb
+
     def __compute_log_priors(self, hyp, compute_grad):
         lp = 0
         dlp = None
@@ -1115,6 +1170,8 @@ class GP:
                     * (hyp[t_idx] - mu[t_idx])
                     / sigma[t_idx] ** 2
                 )
+
+        lp -= np.sum(np.log(self.normalization_constants))
 
         if compute_grad:
             return lp, dlp
@@ -1723,7 +1780,7 @@ class GP:
         if self.y is None:
             # No data, draw from prior
             f_mu = m_star
-            C = K_star + np.spacing(500) * np.eye(N_star)
+            C = K_star + np.spacing(200) * np.eye(N_star)
         else:
             # Compute cross-kernel matrix Ks
             Ks = self.covariance.compute(hyp[0:cov_N], self.X, X_star=X_star)

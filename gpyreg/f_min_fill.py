@@ -105,9 +105,9 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
                     df = 3
                 df = np.minimum(df, 3)
                 if df == 0:
-                    tcdf_lb = sp.stats.norm.cdf((LB[i] - mu) / sigma, df)
-                    tcdf_ub = sp.stats.norm.cdf((UB[i] - mu) / sigma, df)
-                    S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
+                    cdf_lb = sp.stats.norm.cdf((LB[i] - mu) / sigma)
+                    cdf_ub = sp.stats.norm.cdf((UB[i] - mu) / sigma)
+                    S_scaled = cdf_lb + (cdf_ub - cdf_lb) * S[:, i]
                     sX[:, i] = sp.stats.norm.ppf(S_scaled) * sigma + mu
                 else:
                     tcdf_lb = sp.stats.t.cdf((LB[i] - mu) / sigma, df)

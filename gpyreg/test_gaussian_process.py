@@ -99,6 +99,9 @@ def test_gp_gradient_computations():
         else:  # None
             pass
 
+    # Manual changes to hyper priors requires us to call this
+    gp._GP__recompute_normalization_constants()
+
     f = lambda hyp_: gp._GP__compute_log_priors(hyp_, False)
     f_grad = lambda hyp_: gp._GP__compute_log_priors(hyp_, True)[1]
     assert np.all(
@@ -263,10 +266,10 @@ def test_getters_setters():
 
 
 def incomplete_test_fitting():
-    np.random.seed(123456)
+    # np.random.seed(123456)
     N = 500
     D = 1
-    X = np.random.standard_normal(size=(N, D))
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
 
     gp = gpr.GP(
         D=D,
@@ -281,7 +284,7 @@ def incomplete_test_fitting():
 
     N_s = 1
     hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
-    hyp[:, D] *= 0.2
+    hyp[:, D] *= 0.3
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
     print(hyp)
 
@@ -290,8 +293,6 @@ def incomplete_test_fitting():
     gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
     gp.plot()
 
-    aaa
-
     gp1 = gpr.GP(
         D=D,
         covariance=gpr.covariance_functions.SquaredExponential(),
@@ -299,7 +300,7 @@ def incomplete_test_fitting():
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
 
-    gp_train = {"n_samples": 0}
+    gp_train = {"n_samples": 0, "init_N": 2 ** 10}
     gp_priors = {
         # "noise_log_scale": ("student_t", (np.log(1e-3), 1.0, 7)),
     }
