@@ -39,7 +39,7 @@ numpydoc_show_class_members = False
 autodoc_default_options = { 
     "members": True, 
     "undoc-members": False, 
-    "private-members": True,
+    "private-members": False,
 }
 
 # autodoc_default_options = {

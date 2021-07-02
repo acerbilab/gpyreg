@@ -243,9 +243,9 @@ class GP:
         mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
 
-        cov_info = self.covariance.get_info(self.X, self.y)
-        mean_info = self.mean.get_info(self.X, self.y)
-        noise_info = self.noise.get_info(self.X, self.y)
+        cov_bounds_info = self.covariance.get_bounds_info(self.X, self.y)
+        mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
+        noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
         lb = self.lower_bounds.copy()
         ub = self.upper_bounds.copy()
@@ -254,17 +254,21 @@ class GP:
         lb_noise = lb[cov_N : cov_N + noise_N]
         lb_mean = lb[cov_N + noise_N : cov_N + noise_N + mean_N]
 
-        lb_cov[np.isinf(lb_cov)] = cov_info.LB[np.isinf(lb_cov)]
-        lb_noise[np.isinf(lb_noise)] = noise_info.LB[np.isinf(lb_noise)]
-        lb_mean[np.isinf(lb_mean)] = mean_info.LB[np.isinf(lb_mean)]
+        lb_cov[np.isinf(lb_cov)] = cov_bounds_info["LB"][np.isinf(lb_cov)]
+        lb_noise[np.isinf(lb_noise)] = noise_bounds_info["LB"][
+            np.isinf(lb_noise)
+        ]
+        lb_mean[np.isinf(lb_mean)] = mean_bounds_info["LB"][np.isinf(lb_mean)]
 
         ub_cov = ub[0:cov_N]
         ub_noise = ub[cov_N : cov_N + noise_N]
         ub_mean = ub[cov_N + noise_N : cov_N + noise_N + mean_N]
 
-        ub_cov[np.isinf(ub_cov)] = cov_info.UB[np.isinf(ub_cov)]
-        ub_noise[np.isinf(ub_noise)] = noise_info.UB[np.isinf(ub_noise)]
-        ub_mean[np.isinf(ub_mean)] = mean_info.UB[np.isinf(ub_mean)]
+        ub_cov[np.isinf(ub_cov)] = cov_bounds_info["UB"][np.isinf(ub_cov)]
+        ub_noise[np.isinf(ub_noise)] = noise_bounds_info["UB"][
+            np.isinf(ub_noise)
+        ]
+        ub_mean[np.isinf(ub_mean)] = mean_bounds_info["UB"][np.isinf(ub_mean)]
 
         lb = np.concatenate([lb_cov, lb_noise, lb_mean])
         ub = np.concatenate([ub_cov, ub_noise, ub_mean])
@@ -667,13 +671,19 @@ class GP:
                     alpha_update = (
                         sp.linalg.solve_triangular(
                             L,
-                            sp.linalg.solve_triangular(L, Ks, trans=1),
+                            sp.linalg.solve_triangular(
+                                L, Ks, trans=1, check_finite=False
+                            ),
                             trans=0,
+                            check_finite=False,
                         )
                         / sn2_eff
                     )
                     new_L_column = (
-                        sp.linalg.solve_triangular(L, Ks, trans=1) / sn2_eff
+                        sp.linalg.solve_triangular(
+                            L, Ks, trans=1, check_finite=False
+                        )
+                        / sn2_eff
                     )
                     self.posteriors[s].L = np.block(
                         [
@@ -727,7 +737,9 @@ class GP:
             else:
                 self.s2 = np.concatenate((self.s2, s2_new))
 
-        if not rank_one_update and hyp is not None:
+        if not rank_one_update:
+            if hyp is None:
+                hyp = self.get_hyperparameters(as_array=True)
             s_N, _ = hyp.shape
             self.posteriors = np.empty((s_N,), dtype=Posterior)
 
@@ -741,6 +753,22 @@ class GP:
                     self.posteriors[i] = Posterior(
                         hyp[i, :], None, None, None, None, None
                     )
+
+    def clean(self):
+        """Cleans auxiliary computational structures from the gaussian
+        process, thus reducing memory usage. These can be reconstructed
+        with a call to update with compute_posterior=True.
+        """
+
+        if self.posteriors is None:
+            return
+
+        for i in range(0, len(self.posteriors)):
+            self.posteriors[i].alpha = None
+            self.posteriors[i].sW = None
+            self.posteriors[i].L = None
+            self.posteriors[i].sn2_mult = None
+            self.posteriors[i].L_chol = None
 
     def fit(self, X=None, y=None, s2=None, hyp0=None, options=None):
         """Trains gaussian process hyperparameters.
@@ -814,9 +842,9 @@ class GP:
 
         ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
 
-        cov_info = self.covariance.get_info(X, y)
-        mean_info = self.mean.get_info(X, y)
-        noise_info = self.noise.get_info(X, y)
+        cov_bounds_info = self.covariance.get_bounds_info(X, y)
+        mean_bounds_info = self.mean.get_bounds_info(X, y)
+        noise_bounds_info = self.noise.get_bounds_info(X, y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
         if use_recommended_bounds:
@@ -825,8 +853,20 @@ class GP:
         UB = self.upper_bounds
 
         # Plausible bounds for generation of starting points
-        PLB = np.concatenate([cov_info.PLB, noise_info.PLB, mean_info.PLB])
-        PUB = np.concatenate([cov_info.PUB, noise_info.PUB, mean_info.PUB])
+        PLB = np.concatenate(
+            [
+                cov_bounds_info["PLB"],
+                noise_bounds_info["PLB"],
+                mean_bounds_info["PLB"],
+            ]
+        )
+        PUB = np.concatenate(
+            [
+                cov_bounds_info["PUB"],
+                noise_bounds_info["PUB"],
+                mean_bounds_info["PUB"],
+            ]
+        )
         PLB = np.minimum(np.maximum(PLB, LB), UB)
         PUB = np.maximum(np.minimum(PUB, UB), LB)
 
@@ -937,7 +977,6 @@ class GP:
         hyp = hyp_pre_thin[thin - 1 :: thin, :]
 
         t3 = time.time() - t3_s
-        print(hyp)
         print(t1, t2, t3)
 
         # Recompute GP with finalized hyperparameters.
@@ -1265,6 +1304,102 @@ class GP:
 
         return nlZ
 
+    def predict_full(self, x_star, y_star=None, s2_star=0, add_noise=False):
+        """Computes the GP posterior mean and full covariance matrix for each
+        hyperparameter sample.
+        
+        Parameters
+        ==========
+        x_star : array_like
+            The points we want to predict the values at.
+        y_star : array_like, optional
+            True values at the points.
+        s2_star : array_like, optional
+            Noise at the points.
+        add_noise : bool, defaults to True
+            Whether to add noise to the prediction results.
+
+        Returns
+        =======
+        mu : (n, sample_n)
+            Posterior mean at the requested points for each hyperparameter sample.
+        cov : (n, n, sample_n)
+            Covariance matrix for each hyperparameter sample.
+        """
+
+        if x_star.ndim == 1:
+            x_star = np.reshape(x_star, (-1, 1))
+        s_N = self.posteriors.size
+        N_star, _ = x_star.shape
+
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        mean_N = self.mean.hyperparameter_count(self.D)
+        noise_N = self.noise.hyperparameter_count()
+
+        # Preallocate space
+        mu = np.zeros((N_star, s_N))
+        cov = np.zeros((N_star, N_star, s_N))
+
+        for s in range(0, s_N):
+            hyp = self.posteriors[s].hyp
+            alpha = self.posteriors[s].alpha
+            L = self.posteriors[s].L
+            L_chol = self.posteriors[s].L_chol
+            sW = self.posteriors[s].sW
+
+            # Compute GP mean function at test points
+            m_star = np.reshape(
+                self.mean.compute(
+                    hyp[cov_N + noise_N : cov_N + noise_N + mean_N], x_star
+                ),
+                (-1, 1),
+            )
+
+            # Compute kernel matrix
+            K_star = self.covariance.compute(hyp[0:cov_N], x_star)
+
+            if self.y is None:
+                # No data, draw from prior
+                tmp_mu = m_star
+                C = K_star
+            else:
+                # Compute cross-kernel matrix Ks
+                Ks = self.covariance.compute(
+                    hyp[0:cov_N], self.X, X_star=x_star
+                )
+
+                # Conditional mean
+                tmp_mu = m_star + np.dot(Ks.T, alpha)
+
+                if L_chol:
+                    V = sp.linalg.solve_triangular(
+                        L,
+                        np.tile(sW, (1, N_star)) * Ks,
+                        trans=1,
+                        check_finite=False,
+                    )
+                    C = K_star - np.dot(V.T, V)  # Predictive variances
+                else:
+                    LKs = np.dot(L, Ks)
+                    C = K_star + np.dot(Ks.T, LKs)
+
+            # Enforce symmetry if lost due to numerical errors.
+            C = (C + C.T) / 2
+
+            mu[:, s : s + 1] = tmp_mu
+            cov[:, :, s] = C
+            if add_noise:
+                sn2_mult = self.posteriors[s].sn2_mult
+                if sn2_mult is None:
+                    sn2_mult = 1
+                # Also the noise function.
+                sn2_star = self.noise.compute(
+                    hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
+                )
+                cov[:, :, s] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
+
+        return mu, cov
+
     def predict(
         self,
         x_star,
@@ -1298,15 +1433,18 @@ class GP:
         """
         if x_star.ndim == 1:
             x_star = np.reshape(x_star, (-1, 1))
-        N, D = self.X.shape
         s_N = self.posteriors.size
-        N_star = x_star.shape[0]
+        N_star, D = x_star.shape
 
         # Preallocate space
         fmu = np.zeros((N_star, s_N))
         ymu = np.zeros((N_star, s_N))
         fs2 = np.zeros((N_star, s_N))
         ys2 = np.zeros((N_star, s_N))
+        
+        cov_N = self.covariance.hyperparameter_count(D)
+        mean_N = self.mean.hyperparameter_count(D)
+        noise_N = self.noise.hyperparameter_count()
 
         for s in range(0, s_N):
             hyp = self.posteriors[s].hyp
@@ -1314,35 +1452,28 @@ class GP:
             L = self.posteriors[s].L
             L_chol = self.posteriors[s].L_chol
             sW = self.posteriors[s].sW
-            sn2_mult = self.posteriors[s].sn2_mult
 
-            cov_N = self.covariance.hyperparameter_count(D)
-            mean_N = self.mean.hyperparameter_count(D)
-            noise_N = self.noise.hyperparameter_count()
-            sn2_star = self.noise.compute(
-                hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
-            )
             m_star = np.reshape(
                 self.mean.compute(
                     hyp[cov_N + noise_N : cov_N + noise_N + mean_N], x_star
                 ),
                 (-1, 1),
             )
-            Ks = self.covariance.compute(hyp[0:cov_N], self.X, x_star)
-            kss = self.covariance.compute(hyp[0:cov_N], x_star, "diag")
+            
+            kss = self.covariance.compute(hyp[0:cov_N], x_star, compute_diag=True)
 
-            if N > 0:
+            if self.y is not None:
+                Ks = self.covariance.compute(hyp[0:cov_N], self.X, x_star)
                 fmu[:, s : s + 1] = m_star + np.dot(
                     Ks.T, alpha
                 )  # Conditional mean
-            else:
-                fmu[:, s : s + 1] = m_star
-
-            ymu[:, s] = fmu[:, s]
-            if N > 0:
+                
                 if L_chol:
                     V = sp.linalg.solve_triangular(
-                        L, np.tile(sW, (1, N_star)) * Ks, trans=1
+                        L,
+                        np.tile(sW, (1, N_star)) * Ks,
+                        trans=1,
+                        check_finite=False,
                     )
                     fs2[:, s : s + 1] = kss - np.reshape(
                         np.sum(V * V, 0), (-1, 1)
@@ -1352,12 +1483,20 @@ class GP:
                         np.sum(Ks * np.dot(L, Ks), 0), (-1, 1)
                     )
             else:
+                fmu[:, s : s + 1] = m_star
                 fs2[:, s : s + 1] = kss
 
-            fs2[:, s] = np.maximum(
-                fs2[:, s], 0
-            )  # remove numerical noise, i.e. negative variances
-            ys2[:, s : s + 1] = fs2[:, s : s + 1] + sn2_star * sn2_mult
+            ymu[:, s] = fmu[:, s]  
+            # remove numerical noise, i.e. negative variances
+            fs2[:, s] = np.maximum(fs2[:, s], 0)  
+            if add_noise:
+                sn2_mult = self.posteriors[s].sn2_mult
+                if sn2_mult is None:
+                    sn2_mult = 1
+                sn2_star = self.noise.compute(
+                    hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
+                )
+                ys2[:, s : s + 1] = fs2[:, s : s + 1] + sn2_star * sn2_mult
 
         # Unless predictions for samples are requested separately
         # average over samples.
@@ -1388,6 +1527,9 @@ class GP:
         separate_samples : bool, defaults to False
             Whether to return the results separately for each hyperparameter
             sample or averaged.
+
+        Returns
+        =======
         """
 
         if not isinstance(
@@ -1398,7 +1540,6 @@ class GP:
                 "kernel."
             )
 
-        # Number of training points and dimension
         N, D = self.X.shape
         # Number of hyperparameter samples.
         N_s = np.size(self.posteriors)
@@ -1408,9 +1549,18 @@ class GP:
         # mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
 
+        if np.size(mu) == 1:
+            mu = np.tile(mu, (1, D))
+
+        if mu.ndim == 1:
+            mu = np.reshape(mu, (-1, 1))
+
         N_star = mu.shape[0]
         if np.size(sigma) == 1:
-            sigma = np.tile(sigma, (N_star, 1))
+            sigma = np.tile(sigma, (1, D))
+
+        if sigma.ndim == 1:
+            sigma = np.reshape(sigma, (-1, 1))
 
         quadratic_mean_fun = isinstance(
             self.mean, gpyreg.mean_functions.NegativeQuadratic
@@ -1476,9 +1626,12 @@ class GP:
                 tau_kk = np.sqrt(2 * sigma ** 2 + ell ** 2)
                 nf_kk = np.exp(ln_sf2 + sum_lnell - np.sum(np.log(tau_kk), 1))
                 if L_chol:
+                    tmp_result = sp.linalg.solve_triangular(
+                        L, z.T, trans=1, check_finite=False
+                    )
                     invKzk = (
-                        sp.linalg.solve(
-                            L, sp.linalg.solve(L, z.T, trans=1), trans=0
+                        sp.linalg.solve_triangular(
+                            L, tmp_result, trans=0, check_finite=False
                         )
                         / sn2_eff
                     )
@@ -1532,22 +1685,27 @@ class GP:
             delta_y = lb
             lb = None
 
-        _, D = self.X.shape  # Number of training points and dimension
         s_N = self.posteriors.size  # Hyperparameter samples
         x_N = 100  # Grid points per visualization
 
         # Loop over hyperparameter samples.
-        ell = np.zeros((D, s_N))
+        ell = np.zeros((self.D, s_N))
         for s in range(0, s_N):
             ell[:, s] = np.exp(
-                self.posteriors[s].hyp[0:D]
+                self.posteriors[s].hyp[0:self.D]
             )  # Extract length scale from HYP
         ellbar = np.sqrt(np.mean(ell ** 2, 1)).T
 
         if lb is None:
-            lb = np.min(self.X, axis=0) - ellbar
+            if self.X is not None:
+                lb = np.min(self.X, axis=0) - ellbar
+            else:
+                lb = -ellbar
         if ub is None:
-            ub = np.max(self.X, axis=0) + ellbar
+            if self.X is not None:
+                ub = np.max(self.X, axis=0) + ellbar
+            else:
+                ub = ellbar
 
         gutter = [0.05, 0.05]
         margins = [0.1, 0.01, 0.12, 0.01]
@@ -1555,7 +1713,7 @@ class GP:
 
         if x0 is None:
             max_min_flag = True
-        if max_min_flag is not None:
+        if max_min_flag is not None and self.X is not None and self.y is not None:
             if max_min_flag:
                 i = np.argmax(self.y)
                 x0 = self.X[i, :]
@@ -1563,12 +1721,12 @@ class GP:
                 i = np.argmin(self.y)
                 x0 = self.X[i, :]
 
-        _, ax = plt.subplots(D, D, squeeze=False)
+        _, ax = plt.subplots(self.D, self.D, squeeze=False)
 
         flo = fhi = None
-        for i in range(0, D):
+        for i in range(0, self.D):
             ax[i, i].set_position(
-                self.__tight_subplot(D, D, i, i, gutter, margins)
+                self.__tight_subplot(self.D, self.D, i, i, gutter, margins)
             )
 
             xx = None
@@ -1576,8 +1734,11 @@ class GP:
                 np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
                 (-1, 1),
             )
-            if D > 1:
-                xx = np.tile(x0, (np.size(xx_vec), 1))
+            if self.D > 1:
+                if x0 is not None:
+                    xx = np.tile(x0, (np.size(xx_vec), 1))
+                else:
+                    xx = np.tile(np.full((self.D,), 0.0), (np.size(xx_vec), 1))
                 xx[:, i : i + 1] = xx_vec
             else:
                 xx = xx_vec
@@ -1605,7 +1766,7 @@ class GP:
                     np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
                     (-1, 1),
                 )
-                if D > 1:
+                if self.D > 1:
                     xx = np.tile(x0, (np.size(xx_vec), 1))
                     xx[:, i : i + 1] = xx_vec
                 else:
@@ -1630,24 +1791,26 @@ class GP:
             ax[i, i].spines["top"].set_visible(False)
             ax[i, i].spines["right"].set_visible(False)
 
-            if D == 1:
+            if self.D == 1:
                 ax[i, i].set_xlabel("x")
                 ax[i, i].set_ylabel("y")
-                ax[i, i].scatter(self.X, self.y, color="blue")
+                if self.X is not None and self.y is not None:
+                    ax[i, i].scatter(self.X, self.y, color="blue")
             else:
                 if i == 0:
                     ax[i, i].set_ylabel(r"$x_" + str(i + 1) + r"$")
-                if i == D - 1:
+                if i == self.D - 1:
                     ax[i, i].set_xlabel(r"$x_" + str(i + 1) + r"$")
-            ax[i, i].vlines(
-                x0[i],
-                ax[i, i].get_ylim()[0],
-                ax[i, i].get_ylim()[1],
-                colors="k",
-                linewidth=linewidth,
-            )
+            if x0 is not None:
+                ax[i, i].vlines(
+                    x0[i],
+                    ax[i, i].get_ylim()[0],
+                    ax[i, i].get_ylim()[1],
+                    colors="k",
+                    linewidth=linewidth,
+                )
 
-        for i in range(0, D):
+        for i in range(0, self.D):
             for j in range(0, i):
                 xx1_vec = np.reshape(np.linspace(lb[i], ub[i], x_N), (-1, 1)).T
                 xx2_vec = np.reshape(np.linspace(lb[j], ub[j], x_N), (-1, 1)).T
@@ -1655,7 +1818,10 @@ class GP:
                     -1, 2
                 )
 
-                xx = np.tile(x0, (x_N * x_N, 1))
+                if x0 is not None:
+                    xx = np.tile(x0, (x_N**2, 1))
+                else:
+                    xx = np.tile(np.full((self.D,), 0.0), (x_N**2, 1))
                 xx[:, i] = xx_vec[:, 0]
                 xx[:, j] = xx_vec[:, 1]
 
@@ -1671,7 +1837,7 @@ class GP:
                         i2 = j
                         mat = np.reshape(np.sqrt(fs2), (x_N, x_N))
                     ax[i1, i2].set_position(
-                        self.__tight_subplot(D, D, i1, i2, gutter, margins)
+                        self.__tight_subplot(self.D, self.D, i1, i2, gutter, margins)
                     )
                     ax[i1, i2].spines["top"].set_visible(False)
                     ax[i1, i2].spines["right"].set_visible(False)
@@ -1684,28 +1850,30 @@ class GP:
                         ax[i1, i2].contour(Xt, Yt, mat)
                     ax[i1, i2].set_xlim(lb[i2], ub[i2])
                     ax[i1, i2].set_ylim(lb[i1], ub[i1])
-                    ax[i1, i2].scatter(
-                        self.X[:, i2], self.X[:, i1], color="blue", s=10
-                    )
+                    if self.X is not None:
+                        ax[i1, i2].scatter(
+                            self.X[:, i2], self.X[:, i1], color="blue", s=10
+                        )
 
-                    ax[i1, i2].hlines(
-                        x0[i1],
-                        ax[i1, i2].get_xlim()[0],
-                        ax[i1, i2].get_xlim()[1],
-                        colors="k",
-                        linewidth=linewidth,
-                    )
-                    ax[i1, i2].vlines(
-                        x0[i2],
-                        ax[i1, i2].get_ylim()[0],
-                        ax[i1, i2].get_ylim()[1],
-                        colors="k",
-                        linewidth=linewidth,
-                    )
+                    if x0 is not None:
+                        ax[i1, i2].hlines(
+                            x0[i1],
+                            ax[i1, i2].get_xlim()[0],
+                            ax[i1, i2].get_xlim()[1],
+                            colors="k",
+                            linewidth=linewidth,
+                        )
+                        ax[i1, i2].vlines(
+                            x0[i2],
+                            ax[i1, i2].get_ylim()[0],
+                            ax[i1, i2].get_ylim()[1],
+                            colors="k",
+                            linewidth=linewidth,
+                        )
 
                 if j == 0:
                     ax[i, j].set_ylabel(r"$x_" + str(i + 1) + r"$")
-                if i == D - 1:
+                if i == self.D - 1:
                     ax[i, j].set_xlabel(r"$x_" + str(j + 1) + r"$")
 
         plt.show()
@@ -1761,7 +1929,7 @@ class GP:
         s = np.random.randint(0, N_s)
 
         hyp = self.posteriors[s].hyp
-        alpha = self.posteriors[s].hyp
+        alpha = self.posteriors[s].alpha
         L = self.posteriors[s].L
         L_chol = self.posteriors[s].L_chol
         sW = self.posteriors[s].sW
@@ -1789,7 +1957,12 @@ class GP:
             f_mu = m_star + np.dot(Ks.T, alpha)
 
             if L_chol:
-                V = np.linalg.solve(L.T, np.tile(sW, (1, N_star)) * Ks)
+                V = sp.linalg.solve_triangular(
+                    L,
+                    np.tile(sW, (1, N_star)) * Ks,
+                    trans=1,
+                    check_finite=False,
+                )
                 C = K_star - np.dot(V.T, V)  # Predictive variances
             else:
                 LKs = np.dot(L, Ks)
@@ -1799,7 +1972,7 @@ class GP:
         C = (C + C.T) / 2
 
         # Draw random function
-        T = sp.linalg.cholesky(C)
+        T = sp.linalg.cholesky(C, check_finite=False)
         f_star = np.dot(T.T, np.random.standard_normal((T.shape[0], 1))) + f_mu
 
         # Add observation noise.
@@ -1868,7 +2041,9 @@ class GP:
                 sn2_mat = np.diag(sn2.ravel() / sn2_div)
             for i in range(0, 10):
                 try:
-                    L = sp.linalg.cholesky(K / (sn2_div * sn2_mult) + sn2_mat)
+                    L = sp.linalg.cholesky(
+                        K / (sn2_div * sn2_mult) + sn2_mat, check_finite=False
+                    )
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
@@ -1883,7 +2058,9 @@ class GP:
 
             for i in range(0, 10):
                 try:
-                    L = sp.linalg.cholesky(K + sn2_mult * sn2_mat)
+                    L = sp.linalg.cholesky(
+                        K + sn2_mult * sn2_mat, check_finite=False
+                    )
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
@@ -1892,13 +2069,21 @@ class GP:
             if not compute_nlZ:
                 pL = sp.linalg.solve_triangular(
                     -L,
-                    sp.linalg.solve_triangular(L, np.eye(N), trans=1),
+                    sp.linalg.solve_triangular(
+                        L, np.eye(N), trans=1.0, check_finite=False
+                    ),
                     trans=0,
+                    check_finite=False,
                 )
 
         alpha = (
             sp.linalg.solve_triangular(
-                L, sp.linalg.solve_triangular(L, self.y - m, trans=1), trans=0
+                L,
+                sp.linalg.solve_triangular(
+                    L, self.y - m, trans=1, check_finite=False
+                ),
+                trans=0,
+                check_finite=False,
             )
             / sl
         )
@@ -1916,8 +2101,11 @@ class GP:
                 Q = (
                     sp.linalg.solve_triangular(
                         L,
-                        sp.linalg.solve_triangular(L, np.eye(N), trans=1),
+                        sp.linalg.solve_triangular(
+                            L, np.eye(N), trans=1, check_finite=False
+                        ),
                         trans=0,
+                        check_finite=False,
                     )
                     / sl
                     - np.dot(alpha, alpha.T)

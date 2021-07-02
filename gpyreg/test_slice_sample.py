@@ -49,6 +49,19 @@ def test_normal():
     assert np.abs(norm.var() - np.var(samples)) < threshold
 
 
+def test_normal_step_out():
+    new_options = options = {
+        "display": "off",
+        "diagnostics": True,
+        "step_out": True,
+    }
+    slicer = SliceSampler(norm.logpdf, np.array([0.5]), options=new_options)
+    samples = slicer.sample(20000)["samples"]
+
+    assert np.abs(norm.mean() - np.mean(samples)) < threshold
+    assert np.abs(norm.var() - np.var(samples)) < threshold
+
+
 def test_normal_mixture():
     p = 0.7
     rv1 = norm(0, 1)

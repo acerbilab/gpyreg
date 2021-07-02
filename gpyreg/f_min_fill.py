@@ -8,6 +8,40 @@ import scipy as sp
 
 
 def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
+    """Creates a space-filling design, evaluates the function f
+    on the points of the design and sorts the points from smallest
+    value of f to largest.
+
+    Parameters
+    ==========
+    f : callable
+        The function to evaluate on the design points.
+    x0 : array_like
+        A 2D array of points to include in the design, with each row
+        containing a design point.
+    LB : array_like
+        An 1D array of lower bounds.
+    UB : array_like
+        An 1D array of upper bounds.
+    PLB : array_like
+        An 1D array of plausible lower bounds.
+    PUB : array_like
+        An 1D array of plausible lower bounds.
+    hprior : dic
+        Hyperparameter prior dictionary.
+    N : int
+        Design size to use.
+    design : {'sobol', 'random'}, optional
+        Specify what kind of design to use. Defaults to 'sobol'.
+
+    Returns
+    =======
+    X : array_like
+        A 2D array of the design points sorted according to the value
+        f has at those points.
+    y : array_like
+        An 1D array of the sorted values of f at the design points.
+    """
     # Helper for comparing version numbers.
     def ge_versions(version1, version2):
         def normalize(v):
@@ -39,6 +73,8 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
                 warnings.simplefilter("ignore")
                 # Get rid of first zero.
                 S = sampler.random(n=N - N0 + 1)[1:, :]
+            # Randomly permute columns
+            np.random.shuffle(S.T)
         elif design == "random":
             S = np.random.uniform(size=(N - N0, n_vars))
         else:
@@ -49,6 +85,7 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
             )
         sX = np.zeros((N - N0, n_vars))
 
+        # If a prior is specified use that.
         for i in range(0, n_vars):
             mu = hprior["mu"][i]
             sigma = hprior["sigma"][i]

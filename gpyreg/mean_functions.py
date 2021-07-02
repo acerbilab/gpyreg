@@ -11,16 +11,15 @@ class ZeroMean:
 
     @staticmethod
     def hyperparameter_count(_):
-        """Counts the number of hyperparameters this mean function has.
+        """Gives the number of hyperparameters this mean function has.
 
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the mean function.
 
         Returns
         -------
-
         count : int
             The amount of hyperparameters.
         """
@@ -34,53 +33,55 @@ class ZeroMean:
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the kernel.
 
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with
-            how many parameters with such a name there are, in the order
-            they are used in computations.
+            A list of tuples of hyperparameter names and their number,
+            in the order they are used in computations.
         """
         return []
 
-    def get_info(self, X, y):
-        """Gives additional information on the hyperparameters.
+    def get_bounds_info(self, X, y):
+        """Gives information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        mean function.
 
         Parameters
         ----------
-        X : array_like
-            Matrix of training inputss.
-        y : array_like
-            Vector of training targets.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (n, 1)
+            A 2D array where each row is a test target.
 
         Returns
         -------
-        mean_info : MeanInfo
-            The additional info represented as a ``MeanInfo`` object.
+        mean_bound_info: dict
+            A dictionary containing the bound info.
         """
         mean_N = self.hyperparameter_count(X.shape[1])
-        return MeanInfo(mean_N, X, y, 0)
+        return _bounds_info_helper(mean_N, X, y, 0)
 
     def compute(self, hyp, X, compute_grad=False):
-        """Computes the mean function at test points.
+        """Computes the mean function at given test points.
 
         Parameters
         ----------
-        hyp : array_like
-            An 1D array of hyperparameters.
-        X : array_like
-            Matrix of test points.
+        hyp : ndarray, shape (mean_n,)
+            A 1D array of hyperparameters, where ``mean_n`` is
+            the number returned by the function ``hyperparameter_count``.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
         compute_grad : bool, defaults to False
             Whether to compute the gradient with respect to hyperparameters.
 
         Returns
         -------
-        m : array_like
+        m : ndarray, shape (n,)
             The mean values.
-        dm : array_like, optional
-            The gradient.
+        dm : ndarray, shape (n, mean_n), optional
+            The gradient with respect to hyperparameters.
         """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
@@ -112,12 +113,12 @@ class ConstantMean:
 
     @staticmethod
     def hyperparameter_count(_):
-        """Counts the numver of hyperparameters this mean function has.
+        """Gives the number of hyperparameters this mean function has.
 
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the mean function.
 
         Returns
         -------
@@ -134,53 +135,55 @@ class ConstantMean:
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the kernel.
 
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with
-            how many parameters with such a name there are, in the order
-            they are used in computations.
+            A list of tuples of hyperparameter names and their number,
+            in the order they are used in computations.
         """
         return [("mean_const", 1)]
 
-    def get_info(self, X, y):
-        """Gives additional information on the hyperparameters.
+    def get_bounds_info(self, X, y):
+        """Gives information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        mean function.
 
         Parameters
         ----------
-        X : array_like
-            Matrix of training inputs.
-        y : array_like
-            Vector of training targets.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (n, 1)
+            A 2D array where each row is a test target.
 
         Returns
         -------
-        mean_info : CovarianceInfo
-            The additional info represented as a ``MeanInfo`` object.
+        mean_bound_info: dict
+            A dictionary containing the bound info.
         """
         mean_N = self.hyperparameter_count(X.shape[1])
-        return MeanInfo(mean_N, X, y, 1)
+        return _bounds_info_helper(mean_N, X, y, 1)
 
     def compute(self, hyp, X, compute_grad=False):
-        """Computes the mean function at test points.
+        """Computes the mean function at given test points.
 
         Parameters
         ----------
-        hyp : array_like
-            Vector of hyperparameters.
-        X : array_like
-            Matrix of test points.
+        hyp : ndarray, shape (mean_n,)
+            A 1D array of hyperparameters, where ``mean_n`` is
+            the number returned by the function ``hyperparameter_count``.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
         compute_grad : bool, defaults to False
             Whether to compute the gradient with respect to hyperparameters.
 
         Returns
         -------
-        m : array_like
+        m : ndarray, shape (n,)
             The mean values.
-        dm : array_like, optional
-            The gradient.
+        dm : ndarray, shape (n, mean_n), optional
+            The gradient with respect to hyperparameters.
         """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
@@ -213,16 +216,15 @@ class NegativeQuadratic:
 
     @staticmethod
     def hyperparameter_count(d):
-        """Counts the numver of hyperparameters this mean function has.
+        """Gives the number of hyperparameters this mean function has.
 
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the mean function.
 
         Returns
         -------
-
         count : int
             The amount of hyperparameters.
         """
@@ -236,54 +238,55 @@ class NegativeQuadratic:
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the kernel.
 
         Returns
         -------
-
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with
-            how many parameters with such a name there are, in the order
-            they are used in computations.
+            A list of tuples of hyperparameter names and their number,
+            in the order they are used in computations.
         """
         return [("mean_const", 1), ("mean_location", d), ("mean_log_scale", d)]
 
-    def get_info(self, X, y):
-        """Gives additional information on the hyperparameters.
+    def get_bounds_info(self, X, y):
+        """Gives information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        mean function.
 
         Parameters
         ----------
-        X : array_like
-            Matrix of training inputs.
-        y : array_like
-            Vector of training targets.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (n, 1)
+            A 2D array where each row is a test target.
 
         Returns
         -------
-        cov_info : MeanInfo
-            The additional info represented as a ``MeanInfo`` object.
+        mean_bound_info: dict
+            A dictionary containing the bound info.
         """
         mean_N = self.hyperparameter_count(X.shape[1])
-        return MeanInfo(mean_N, X, y, 2)
+        return _bounds_info_helper(mean_N, X, y, 2)
 
     def compute(self, hyp, X, compute_grad=False):
-        """Computes the mean function at test points.
+        """Computes the mean function at given test points.
 
         Parameters
         ----------
-        hyp : array_like
-            Vector of hyperparameters.
-        X : array_like
-            Matrix of test points.
+        hyp : ndarray, shape (mean_n,)
+            A 1D array of hyperparameters, where ``mean_n`` is
+            the number returned by the function ``hyperparameter_count``.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
         compute_grad : bool, defaults to False
             Whether to compute the gradient with respect to hyperparameters.
 
         Returns
         -------
-        m : array_like
+        m : ndarray, shape (n,)
             The mean values.
-        dm : array_like, optional
-            The gradient.
+        dm : ndarray, shape (n, mean_n), optional
+            The gradient with respect to hyperparameters.
         """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
@@ -315,54 +318,63 @@ class NegativeQuadratic:
         return m
 
 
-class MeanInfo:
-    def __init__(self, mean_N, X, y, idx):
-        _, D = X.shape
-        tol = 1e-6
-        big = np.exp(3)
-        self.LB = np.full((mean_N,), -np.inf)
-        self.UB = np.full((mean_N,), np.inf)
-        self.PLB = np.full((mean_N,), -np.inf)
-        self.PUB = np.full((mean_N,), np.inf)
-        self.x0 = np.full((mean_N,), np.nan)
+def _bounds_info_helper(mean_N, X, y, idx):
+    _, D = X.shape
+    tol = 1e-6
+    big = np.exp(3)
+    LB = np.full((mean_N,), -np.inf)
+    UB = np.full((mean_N,), np.inf)
+    PLB = np.full((mean_N,), -np.inf)
+    PUB = np.full((mean_N,), np.inf)
+    x0 = np.full((mean_N,), np.nan)
 
-        w = np.max(X) - np.min(X)
-        if np.size(y) <= 1:
-            y = np.array([0, 1])
-        h = np.max(y) - np.min(y)
+    w = np.max(X) - np.min(X)
+    if np.size(y) <= 1:
+        y = np.array([0, 1])
+    h = np.max(y) - np.min(y)
 
-        if idx == 0:
-            pass
-        elif idx == 1:
-            self.LB[0] = np.min(y) - 0.5 * h
-            self.UB[0] = np.max(y) + 0.5 * h
-            # For future reference note that quantile behaviour in
-            # MATLAB and NumPy is slightly different.
-            self.PLB[0] = np.quantile(y, 0.1)
-            self.PUB[0] = np.quantile(y, 0.9)
-            self.x0[0] = np.median(y)
-        else:
-            self.LB[0] = np.min(y)
-            self.UB[0] = np.max(y) + h
-            self.PLB[0] = np.median(y)
-            self.PUB[0] = np.max(y)
-            self.x0[0] = np.quantile(y, 0.9)
+    if idx == 0:
+        pass
+    elif idx == 1:
+        LB[0] = np.min(y) - 0.5 * h
+        UB[0] = np.max(y) + 0.5 * h
+        # For future reference note that quantile behaviour in
+        # MATLAB and NumPy is slightly different.
+        PLB[0] = np.quantile(y, 0.1)
+        PUB[0] = np.quantile(y, 0.9)
+        x0[0] = np.median(y)
+    else:
+        LB[0] = np.min(y)
+        UB[0] = np.max(y) + h
+        PLB[0] = np.median(y)
+        PUB[0] = np.max(y)
+        x0[0] = np.quantile(y, 0.9)
 
-            # xm
-            self.LB[1 : 1 + D] = np.min(X) - 0.5 * w
-            self.UB[1 : 1 + D] = np.max(X) + 0.5 * w
-            self.PLB[1 : 1 + D] = np.min(X)
-            self.PUB[1 : 1 + D] = np.max(X)
-            self.x0[1 : 1 + D] = np.median(X)
+        # xm
+        LB[1 : 1 + D] = np.min(X) - 0.5 * w
+        UB[1 : 1 + D] = np.max(X) + 0.5 * w
+        PLB[1 : 1 + D] = np.min(X)
+        PUB[1 : 1 + D] = np.max(X)
+        x0[1 : 1 + D] = np.median(X)
 
-            # omega
-            self.LB[1 + D : mean_N] = np.log(w) + np.log(tol)
-            self.UB[1 + D : mean_N] = np.log(w) + np.log(big)
-            self.PLB[1 + D : mean_N] = np.log(w) + 0.5 * np.log(tol)
-            self.PUB[1 + D : mean_N] = np.log(w)
-            # For future reference note that std behaviour in
-            # MATLAB and NumPy is slightly different.
-            self.x0[1 + D : mean_N] = np.log(np.std(X, ddof=1))
-        # Plausible starting point
-        i_nan = np.isnan(self.x0)
-        self.x0[i_nan] = 0.5 * (self.PLB[i_nan] + self.PUB[i_nan])
+        # omega
+        LB[1 + D : mean_N] = np.log(w) + np.log(tol)
+        UB[1 + D : mean_N] = np.log(w) + np.log(big)
+        PLB[1 + D : mean_N] = np.log(w) + 0.5 * np.log(tol)
+        PUB[1 + D : mean_N] = np.log(w)
+        # For future reference note that std behaviour in
+        # MATLAB and NumPy is slightly different.
+        x0[1 + D : mean_N] = np.log(np.std(X, ddof=1))
+
+    # Plausible starting point
+    i_nan = np.isnan(x0)
+    x0[i_nan] = 0.5 * (PLB[i_nan] + PUB[i_nan])
+
+    bounds_info = {
+        "LB": LB,
+        "PLB": PLB,
+        "UB": UB,
+        "PUB": PUB,
+        "x0": x0,
+    }
+    return bounds_info

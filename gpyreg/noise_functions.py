@@ -1,19 +1,23 @@
-"""Module for different noise functions used by a Gaussian process."""
+"""Module for different noise functions used by Gaussian processes."""
 
 import numpy as np
 
 
 class GaussianNoise:
-    """Gaussian noise
+    """Gaussian noise function.
+
+    Total noise variance is is obtained by summing the independent
+    contribution of each noise feature.
 
     Parameters
     ==========
     constant_add : bool, defaults to False
         Whether to add constant noise.
     user_provided_add : bool, defaults to False
-        Whether to add user provided noise.
+        Whether to add user provided (input) noise.
     scale_user_provided : bool, defaults to False
-        Whether to scale uncertainty in provided noise.
+        Whether to scale uncertainty in provided noise. If
+        ``user_provided_add = False`` then this does nothing.
     rectified_linear_output_dependent_add : bool, defaults to False
         Whether to add rectified linear output-dependent noise.
     """
@@ -36,11 +40,10 @@ class GaussianNoise:
             self.parameters[2] = 1
 
     def hyperparameter_count(self):
-        """Counts the number of hyperparameters this noise function has.
+        """Gives the number of hyperparameters this noise function has.
 
         Returns
         -------
-
         count : int
             The amount of hyperparameters.
         """
@@ -60,9 +63,8 @@ class GaussianNoise:
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with
-            how many parameters with such a name there are, in the order
-            they are used in computations.
+            A list of tuples of hyperparameter names and their number,
+            in the order they are used in computations.
         """
         hyper_info = []
         if self.parameters[0] == 1:
@@ -74,31 +76,31 @@ class GaussianNoise:
 
         return hyper_info
 
-    def get_info(self, X, y):
-        """Gives additional information on the hyperparameters.
+    def get_bounds_info(self, X, y):
+        """Gives information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        noise function.
 
         Parameters
         ----------
-        X : array_like
-            Matrix of training inputs.
-        y : array_like
-            Vector of training targets.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (n, 1)
+            A 2D array where each row is a test target.
 
         Returns
         -------
-        noise_info : NoiseInfo
-            The additional info represented as a ``NoiseInfo`` object.
+        noise_bound_info: dict
+            A dictionary containing the bound info.
         """
         _, D = X.shape
         noise_N = self.hyperparameter_count()
         tol = 1e-6
-        info = NoiseInfo(
-            np.full((noise_N,), -np.inf),
-            np.full((noise_N,), np.inf),
-            np.full((noise_N,), -np.inf),
-            np.full((noise_N,), np.inf),
-            np.full((noise_N,), np.nan),
-        )
+        lower_bounds = np.full((noise_N,), -np.inf)
+        upper_bounds = np.full((noise_N,), np.inf)
+        plausible_lower_bounds = np.full((noise_N,), -np.inf)
+        plausible_upper_bounds = np.full((noise_N,), np.inf)
+        plausible_x0 = np.full((noise_N,), np.nan)
 
         if np.size(y) <= 1:
             y = np.array([0, 1])
@@ -108,70 +110,87 @@ class GaussianNoise:
         # Base constant noise
         if self.parameters[0] == 1:
             # Constant noise (log standard deviation)
-            info.LB[i] = np.log(tol)
-            info.UB[i] = np.log(height)
-            info.PLB[i] = 0.5 * np.log(tol)
-            info.PUB[i] = np.log(np.std(y, ddof=1))
-            info.x0[i] = np.log(1e-3)
+            lower_bounds[i] = np.log(tol)
+            upper_bounds[i] = np.log(height)
+            plausible_lower_bounds[i] = 0.5 * np.log(tol)
+            plausible_upper_bounds[i] = np.log(np.std(y, ddof=1))
+            plausible_x0[i] = np.log(1e-3)
             i += 1
 
         # User provided noise.
         if self.parameters[1] == 2:
-            info.LB[i] = np.log(1e-3)
-            info.UB[i] = np.log(1e3)
-            info.PLB[i] = np.log(0.5)
-            info.PUB[i] = np.log(2)
-            info.x0[i] = np.log(1)
+            lower_bounds[i] = np.log(1e-3)
+            upper_bounds[i] = np.log(1e3)
+            plausible_lower_bounds[i] = np.log(0.5)
+            plausible_upper_bounds[i] = np.log(2)
+            plausible_x0[i] = np.log(1)
             i += 1
 
         # Output dependent noise
         if self.parameters[2] == 1:
             min_y = np.min(y)
             max_y = np.max(y)
-            info.LB[i] = min_y
-            info.UB[i] = max_y
-            info.PLB[i] = min_y
-            info.PUB[i] = np.max(max_y - 5 * D, min_y)
-            info.x0[i] = np.max(max_y - 10 * D, min_y)
+            lower_bounds[i] = min_y
+            upper_bounds[i] = max_y
+            plausible_lower_bounds[i] = min_y
+            plausible_upper_bounds[i] = np.maximum(max_y - 5 * D, min_y)
+            plausible_x0[i] = np.maximum(max_y - 10 * D, min_y)
             i += 1
 
-            info.LB[i] = np.log(1e-3)
-            info.UB[i] = np.log(0.1)
-            info.PLB[i] = np.log(0.01)
-            info.PUB[i] = np.log(0.1)
-            info.x0[i] = np.log(0.1)
+            lower_bounds[i] = np.log(1e-3)
+            upper_bounds[i] = np.log(0.1)
+            plausible_lower_bounds[i] = np.log(0.01)
+            plausible_upper_bounds[i] = np.log(0.1)
+            plausible_x0[i] = np.log(0.1)
             i += 1
 
         # Plausible starting point
-        i_nan = np.isnan(info.x0)
-        info.x0[i_nan] = 0.5 * (info.PLB[i_nan] + info.PUB[i_nan])
+        i_nan = np.isnan(plausible_x0)
+        plausible_x0[i_nan] = 0.5 * (
+            plausible_lower_bounds[i_nan] + plausible_upper_bounds[i_nan]
+        )
 
-        return info
+        noise_bound_info = {
+            "LB": lower_bounds,
+            "PLB": plausible_lower_bounds,
+            "PUB": plausible_upper_bounds,
+            "UB": upper_bounds,
+            "x0": plausible_x0,
+        }
+        return noise_bound_info
 
-    def compute(self, hyp, X, y, s2, compute_grad=False):
-        """Computes the noise function at test points.
+    def compute(self, hyp, X, y, s2=None, compute_grad=False):
+        """Computes the noise function at test points, that is the variance
+        of observation noise evaluated at test points.
 
         Parameters
         ----------
-        hyp : array_like
-            Vector of hyperparameters.
-        X : array_like
-            Matrix of test points.
-        y : array_like
-            Vector of test targets.
-        s2 : array_like
-            Estimated noise variance associated with each training input
-            vector.
+        hyp : ndarray, shape (noise_n,)
+            A 1D array of hyperparameters, where ``noise_n`` is
+            the number returned by the function ``hyperparameter_count``.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (n, 1)
+            A 2D array where each row is a test target.
+        s2 : ndarray, shape (n, 1), optional
+            A 2D array of estimated noise variance associated
+            with each test point. Only required if
+            ``user_provided_add = True``.
         compute_grad : bool, defaults to False
             Whether to compute the gradient with respect to the
             hyperparameters.
 
         Returns
         -------
-        sn2 : array_like
+        sn2 : ndarray
             The variance of observation noise evaluated at test points.
-        dsn2 : array_like, optional
-            The gradient.
+            If there is no input or output dependent noise, ``sn2`` is
+            a scalar since it does not change, while otherwise it
+            is of the same shape as ``s2``.
+        dsn2 : ndarray, optional
+            The gradient with respect to hyperparameters. If there is no
+            input or output dependent noise, ``dsn2`` is of shape
+            ``(1, noise_n)`` while otherwise it is of shape ``(n, noise_n)``.
         """
         N, _ = X.shape
         noise_N = self.hyperparameter_count()
@@ -209,7 +228,7 @@ class GaussianNoise:
         elif self.parameters[1] == 2:
             sn2 += np.exp(hyp[i]) * s2
             if compute_grad:
-                dsn2[:, i] = np.exp(hyp[i]) * s2
+                dsn2[:, i : i + 1] = np.exp(hyp[i]) * s2
             i += 1
 
         if self.parameters[2] == 1:
@@ -218,22 +237,13 @@ class GaussianNoise:
                 w2 = np.exp(2 * hyp[i + 1])
                 zz = np.maximum(0, y_tresh - y)
 
-                sn2 += w2 @ zz ** 2
+                sn2 += w2 * zz ** 2
                 if compute_grad:
-                    dsn2[:, i] = 2 * w2 * (y_tresh - y) * (zz > 0)
-                    dsn2[:, i + 1] = 2 * w2 * zz ** 2
+                    dsn2[:, i : i + 1] = 2 * w2 * (y_tresh - y) * (zz > 0)
+                    dsn2[:, i + 1 : i + 2] = 2 * w2 * zz ** 2
             i += 2
 
         if compute_grad:
             return sn2, dsn2
 
         return sn2
-
-
-class NoiseInfo:
-    def __init__(self, LB, UB, PLB, PUB, x0):
-        self.LB = LB
-        self.UB = UB
-        self.PLB = PLB
-        self.PUB = PUB
-        self.x0 = x0

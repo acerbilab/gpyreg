@@ -1,4 +1,4 @@
-"""Module for different covariance functions used by a Gaussian process."""
+"""Module for different covariance functions used by Gaussian processes."""
 
 import numpy as np
 from scipy.spatial.distance import pdist, cdist, squareform
@@ -12,16 +12,15 @@ class SquaredExponential:
 
     @staticmethod
     def hyperparameter_count(d):
-        """Counts the number of hyperparameters this covariance function has.
+        """Gives the number of hyperparameters this covariance function has.
 
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the kernel.
 
         Returns
         -------
-
         count : int
             The amount of hyperparameters.
         """
@@ -29,64 +28,75 @@ class SquaredExponential:
 
     @staticmethod
     def hyperparameter_info(d):
-        """Gives information on the names of hyperparameters for setting them
-        in other parts of the program.
+        """Gives information on the names of hyperparameters for setting
+        them in other parts of the program.
 
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the kernel.
 
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how
-            many parameters with such a name there are, in the order they
-            are used in computations.
+            A list of tuples of hyperparameter names and their number,
+            in the order they are used in computations.
         """
         return [
             ("covariance_log_lengthscale", d),
             ("covariance_log_outputscale", 1),
         ]
 
-    def get_info(self, X, y):
-        """Gives additional information on the hyperparameters.
+    def get_bounds_info(self, X, y):
+        """Gives information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        covariance function.
 
         Parameters
         ----------
-        X : array_like
-            Matrix of training inputs.
-        y : array_like
-            Vector of training targets.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (n, 1)
+            A 2D array where each row is a test target.
 
         Returns
         -------
-        cov_info : CovarianceInfo
-            The additional info represented as a ``CovarianceInfo`` object.
+        cov_bound_info: dict
+            A dictionary containing the bound info.
         """
         cov_N = self.hyperparameter_count(X.shape[1])
-        return CovarianceInfo(cov_N, X, y)
+        return _bounds_info_helper(cov_N, X, y)
 
-    def compute(self, hyp, X, X_star=None, compute_grad=False):
-        """Computes the self-covariance matrix of the training points.
+    def compute(self, hyp, X, X_star=None, compute_diag=False, compute_grad=False):
+        """Computes the covariance matrix for given training points
+        and test points.
 
         Parameters
         ----------
-        hyp : array_like
-            An 1D array of hyperparameters.
-        X : array_like
-            Matrix of training inputs.
-        X_star : array_like, optional
-            Matrix of additional training inputs.
+        hyp : ndarray, shape (cov_n,)
+            A 1D array of hyperparameters, where ``cov_n`` is
+            the number returned by the function ``hyperparameter_count``.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a training point.
+        X_star : ndarray, shape (n, d), optional
+            A 2D array where each row is a test point. If this is not
+            given, we compute the self-covariance matrix.
+        compute_diag : bool, defaults to False
+            Whether to only compute the diagonal of the self-covariance
+            matrix.
         compute_grad : bool, defaults to False
-            Flag for computing the gradient.
+            Whether to compute the gradient with respect to the
+            hyperparameters.
 
         Returns
         -------
-        K : array_like
-            The self-covariance matrix.
-        dK : array_like, optional
-            The gradient of the self-covariance matrix.
+        K : ndarray
+            The covariance matrix, with shape ``(n, n)`` except
+            if we only requested the diagonal, in which case the shape is
+            ``(n,)``.
+        dK : ndarray, shape (n, n, cov_n), optional
+            The gradient of the covariance matrix with respect to the
+            hyperparameters.
         """
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
@@ -106,9 +116,10 @@ class SquaredExponential:
         sf2 = np.exp(2 * hyp[D])
 
         if X_star is None:
-            tmp = squareform(pdist(X / ell, "sqeuclidean"))
-        elif isinstance(X_star, str):
-            tmp = np.zeros((N, 1))
+            if compute_diag:
+                tmp = np.zeros((N, 1))
+            else:
+                tmp = squareform(pdist(X / ell, "sqeuclidean"))
         else:
             tmp = cdist(X / ell, X_star / ell, "sqeuclidean")
 
@@ -136,25 +147,39 @@ class Matern:
     degree : {1, 3, 5}
         The degree of the Matern kernel.
 
-        Currently the only supported degrees are 1, 3, 5.
-
+        Currently the only supported degrees are 1, 3, 5, and if
+        some other degree is provided we throw a ``ValueError`` exception.
     """
 
     def __init__(self, degree):
+        if degree not in (1, 3, 5):
+            raise ValueError(
+                "Only degrees 1, 3 and 5 are supported for the "
+                "Matern covariance function."
+            )
+
         self.degree = degree
+        if self.degree == 1:
+            self.f = lambda t: 1
+            self.df = lambda t: 1 / t
+        elif self.degree == 3:
+            self.f = lambda t: 1 + t
+            self.df = lambda t: 1
+        else:
+            self.f = lambda t: 1 + t * (1 + t / 3)
+            self.df = lambda t: (1 + t) / 3
 
     @staticmethod
     def hyperparameter_count(d):
-        """Counts the number of hyperparameters this covariance function has.
+        """Gives the number of hyperparameters this covariance function has.
 
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the kernel.
 
         Returns
         -------
-
         count : int
             The amount of hyperparameters.
         """
@@ -162,62 +187,75 @@ class Matern:
 
     @staticmethod
     def hyperparameter_info(d):
-        """Gives information on the names of hyperparameters for setting them
-        in other parts of the program.
+        """Gives information on the names of hyperparameters for setting
+        them in other parts of the program.
 
         Parameters
         ----------
         d : int
-            The degree we are interested in.
+            The degree of the kernel.
 
         Returns
         -------
         hyper_info : array_like
-            A list of tuples containing hyperparameter names along with how
-            many parameters with such a name there are, in the order they
-            are used in computations.
+            A list of tuples of hyperparameter names and their number,
+            in the order they are used in computations.
         """
         return [
             ("covariance_log_lengthscale", d),
             ("covariance_log_outputscale", 1),
         ]
 
-    def get_info(self, X, y):
-        """Gives additional information on the hyperparameters.
+    def get_bounds_info(self, X, y):
+        """Gives information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        covariance function.
 
         Parameters
         ----------
-        X : array_like
-            Matrix of training inputs.
-        y : array_like
-            Vector of training targets.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (n, 1)
+            A 2D array where each row is a test target.
 
         Returns
         -------
-        cov_info : CovarianceInfo
-            The additional info represented as a ``CovarianceInfo`` object.
+        cov_bound_info: dict
+            A dictionary containing the bound info.
         """
         cov_N = self.hyperparameter_count(X.shape[1])
-        return CovarianceInfo(cov_N, X, y)
+        return _bounds_info_helper(cov_N, X, y)
 
-    def compute(self, hyp, X, X_star=None, compute_grad=False):
-        """Computes the self-covariance matrix of the training points.
+    def compute(self, hyp, X, X_star=None, compute_diag=False, compute_grad=False):
+        """Computes the covariance matrix for given training points
+        and test points.
 
         Parameters
         ----------
-        X : array_like
-            Matrix of training inputs.
-        X_star : array_like, optional
-            Matrix of additional training inputs.
+        hyp : ndarray, shape (cov_n,)
+            A 1D array of hyperparameters, where ``cov_n`` is
+            the number returned by the function ``hyperparameter_count``.
+        X : ndarray, shape (n, d)
+            A 2D array where each row is a training point.
+        X_star : ndarray, shape (n, d), optional
+            A 2D array where each row is a test point. If this is not
+            given, we compute the self-covariance matrix.
+        compute_diag : bool, defaults to False
+            Whether to only compute the diagonal of the self-covariance
+            matrix.
         compute_grad : bool, defaults to False
-            Flag for computing the gradient.
+            Whether to compute the gradient with respect to the
+            hyperparameters.
 
         Returns
         -------
-        K : array_like
-            The self-covariance matrix.
-        dK : array_like, optional
-            The gradient of the self-covariance matrix.
+        K : ndarray
+            The covariance matrix, with shape ``(n, n)`` except
+            if we only requested the diagonal, in which case the shape is
+            ``(n,)``.
+        dK : ndarray, shape (n, n, cov_n), optional
+            The gradient of the covariance matrix with respect to the
+            hyperparameters.
         """
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
@@ -236,32 +274,17 @@ class Matern:
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
 
-        f = df = None
-        if self.degree == 1:
-            f = lambda t: 1
-            df = lambda t: 1 / t
-        elif self.degree == 3:
-            f = lambda t: 1 + t
-            df = lambda t: 1
-        elif self.degree == 5:
-            f = lambda t: 1 + t * (1 + t / 3)
-            df = lambda t: (1 + t) / 3
-        else:
-            raise Exception(
-                "Only degrees 1, 3 and 5 are supported for the "
-                "Matern covariance function."
-            )
-
         if X_star is None:
-            tmp = squareform(pdist(X @ np.diag(np.sqrt(self.degree) / ell)))
-        elif isinstance(X_star, str):
-            tmp = np.zeros((X.shape[0], 1))
+            if compute_diag:
+                tmp = np.zeros((N, 1))
+            else:
+                tmp = squareform(pdist(X @ np.diag(np.sqrt(self.degree) / ell)))
         else:
             a = X @ np.diag(np.sqrt(self.degree) / ell)
             b = X_star @ np.diag(np.sqrt(self.degree) / ell)
             tmp = cdist(a, b)
 
-        K = sf2 * f(tmp) * np.exp(-tmp)
+        K = sf2 * self.f(tmp) * np.exp(-tmp)
 
         if compute_grad:
             dK = np.zeros((N, N, cov_N))
@@ -274,7 +297,10 @@ class Matern:
                         "sqeuclidean",
                     )
                 )
-                dK[:, :, i] = sf2 * (df(tmp) * np.exp(-tmp)) * Ki
+                # With d=1 kernel we get issues caused by zero divisions.
+                # This is OK, the kernel is just not differentiable there.
+                with np.errstate(all="ignore"):
+                    dK[:, :, i] = sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki
             # Gradient of cov output scale
             dK[:, :, D] = 2 * K
             return K, dK
@@ -282,33 +308,43 @@ class Matern:
         return K
 
 
-class CovarianceInfo:
-    def __init__(self, cov_N, X, y):
-        _, D = X.shape
-        tol = 1e-6
-        self.LB = np.full((cov_N,), -np.inf)
-        self.UB = np.full((cov_N,), np.inf)
-        self.PLB = np.full((cov_N,), -np.inf)
-        self.PUB = np.full((cov_N,), np.inf)
-        self.x0 = np.full((cov_N,), np.nan)
+def _bounds_info_helper(cov_N, X, y):
+    _, D = X.shape
+    tol = 1e-6
+    lower_bounds = np.full((cov_N,), -np.inf)
+    upper_bounds = np.full((cov_N,), np.inf)
+    plausible_lower_bounds = np.full((cov_N,), -np.inf)
+    plausible_upper_bounds = np.full((cov_N,), np.inf)
+    plausible_x0 = np.full((cov_N,), np.nan)
 
-        width = np.max(X, axis=0) - np.min(X, axis=0)
-        if np.size(y) <= 1:
-            y = np.array([0, 1])
-        height = np.max(y) - np.min(y)
+    width = np.max(X, axis=0) - np.min(X, axis=0)
+    if np.size(y) <= 1:
+        y = np.array([0, 1])
+    height = np.max(y) - np.min(y)
 
-        self.LB[0:D] = np.log(width) + np.log(tol)
-        self.UB[0:D] = np.log(width * 10)
-        self.PLB[0:D] = np.log(width) + 0.5 * np.log(tol)
-        self.PUB[0:D] = np.log(width)
-        self.x0[0:D] = np.log(np.std(X, ddof=1))
+    lower_bounds[0:D] = np.log(width) + np.log(tol)
+    upper_bounds[0:D] = np.log(width * 10)
+    plausible_lower_bounds[0:D] = np.log(width) + 0.5 * np.log(tol)
+    plausible_upper_bounds[0:D] = np.log(width)
+    plausible_x0[0:D] = np.log(np.std(X, ddof=1))
 
-        self.LB[D] = np.log(height) + np.log(tol)
-        self.UB[D] = np.log(height * 10)
-        self.PLB[D] = np.log(height) + 0.5 * np.log(tol)
-        self.PUB[D] = np.log(height)
-        self.x0[D] = np.log(np.std(y, ddof=1))
+    lower_bounds[D] = np.log(height) + np.log(tol)
+    upper_bounds[D] = np.log(height * 10)
+    plausible_lower_bounds[D] = np.log(height) + 0.5 * np.log(tol)
+    plausible_upper_bounds[D] = np.log(height)
+    plausible_x0[D] = np.log(np.std(y, ddof=1))
 
-        # Plausible starting point
-        i_nan = np.isnan(self.x0)
-        self.x0[i_nan] = 0.5 * (self.PLB[i_nan] + self.PUB[i_nan])
+    # Plausible starting point
+    i_nan = np.isnan(plausible_x0)
+    plausible_x0[i_nan] = 0.5 * (
+        plausible_lower_bounds[i_nan] + plausible_upper_bounds[i_nan]
+    )
+
+    bounds_info = {
+        "LB": lower_bounds,
+        "UB": upper_bounds,
+        "PLB": plausible_lower_bounds,
+        "PUB": plausible_upper_bounds,
+        "x0": plausible_x0,
+    }
+    return bounds_info
