@@ -63,6 +63,7 @@ gp.plot()
 # Update the GP by adding some extra points
 X_new = np.random.uniform(low=-5, high=5, size=(N, D))
 y_new = np.sin(np.sum(X_new, 1)) + np.random.normal(scale=0.1, size=N)
+y_new = np.reshape(y_new, (-1, 1))
 
 # This function updates the training data and (usually) the GP posterior but does not
 # retrain the GP hyperparameters - it also fills in the auxiliary data that might have

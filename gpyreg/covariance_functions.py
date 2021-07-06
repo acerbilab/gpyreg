@@ -67,7 +67,9 @@ class SquaredExponential:
         cov_N = self.hyperparameter_count(X.shape[1])
         return _bounds_info_helper(cov_N, X, y)
 
-    def compute(self, hyp, X, X_star=None, compute_diag=False, compute_grad=False):
+    def compute(
+        self, hyp, X, X_star=None, compute_diag=False, compute_grad=False
+    ):
         """Computes the covariance matrix for given training points
         and test points.
 
@@ -78,7 +80,7 @@ class SquaredExponential:
             the number returned by the function ``hyperparameter_count``.
         X : ndarray, shape (n, d)
             A 2D array where each row is a training point.
-        X_star : ndarray, shape (n, d), optional
+        X_star : ndarray, shape (m, d), optional
             A 2D array where each row is a test point. If this is not
             given, we compute the self-covariance matrix.
         compute_diag : bool, defaults to False
@@ -226,7 +228,9 @@ class Matern:
         cov_N = self.hyperparameter_count(X.shape[1])
         return _bounds_info_helper(cov_N, X, y)
 
-    def compute(self, hyp, X, X_star=None, compute_diag=False, compute_grad=False):
+    def compute(
+        self, hyp, X, X_star=None, compute_diag=False, compute_grad=False
+    ):
         """Computes the covariance matrix for given training points
         and test points.
 
@@ -237,7 +241,7 @@ class Matern:
             the number returned by the function ``hyperparameter_count``.
         X : ndarray, shape (n, d)
             A 2D array where each row is a training point.
-        X_star : ndarray, shape (n, d), optional
+        X_star : ndarray, shape (m, d), optional
             A 2D array where each row is a test point. If this is not
             given, we compute the self-covariance matrix.
         compute_diag : bool, defaults to False
@@ -278,7 +282,9 @@ class Matern:
             if compute_diag:
                 tmp = np.zeros((N, 1))
             else:
-                tmp = squareform(pdist(X @ np.diag(np.sqrt(self.degree) / ell)))
+                tmp = squareform(
+                    pdist(X @ np.diag(np.sqrt(self.degree) / ell))
+                )
         else:
             a = X @ np.diag(np.sqrt(self.degree) / ell)
             b = X_star @ np.diag(np.sqrt(self.degree) / ell)

@@ -15,7 +15,7 @@ def test_empty_gp():
         mean=gpr.mean_functions.NegativeQuadratic(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    
+
     # Test that lower and upper bounds are set appropriately.
     bounds = gp.get_bounds()
     assert np.all(bounds["covariance_log_lengthscale"][0] == -np.inf)
@@ -30,7 +30,7 @@ def test_empty_gp():
     assert np.all(bounds["mean_location"][1] == np.inf)
     assert np.all(bounds["mean_log_scale"][0] == -np.inf)
     assert np.all(bounds["mean_log_scale"][1] == np.inf)
-    
+
     # Test that hyperparameter priors are set appropriately.
     prior = gp.get_priors()
     assert prior["covariance_log_lengthscale"] is None
@@ -39,7 +39,7 @@ def test_empty_gp():
     assert prior["mean_const"] is None
     assert prior["mean_location"] is None
     assert prior["mean_log_scale"] is None
-    
+
     # Come up with some hyperparameters.
     cov_N = gp.covariance.hyperparameter_count(D)
     mean_N = gp.mean.hyperparameter_count(D)
@@ -47,7 +47,7 @@ def test_empty_gp():
     hyp = np.random.standard_normal(size=(3, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.2
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
-    
+
     # Set GP to have them.
     gp.update(hyp=hyp)
 
@@ -55,17 +55,17 @@ def test_empty_gp():
     # with a GP that only has hyperparameters.
     xx, yy = np.meshgrid(np.linspace(-5, 5, 20), np.linspace(-5, 5, 20))
     x_star = np.array((xx.ravel(), yy.ravel())).T
-    gp.predict_full(x_star, add_noise=True)  
-    gp.predict_full(x_star, add_noise=False)  
-    
+    gp.predict_full(x_star, add_noise=True)
+    gp.predict_full(x_star, add_noise=False)
+
     gp.predict(x_star, add_noise=True)
     gp.predict(x_star, add_noise=False)
-    
+
     # gp.quad(0, 1, compute_var=True)
-    
+
     gp.plot()
-    
- 
+
+
 def test_random_function():
     N = 20
     D = 2
@@ -73,7 +73,7 @@ def test_random_function():
 
     gp = gpr.GP(
         D=D,
-        covariance=gpr.covariance_functions.SquaredExponential(),
+        covariance=gpr.covariance_functions.Matern(5),
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
@@ -92,7 +92,13 @@ def test_random_function():
     gp.update(X_new=X, y_new=y)
 
     gp.plot()
- 
+
+    X_new = np.random.standard_normal(size=(10, D))
+    y_new = gp.random_function(X_new)
+    gp.update(X_new=X_new, y_new=y_new)
+
+    gp.plot(delta_y=5, max_min_flag=False)
+
 
 def test_getters_setters():
     N = 20
@@ -152,6 +158,16 @@ def test_getters_setters():
 
     prior = gp.get_priors()
     assert gp_priors == prior
+
+    gp_bounds_mistaken = {
+        "covariance_log_outputscal": (-np.inf, np.inf),
+        "covariance_log_lengthscale": (-np.inf, np.inf),
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": (-np.inf, np.inf),
+    }
+
+    mistaken = gp.set_bounds(gp_bounds_mistaken)
+    assert len(mistaken) == 1 and mistaken[0] == "covariance_log_outputscale"
 
     hyp_arr = np.array(
         [[-0.4630094, -0.78566179, -0.2209450, -7.2947503, 0.03713608]]
@@ -285,10 +301,10 @@ def test_gp_gradient_computations():
     hyp[:, D] *= 0.2
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
-    gp.update(X_new=X, hyp=hyp, compute_posterior=False)
+    gp.update(hyp=hyp, compute_posterior=False)
     y = gp.random_function(X)
 
-    gp.update(y_new=y, hyp=hyp)
+    gp.update(X_new=X, y_new=y)
 
     hyp0 = hyp[0, :]
 
@@ -358,17 +374,17 @@ def test_gp_gradient_computations():
     gp1.update(X_new=X[0:idx, :], y_new=y[0:idx], hyp=hyp)
 
     for i in range(idx, N):
-        gp1.update(X_new=X[i, :], y_new=y[i])
+        gp1.update(X_new=X[i : i + 1, :], y_new=y[i : i + 1])
 
-    assert np.all(np.isclose(gp.X, gp1.X))
-    assert np.all(np.isclose(gp.y, gp1.y))
+    # These should be exactly the same.
+    assert np.all(gp.X == gp1.X)
+    assert np.all(gp.y == gp1.y)
+    assert np.all(gp.posteriors[0].hyp == gp1.posteriors[0].hyp)
 
-    assert np.all(np.isclose(gp.posteriors[0].hyp, gp1.posteriors[0].hyp))
+    # These only approximately the same I think.
     assert np.all(np.isclose(gp.posteriors[0].alpha, gp1.posteriors[0].alpha))
-
     assert np.all(np.isclose(gp.posteriors[0].sW, gp1.posteriors[0].sW))
     assert np.all(np.isclose(gp.posteriors[0].L, gp1.posteriors[0].L))
-
     assert np.isclose(gp.posteriors[0].sn2_mult, gp1.posteriors[0].sn2_mult)
     assert gp.posteriors[0].L_chol and gp1.posteriors[0].L_chol
 
@@ -388,6 +404,68 @@ def test_gp_gradient_computations():
 
     # Test plotting
     gp.plot()
+
+
+def test_split_update():
+    N = 20
+    D = 2
+    X = np.random.standard_normal(size=(N, D))
+    s2 = np.full((N, 1), 0.05)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(user_provided_add=True),
+    )
+
+    cov_N = gp.covariance.hyperparameter_count(D)
+    mean_N = gp.mean.hyperparameter_count(D)
+    noise_N = gp.noise.hyperparameter_count()
+
+    N_s = np.random.randint(1, 3)
+    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    hyp[:, D] *= 0.2
+    hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
+
+    gp.update(hyp=hyp, compute_posterior=False)
+    y = gp.random_function(X)
+
+    gp.update(X_new=X, y_new=y, s2_new=s2, compute_posterior=True)
+
+    gp1 = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(user_provided_add=True),
+    )
+
+    gp1.update(
+        X_new=X[0:10, :],
+        y_new=y[0:10],
+        s2_new=s2[0:10, :],
+        hyp=hyp,
+        compute_posterior=True,
+    )
+    gp1.update(
+        X_new=X[10:, :],
+        y_new=y[10:],
+        s2_new=s2[10:, :],
+        hyp=hyp,
+        compute_posterior=True,
+    )
+
+    # These should be exactly the same.
+    assert np.all(gp.X == gp1.X)
+    assert np.all(gp.y == gp1.y)
+    assert np.all(gp.posteriors[0].hyp == gp1.posteriors[0].hyp)
+
+    # These only approximately the same I think.
+    assert np.all(np.isclose(gp.posteriors[0].alpha, gp1.posteriors[0].alpha))
+    assert np.all(np.isclose(gp.posteriors[0].sW, gp1.posteriors[0].sW))
+    assert np.all(np.isclose(gp.posteriors[0].L, gp1.posteriors[0].L))
+    assert np.isclose(gp.posteriors[0].sn2_mult, gp1.posteriors[0].sn2_mult)
+    assert gp.posteriors[0].L_chol and gp1.posteriors[0].L_chol
 
 
 def test_quadrature_without_noise():
@@ -415,7 +493,7 @@ def test_quadrature_without_noise():
     F_true = sp.integrate.quad(f_p, -np.inf, np.inf)[0]
 
     mu_N = 1000
-    x_star = np.linspace(-10, 10, mu_N)
+    x_star = np.reshape(np.linspace(-10, 10, mu_N), (-1, 1))
     f_mu, f_cov = gp.predict_full(x_star, add_noise=False)
 
     F_predict = 0
@@ -433,16 +511,18 @@ def test_quadrature_without_noise():
     assert np.abs(F_bayes - F_predict) < 0.0001
     assert np.abs(F_true - F_bayes) < 0.0001
     assert np.abs(F_true - F_predict) < 0.0001
-    
+
     F_bayes_2, F_var_bayes_2 = gp.quad(0.5, 0.4, compute_var=True)
-    
+
     # Test that we can compute multiple quadratures easily.
-    F_bayes_total, F_var_bayes_total = gp.quad(np.array([0, 0.5]), np.array([0.1, 0.4]), compute_var=True)
+    F_bayes_total, F_var_bayes_total = gp.quad(
+        np.array([[0], [0.5]]), np.array([[0.1], [0.4]]), compute_var=True
+    )
     assert np.isclose(F_bayes[0, 0], F_bayes_total[0, 0])
     assert np.isclose(F_bayes_2[0, 0], F_bayes_total[1, 0])
     assert np.isclose(F_var_bayes[0, 0], F_var_bayes_total[0, 0])
     assert np.isclose(F_var_bayes_2[0, 0], F_var_bayes_total[1, 0])
-    
+
     gp.plot()
 
 
@@ -471,11 +551,10 @@ def test_quadrature_with_noise():
             scale_user_provided=True,
             rectified_linear_output_dependent_add=True,
         ),
-        s2=s2,
     )
 
     gp_train = {"n_samples": 10}
-    gp.fit(X=X, y=y, options=gp_train)
+    gp.fit(X=X, y=y, s2=s2, options=gp_train)
 
     f_mu, f_cov = gp.predict_full(x_star, s2_star=s2_constant, add_noise=True)
     F_predict = 0
@@ -505,7 +584,46 @@ def test_quadrature_with_noise():
     assert np.abs(F_true - F_bayes) < 0.1
 
     gp.plot()
-    
+
+
+def test_fitting_with_fixed_bounds():
+    N = 20
+    D = 1
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(3),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp_bounds = {
+        "covariance_log_outputscale": (-np.inf, np.inf),
+        "covariance_log_lengthscale": (-np.inf, np.inf),
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": (0.5, 0.5),
+    }
+
+    gp_priors = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": None,
+    }
+
+    gp.set_priors(gp_priors)
+    gp.set_bounds(gp_bounds)
+
+    assert gp.get_bounds() == gp_bounds
+
+    hyp, _ = gp.fit(X=X, y=y)
+
+    assert np.all(hyp[:, 3] == 0.5)
+
+    gp.plot()
+
 
 def test_fitting():
     rounds = 10

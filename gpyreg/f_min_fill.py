@@ -19,15 +19,15 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
     x0 : array_like
         A 2D array of points to include in the design, with each row
         containing a design point.
-    LB : array_like
-        An 1D array of lower bounds.
-    UB : array_like
-        An 1D array of upper bounds.
-    PLB : array_like
-        An 1D array of plausible lower bounds.
-    PUB : array_like
-        An 1D array of plausible lower bounds.
-    hprior : dic
+    LB : ndarray, shape (hyp_n,)
+        The lower bounds.
+    UB : ndarray, shape (hyp_n,)
+        The upper bounds.
+    PLB : ndarray, shape (hyp_n,)
+        The plausible lower bounds.
+    PUB : ndarray, shape (hyp_n,)
+        The plausible upper bounds.
+    hprior : dict
         Hyperparameter prior dictionary.
     N : int
         Design size to use.

@@ -24,15 +24,15 @@ class GP:
     Parameters
     ==========
     D : int
-        The dimension for the gaussian process.
+        The dimension of the gaussian process.
     covariance : object
         The covariance function to use.
     mean : object
         The mean function to use.
     noise : object
         The noise function to use.
-    s2 : array_like, optional
-        User-provided noise.
+    s2 : ndarray, shape (n, 1), optional
+        User-provided noise at each training point.
     """
 
     def __init__(self, D, covariance, mean, noise, s2=None):
@@ -118,14 +118,14 @@ class GP:
         return total
 
     def set_bounds(self, bounds=None):
-        """Sets the hyperparameter priors.
+        """Sets the hyperparameter lower and upper bounds.
 
         Parameters
         ==========
         bounds : dict, optional
             A dictionary of hyperparameter names and tuples of their lower and
-            upper bounds. If None is given, the the lower bounds will be set
-            to -inf and upper bounds to +inf.
+            upper bounds. If not given, the the lower bounds will be set
+            to ``-Inf`` and upper bounds to ``+Inf``.
 
         Returns
         =======
@@ -182,7 +182,7 @@ class GP:
         Returns
         =======
         bounds_dict : dict
-            A dictionary of the current hyperparameters and their bounds.
+            A dictionary of the current hyperparameter names and their bounds.
         """
         return self.bounds_to_dict(self.lower_bounds, self.upper_bounds)
 
@@ -192,17 +192,16 @@ class GP:
 
         Parameters
         ==========
-        lower_bounds : array_like
-            An 1D array of lower bounds. Must be the same size as
-            the array for the upper bounds.
-        upper_bounds : array_like
-            An 1D array of upper bounds. Must be the same size as
-            the array for the lower bounds.
+        lower_bounds : nadarray, shape (hyp_n,)
+            The lower bounds.
+        upper_bounds : ndarray, shape (hyp_n,)
+            The upper bounds.
+
         Returns
         =======
         bounds_dict : dict
-            A dictionary of the current hyperparemters and the given
-            bounds.
+            A dictionary of the current hyperparameter names and tuples
+            of their lower and upper bounds.
         """
 
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -234,7 +233,8 @@ class GP:
         Returns
         =======
         bounds_dict : dict
-            A dictionary of the hyperparameters and their recommended bounds.
+            A dictionary of the hyperparameter names and tuples of lower
+            upper bounds.
         """
         if self.X is None or self.y is None:
             raise Exception("GP does not have X or y set!")
@@ -282,7 +282,7 @@ class GP:
         Returns
         =======
         hyper_priors : dict
-            A dictionary of the current hyperparameter priors.
+            A dictionary of the current hyperparameter names and their priors.
         """
 
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -350,7 +350,7 @@ class GP:
         Parameters
         ==========
         priors : dict, optional
-            A dictionary of hyperparameter names and tuples of their values.
+            A dictionary of hyperparameter names and their priors.
             If None is given, there will be no prior.
 
         Returns
@@ -439,18 +439,22 @@ class GP:
         return missing
 
     def get_hyperparameters(self, as_array=False):
-        """Gets the current hyperparameters for the Gaussian process.
+        """Gets the current hyperparameters of the Gaussian process.
+
+        If hyperparameters have not been set yet, the result will
+        be filled with ``NaN``.
 
         Parameters
         ==========
         as_array : bool, defaults to False
-            Whether to return the hyperparameters as an array, or a list
-            of dictionaries for each sample.
+            Whether to return the hyperparameters as an array of shape
+            ``(hyp_samples, hyp_n)``, or a list of dictionaries for each
+            sample.
 
         Returns
         =======
         hyp : object
-            The hyperparameteres in the form specified by as_array.
+            The hyperparameteres in the form specified by ``as_array``.
         """
         # If no hyperparameters have been set return an array/dict with NaN.
         if self.posteriors is None:
@@ -477,12 +481,13 @@ class GP:
         Parameters
         ==========
         hyp_new : object
-            The new hyperparameters. This can be an array of size
-            (N0, hyp_n) where hyp_N is the number of hyperparametes, and
-            N0 is the amount of samples, a single dictionary with
+            The new hyperparameters. This can be an array of shape
+            ``(hyp_samples, hyp_n)`` where ``hyp_N`` is the number of
+            hyperparametes, and ``hyp_samples`` is the amount of
+            hyperparameter samples, a single dictionary with
             hyperparameter names and values, or a list of dictionaries.
-            The behaviour of passing a single dictionary and a list
-            with one dictionary is equivalent.
+            Passing a single dictionary or a list with one dictionary
+            is equivalent.
         compute_posterior : bool, defaults to True
             Whether to compute the posterior for the new hyperparameters.
         """
@@ -504,19 +509,22 @@ class GP:
             self.update(hyp=hyp_new_arr, compute_posterior=compute_posterior)
 
     def hyperparameters_to_dict(self, hyp_arr):
-        """Converts a hyperparameter array to a list of dictionaries
-        for each sample with hyperparameter names and values.
+        """Converts a hyperparameter array to a list which contains a
+        dictionary with hyperparameter names and values for each
+        hyperparameter sample.
 
         Parameters
         ==========
-        hyp_arr : array_like
-            An 1D or 2D array containing hyperparameters.
+        hyp_arr : ndarray
+            An array of shape ``(hyp_samples, hyp_n)`` or shape
+            ``(hyp_n,)``, which is interpreted as shape ``(1, hyp_n)``,
+            containing hyperparameters.
 
         Returns
         =======
         hyp_dict : object
-            The list of dictonaries for each sample with hyperparameter
-            names and values.
+            A list which contains a dictonary with hyperparameter names and
+            values for each sample.
         """
         hyp = []
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -548,24 +556,25 @@ class GP:
 
         return hyp
 
-    def hyperparameters_from_dict(self, hyp_dict):
+    def hyperparameters_from_dict(self, hyp_dict_list):
         """Converts a list of hyperparameter dictionaries to a hyperparameter
         array.
 
         Parameters
         ==========
-        hyp_dict : object
+        hyp_dict_list : object
             A list of hyperparameter dictionaries with hyperparameter names
             and values. One can also pass just one dictionary instead of a
             list with one element.
 
         Returns
         =======
-        hyp_arr : array_like
-            The hyperparameter array.
+        hyp_arr : ndarray, shape (hyp_samples, hyp_n)
+            The hyperparameter array where ``hyp_samples`` is the length of
+            the list ``hyp_dict_list``.
         """
-        if isinstance(hyp_dict, dict):
-            hyp_dict = [hyp_dict]
+        if isinstance(hyp_dict_list, dict):
+            hyp_dict_list = [hyp_dict_list]
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -577,9 +586,9 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
-        hyp_new_arr = np.zeros((len(hyp_dict), hyp_N))
+        hyp_new_arr = np.zeros((len(hyp_dict_list), hyp_N))
 
-        for i, hyp_tmp in enumerate(hyp_dict):
+        for i, hyp_tmp in enumerate(hyp_dict_list):
             j = 0
 
             for info in hyper_info:
@@ -596,18 +605,20 @@ class GP:
         hyp=None,
         compute_posterior=True,
     ):
-        """Adds new data to the gaussian process.
+        """Adds new data to the Gaussian process.
 
         Parameters
         ==========
-        X_new : array_like, optional
-            New training inputs, that will be concatenated with the old ones.
-        y_new : array_like, optional
-            New training targets, that will be concatenated with the old ones.
-        s2_new : array_like, optional
-            New input-dependent noise that will be concatenated with the
-            old ones.
-        hyp : array_like, optional
+        X_new : ndarray, shape (n, d), optional
+            New training inputs that will be added to the old training
+            inputs.
+        y_new : narray, shape (n, 1) optional
+            New training targets that will be addded to the old training
+            targets.
+        s2_new : ndarray, shape (n, 1), optional
+            New input-dependent noise that will be added to the old training
+            inputs.
+        hyp : ndarray, shape (hyp_n,), optional
             New hyperparameters that will replace the old ones.
         compute_posterior : bool, defaults to True
             Whether to compute the new posterior or not.
@@ -617,12 +628,8 @@ class GP:
         # with references later.
         if X_new is not None:
             X_new = X_new.copy()
-            if X_new.ndim == 1:
-                X_new = np.reshape(X_new, (1, -1))
         if y_new is not None:
             y_new = y_new.copy()
-            if y_new.ndim == 1:
-                y_new = np.reshape(y_new, (-1, 1))
         if s2_new is not None:
             s2_new = s2_new.copy()
         if hyp is not None:
@@ -630,7 +637,7 @@ class GP:
 
         # Check whether to do a rank-1 update.
         rank_one_update = False
-        if X_new is not None and y_new is not None:
+        if X_new is not None and y_new is not None and compute_posterior:
             if (
                 self.X is not None
                 and self.y is not None
@@ -698,7 +705,7 @@ class GP:
                             ],
                         ]
                     )
-                else:  # Low-noies parametrization
+                else:  # Low-noise parametrization
                     alpha_update = np.dot(-L, Ks)
                     v = -alpha_update / v_star[:, s]
                     self.posteriors[s].L = np.block(
@@ -755,31 +762,38 @@ class GP:
                     )
 
     def clean(self):
-        """Cleans auxiliary computational structures from the gaussian
+        """Cleans auxiliary computational structures from the Gaussian
         process, thus reducing memory usage. These can be reconstructed
-        with a call to update with compute_posterior=True.
+        with a call to ``update`` with ``compute_posterior=True``.
         """
 
-        if self.posteriors is None:
-            return
-
-        for i in range(0, len(self.posteriors)):
-            self.posteriors[i].alpha = None
-            self.posteriors[i].sW = None
-            self.posteriors[i].L = None
-            self.posteriors[i].sn2_mult = None
-            self.posteriors[i].L_chol = None
+        # Check if there are posteriors to clean.
+        if self.posteriors is not None:
+            for i in range(0, len(self.posteriors)):
+                self.posteriors[i].alpha = None
+                self.posteriors[i].sW = None
+                self.posteriors[i].L = None
+                self.posteriors[i].sn2_mult = None
+                self.posteriors[i].L_chol = None
+        # Maybe add a call to garbage collection here? This would
+        # make sure that the things set to None are actually no longer
+        # using memory.
 
     def fit(self, X=None, y=None, s2=None, hyp0=None, options=None):
         """Trains gaussian process hyperparameters.
 
         Parameters
         ==========
-
-        X : array_like, optional
-            Inputs to train on.
-        y : array_like, optional
-            Targets to train on.
+        X : ndarray, shape (n, d), optional
+            Training points that will replace the current training points
+            of the GP. If not given the current training points are used.
+        y : ndarray, shape (n, 1), optional
+            Training targets that will replace the current training targets
+            of the GP. If not given the current training targets are used.
+        s2 : ndarray, shape (n, 1), optional
+            Noise variance at training points that will replace the
+            current noise variances of the GP. If not given the current
+            noise variances are used.
         options : dict, optional
             A dictionary of options for training. The possible options are:
 
@@ -801,7 +815,7 @@ class GP:
 
         Returns
         =======
-        hyp : array_like
+        hyp : ndarray, shape (hyp_samples, hyp_n)
             The fitted hyperparameters.
         sampling_result : dict
             If sampling was performed this is a dictionary with info on the
@@ -821,20 +835,14 @@ class GP:
         # Initialize GP if requested.
         if X is not None:
             self.X = X
-        else:
-            X = self.X
 
         if y is not None:
             if y.ndim == 1:
                 y = np.reshape(y, (-1, 1))
             self.y = y
-        else:
-            y = self.y
 
         if s2 is not None:
             self.s2 = s2
-        else:
-            s2 = self.s2
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         # mean_N = self.mean.hyperparameter_count(self.D)
@@ -842,9 +850,9 @@ class GP:
 
         ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
 
-        cov_bounds_info = self.covariance.get_bounds_info(X, y)
-        mean_bounds_info = self.mean.get_bounds_info(X, y)
-        noise_bounds_info = self.noise.get_bounds_info(X, y)
+        cov_bounds_info = self.covariance.get_bounds_info(self.X, self.y)
+        mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
+        noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
         if use_recommended_bounds:
@@ -914,7 +922,7 @@ class GP:
         idx0 = widths_default == 0
         if np.any(idx0):
             if np.shape(hyp)[1] > 1:
-                std_hyp = np.std(hyp, axis=1, ddof=1)
+                std_hyp = np.std(hyp, axis=0, ddof=1)
                 widths_default[idx0] = std_hyp[idx0]
                 idx0 = widths_default == 0
 
@@ -925,14 +933,19 @@ class GP:
 
         # Check that hyperparameters are within bounds.
         # Note that with infinite upper and lower bounds we have to be careful
-        # with spacing since it returns NaN.
-        eps_LB = np.reshape(LB, (1, -1))
-        eps_LB[np.isfinite(eps_LB)] += np.spacing(eps_LB[np.isfinite(eps_LB)])
-        eps_UB = np.reshape(UB, (1, -1))
-        eps_UB[np.isfinite(eps_UB)] -= np.spacing(eps_UB[np.isfinite(eps_UB)])
+        # with spacing since it returns NaN. Furthermore, if LB == UB then
+        # we have to be careful about the lower bound not being larger than
+        # the upper bounds. Also, copy is necessary to avoid LB or UB
+        # getting modified.
+        eps_LB = np.reshape(LB.copy(), (1, -1))
+        eps_UB = np.reshape(UB.copy(), (1, -1))
+        LB_idx = (eps_LB != eps_UB) & np.isfinite(eps_LB)
+        UB_idx = (eps_LB != eps_UB) & np.isfinite(eps_UB)
+        eps_LB[LB_idx] += np.spacing(eps_LB[LB_idx])
+        eps_UB[UB_idx] -= np.spacing(eps_UB[UB_idx])
         hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
-        # Perform optimization from most promising NOPTS hyperparameter
+        # Perform optimization from most promising opts_N hyperparameter
         # vectors.
         objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((opts_N,), np.inf)
@@ -1232,8 +1245,8 @@ class GP:
         =======
         lZ : float
             The positive log marginal likelihood.
-        dlZ : array_like, optional
-            The gradient.
+        dlZ : ndarray, shape (hyp_n,), optional
+            The gradient with respect to hyperparameters.
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
@@ -1255,8 +1268,8 @@ class GP:
         =======
         lZ_plus_posterior : float
             The positive log marginal likelihood with added log prior.
-        dlZ_plus_d_posterior : array_like, optional
-            The gradient.
+        dlZ_plus_d_posterior : ndarray, shape (hyp_n,), optional
+            The gradient with respect to hyperparameters.
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
@@ -1307,28 +1320,27 @@ class GP:
     def predict_full(self, x_star, y_star=None, s2_star=0, add_noise=False):
         """Computes the GP posterior mean and full covariance matrix for each
         hyperparameter sample.
-        
+
         Parameters
         ==========
-        x_star : array_like
+        x_star : ndarray, shape (n, d)
             The points we want to predict the values at.
-        y_star : array_like, optional
+        y_star : ndarray, shape (n, 1), optional
             True values at the points.
-        s2_star : array_like, optional
-            Noise at the points.
+        s2_star : ndarray, shape (n, 1), optional
+            Noise variance at the points.
         add_noise : bool, defaults to True
             Whether to add noise to the prediction results.
 
         Returns
         =======
-        mu : (n, sample_n)
-            Posterior mean at the requested points for each hyperparameter sample.
-        cov : (n, n, sample_n)
+        mu : ndarray, shape (n, sample_n)
+            Posterior mean at the requested points for each hyperparameter
+            sample.
+        cov : ndarray, shape (n, n, sample_n)
             Covariance matrix for each hyperparameter sample.
         """
 
-        if x_star.ndim == 1:
-            x_star = np.reshape(x_star, (-1, 1))
         s_N = self.posteriors.size
         N_star, _ = x_star.shape
 
@@ -1408,16 +1420,16 @@ class GP:
         add_noise=False,
         separate_samples=False,
     ):
-        """Predict the values of the gaussian process at given points.
+        """Computes the GP posterior mean and noise variance at given points.
 
         Parameters
         ==========
-        x_star : array_like
+        x_star : ndarray, shape (n, d)
             The points we want to predict the values at.
-        y_star : array_like, optional
+        y_star : ndarray, shape (n, 1), optional
             True values at the points.
-        s2_star : array_like, optional
-            Noise at the points.
+        s2_star : ndarray, shape (n, 1), optional
+            Noise variance at the points.
         add_noise : bool, defaults to True
             Whether to add noise to the prediction results.
         separate_samples : bool, defaults to False
@@ -1426,22 +1438,24 @@ class GP:
 
         Returns
         =======
-        mu : array_like
-            Value of mu at the requested points.
-        s2 : array_like
-            Value noise the at the requested points.
+        mu : ndarray
+            Posterior mean at the requested points. If we requested
+            separate samples the shape is ``(n, sample_n)`` while
+            otherwise it is  ``(n,)``.
+            sample.
+        s2 : ndarray
+            Noise variance at each point. If we requested
+            separate samples the shape is ``(n, sample_n)`` while
+            otherwise it is ``(n,)``.
         """
-        if x_star.ndim == 1:
-            x_star = np.reshape(x_star, (-1, 1))
+
         s_N = self.posteriors.size
         N_star, D = x_star.shape
 
         # Preallocate space
-        fmu = np.zeros((N_star, s_N))
-        ymu = np.zeros((N_star, s_N))
-        fs2 = np.zeros((N_star, s_N))
-        ys2 = np.zeros((N_star, s_N))
-        
+        mu = np.zeros((N_star, s_N))
+        s2 = np.zeros((N_star, s_N))
+
         cov_N = self.covariance.hyperparameter_count(D)
         mean_N = self.mean.hyperparameter_count(D)
         noise_N = self.noise.hyperparameter_count()
@@ -1459,15 +1473,17 @@ class GP:
                 ),
                 (-1, 1),
             )
-            
-            kss = self.covariance.compute(hyp[0:cov_N], x_star, compute_diag=True)
+
+            kss = self.covariance.compute(
+                hyp[0:cov_N], x_star, compute_diag=True
+            )
 
             if self.y is not None:
                 Ks = self.covariance.compute(hyp[0:cov_N], self.X, x_star)
-                fmu[:, s : s + 1] = m_star + np.dot(
+                mu[:, s : s + 1] = m_star + np.dot(
                     Ks.T, alpha
                 )  # Conditional mean
-                
+
                 if L_chol:
                     V = sp.linalg.solve_triangular(
                         L,
@@ -1475,20 +1491,19 @@ class GP:
                         trans=1,
                         check_finite=False,
                     )
-                    fs2[:, s : s + 1] = kss - np.reshape(
+                    s2[:, s : s + 1] = kss - np.reshape(
                         np.sum(V * V, 0), (-1, 1)
                     )  # predictive variance
                 else:
-                    fs2[:, s : s + 1] = kss + np.reshape(
+                    s2[:, s : s + 1] = kss + np.reshape(
                         np.sum(Ks * np.dot(L, Ks), 0), (-1, 1)
                     )
             else:
-                fmu[:, s : s + 1] = m_star
-                fs2[:, s : s + 1] = kss
+                mu[:, s : s + 1] = m_star
+                s2[:, s : s + 1] = kss
 
-            ymu[:, s] = fmu[:, s]  
             # remove numerical noise, i.e. negative variances
-            fs2[:, s] = np.maximum(fs2[:, s], 0)  
+            s2[:, s] = np.maximum(s2[:, s], 0)
             if add_noise:
                 sn2_mult = self.posteriors[s].sn2_mult
                 if sn2_mult is None:
@@ -1496,40 +1511,50 @@ class GP:
                 sn2_star = self.noise.compute(
                     hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
                 )
-                ys2[:, s : s + 1] = fs2[:, s : s + 1] + sn2_star * sn2_mult
+                s2[:, s : s + 1] += sn2_star * sn2_mult
 
         # Unless predictions for samples are requested separately
         # average over samples.
         if s_N > 1 and not separate_samples:
-            fbar = np.reshape(np.sum(fmu, 1), (-1, 1)) / s_N
-            ybar = np.reshape(np.sum(ymu, 1), (-1, 1)) / s_N
-            vf = np.sum((fmu - fbar) ** 2, 1) / (s_N - 1)
-            fs2 = np.reshape(np.sum(fs2, 1) / s_N + vf, (-1, 1))
-            vy = np.sum((ymu - ybar) ** 2, 1) / (s_N - 1)
-            ys2 = np.reshape(np.sum(ys2, 1) / s_N + vy, (-1, 1))
+            mu_bar = np.reshape(np.sum(mu, 1), (-1, 1)) / s_N
+            v = np.sum((mu - mu_bar) ** 2, 1) / (s_N - 1)
+            s2 = np.reshape(np.sum(s2, 1) / s_N + v, (-1, 1))
+            mu = mu_bar
 
-            fmu = fbar
-            ymu = ybar
-
-        if add_noise:
-            return ymu, ys2
-        return fmu, fs2
+        return mu, s2
 
     def quad(self, mu, sigma, compute_var=False, separate_samples=False):
-        """Bayesian quadrature for a gaussian process.
+        """Bayesian quadrature for a Gaussian process.
+
+        Computes the integral of a function represented by a Gaussian
+        process with respect to a given Gaussian measure.
 
         Parameters
         ==========
         mu : array_like
+            Either a array of shape ``(n, d)`` with each row containing the
+            mean of a single Gaussian measure, or a single floating point
+            number which is interpreted as an array of shape ``(1, d)``.
         sigma : array_like
+            Either a array of shape ``(n, d)`` with each row containing the
+            variance of a single Gaussian measure, or a single floating point
+            number which is interpreted as an array of shape ``(1, d)``.
         compute_var : bool, defaults to False
-            Whether to compute variance.
+            Whether to compute variance for each integral.
         separate_samples : bool, defaults to False
             Whether to return the results separately for each hyperparameter
-            sample or averaged.
+            sample, or averaged.
 
         Returns
         =======
+        F : ndarray
+            The conputed integrals in an array with shape ``(n, 1)`` if
+            samples are averaged and shape ``(n, hyp_samples)`` if
+            requested separately.
+        F_var : ndarray, optional
+            The computed variances of the integrals in an array with
+            shape ``(n, 1)`` if samples are averaged and shape
+            ``(n, hyp_samples)`` if requested separately.
         """
 
         if not isinstance(
@@ -1552,15 +1577,9 @@ class GP:
         if np.size(mu) == 1:
             mu = np.tile(mu, (1, D))
 
-        if mu.ndim == 1:
-            mu = np.reshape(mu, (-1, 1))
-
         N_star = mu.shape[0]
         if np.size(sigma) == 1:
             sigma = np.tile(sigma, (1, D))
-
-        if sigma.ndim == 1:
-            sigma = np.reshape(sigma, (-1, 1))
 
         quadratic_mean_fun = isinstance(
             self.mean, gpyreg.mean_functions.NegativeQuadratic
@@ -1658,7 +1677,7 @@ class GP:
 
     # sigma doesn't work, requires gplite_quad implementation
     # quantile doesn't work, requires gplite_qpred implementation
-    def plot(self, x0=None, lb=None, ub=None, max_min_flag=None):
+    def plot(self, x0=None, lb=None, ub=None, delta_y=None, max_min_flag=True):
         """Plot the gaussian process profile centered around a given point.
 
         The plot is a D-by-D panel matrix, in which panels on the diagonal
@@ -1670,20 +1689,24 @@ class GP:
 
         Parameters
         ==========
-        x0 : array_like, optional
+        x0 : ndarray, shape (d,), optional
             The reference point.
-        lb : array_like, optional
+        lb : ndarray, shape (d,), optional
             Lower bounds for the plotting.
-        ub : array_like, optional
+        ub : ndarray, shape (d,), optional
             Upper bounds for the plotting.
-        max_min_flag : bool, optional
-            If False then the minimum, and if True the maximum, of the
-            GP training input is used as the reference point.
+        delta_y : float, optional
+            Range of the plot such that the plotted predictive GP mean
+            approximately brackets ``[y0-delta_y, y0+delta_y]`` where
+            ``y0`` is the predictive GP mean at ``x0``. If lower or upper
+            bounds are given this will do nothing.
+        max_min_flag : bool, defaults to True
+            If set to ``False`` then the minimum, and if set to ``True``
+            then the maximum of the GP training input is used as the reference
+            point.
         """
-        delta_y = None
-        if np.isscalar(lb) and ub is None:
-            delta_y = lb
-            lb = None
+        if lb is not None or ub is not None:
+            delta_y = None
 
         s_N = self.posteriors.size  # Hyperparameter samples
         x_N = 100  # Grid points per visualization
@@ -1692,7 +1715,7 @@ class GP:
         ell = np.zeros((self.D, s_N))
         for s in range(0, s_N):
             ell[:, s] = np.exp(
-                self.posteriors[s].hyp[0:self.D]
+                self.posteriors[s].hyp[0 : self.D]
             )  # Extract length scale from HYP
         ellbar = np.sqrt(np.mean(ell ** 2, 1)).T
 
@@ -1712,13 +1735,11 @@ class GP:
         linewidth = 1
 
         if x0 is None:
-            max_min_flag = True
-        if max_min_flag is not None and self.X is not None and self.y is not None:
-            if max_min_flag:
-                i = np.argmax(self.y)
-                x0 = self.X[i, :]
-            else:
-                i = np.argmin(self.y)
+            if self.X is not None and self.y is not None:
+                if max_min_flag:
+                    i = np.argmax(self.y)
+                else:
+                    i = np.argmin(self.y)
                 x0 = self.X[i, :]
 
         _, ax = plt.subplots(self.D, self.D, squeeze=False)
@@ -1729,7 +1750,6 @@ class GP:
                 self.__tight_subplot(self.D, self.D, i, i, gutter, margins)
             )
 
-            xx = None
             xx_vec = np.reshape(
                 np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
                 (-1, 1),
@@ -1749,15 +1769,16 @@ class GP:
             fhi = fmu + 1.96 * np.sqrt(fs2)
 
             if delta_y is not None:
-                # Probably doesn't work
-                fmu0, _ = self.predict(x0, add_noise=False)
+                fmu0, _ = self.predict(
+                    np.reshape(x0, (1, -1)), add_noise=False
+                )
                 dx = xx_vec[1] - xx_vec[0]
                 region = np.abs(fmu - fmu0) < delta_y
                 if np.any(region):
                     idx1 = np.argmax(region)
                     idx2 = np.size(region) - np.argmax(region[::-1]) - 1
-                    lb[i] = x0[idx1] - 0.5 * dx
-                    ub[i] = x0[idx2] + 0.5 * dx
+                    lb[i] = xx_vec[idx1] - 0.5 * dx
+                    ub[i] = xx_vec[idx2] + 0.5 * dx
                 else:
                     lb[i] = x0[i] - 0.5 * dx
                     ub[i] = x0[i] + 0.5 * dx
@@ -1819,9 +1840,9 @@ class GP:
                 )
 
                 if x0 is not None:
-                    xx = np.tile(x0, (x_N**2, 1))
+                    xx = np.tile(x0, (x_N ** 2, 1))
                 else:
-                    xx = np.tile(np.full((self.D,), 0.0), (x_N**2, 1))
+                    xx = np.tile(np.full((self.D,), 0.0), (x_N ** 2, 1))
                 xx[:, i] = xx_vec[:, 0]
                 xx[:, j] = xx_vec[:, 1]
 
@@ -1837,7 +1858,9 @@ class GP:
                         i2 = j
                         mat = np.reshape(np.sqrt(fs2), (x_N, x_N))
                     ax[i1, i2].set_position(
-                        self.__tight_subplot(self.D, self.D, i1, i2, gutter, margins)
+                        self.__tight_subplot(
+                            self.D, self.D, i1, i2, gutter, margins
+                        )
                     )
                     ax[i1, i2].spines["top"].set_visible(False)
                     ax[i1, i2].spines["right"].set_visible(False)
@@ -1903,19 +1926,18 @@ class GP:
         return pos_vec
 
     def random_function(self, X_star, add_noise=False):
-        """Draws a random function from the gaussian process.
+        """Draws a random function from the Gaussian process.
 
         Parameters
         ==========
-        X_star : array_like
+        X_star : ndarray, shape (n, d)
             The points at which to evaluate the drawn function.
         add_noise : bool, defaults to False
             Whether to add noise to the values of the drawn function.
 
         Returns
         =======
-
-        f_star : array_like,
+        f_star : ndarray, shape (n, 1)
             The values of the drawn function at the requested points.
         """
         N_star = X_star.shape[0]

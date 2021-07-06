@@ -97,7 +97,7 @@ class ZeroMean:
                 "one-sample hyperparameter inputs."
             )
 
-        m = np.zeros((N, 1))
+        m = np.zeros((N,))
 
         if compute_grad:
             return m, []
@@ -200,7 +200,7 @@ class ConstantMean:
             )
 
         m0 = hyp[0]
-        m = m0 * np.ones((N, 1))
+        m = m0 * np.ones((N,))
 
         if compute_grad:
             return m, np.ones((N, 1))

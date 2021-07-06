@@ -44,7 +44,7 @@ gp_train = {"n_samples": 10}
 # Train the GP
 gp.fit(X=X, y=y, options=gp_train)
 
-x_star = np.linspace(-15, 15, 200)
+x_star = np.reshape(np.linspace(-15, 15, 200), (-1, 1))
 fmu, fs2 = gp.predict(x_star, add_noise=False)
 
 # Plot the GP
