@@ -906,7 +906,7 @@ class GP:
         # Fix zero widths.
         idx0 = widths_default == 0
         if np.any(idx0):
-            if np.shape(hyp)[1] > 1:
+            if np.shape(hyp)[0] > 1:
                 std_hyp = np.std(hyp, axis=0, ddof=1)
                 widths_default[idx0] = std_hyp[idx0]
                 idx0 = widths_default == 0

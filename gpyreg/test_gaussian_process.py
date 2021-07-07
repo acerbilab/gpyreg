@@ -621,7 +621,39 @@ def test_fitting_with_fixed_bounds():
     assert np.all(hyp[:, 3] == 0.5)
 
     gp.plot()
+    
 
+def test_fitting_options():
+    N = 20
+    D = 1
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    
+    gp_train_1 = {'opts_N': 0}
+    gp_train_2 = {"n_samples": 0}
+    gp_train_3 = {"init_N": 0}
+    gp_train_4 =  {'opts_N': 0, "n_samples": 0}
+    gp_train_5 = {'n_samples': 0, "init_N": 0}
+    gp_train_6 = {'opts_N': 0, "init_N": 0}
+    gp_train_7 = {'opts_N': 0, 'n_samples': 0, "init_N": 0}
+    gp_train_8 = {"init_N": 1}
+     
+    # Test that all these at least can be run in a row.
+    gp.fit(X=X, y=y, options=gp_train_1)
+    gp.fit(X=X, y=y, options=gp_train_2)
+    gp.fit(X=X, y=y, options=gp_train_3)
+    gp.fit(X=X, y=y, options=gp_train_4)
+    gp.fit(X=X, y=y, options=gp_train_5)
+    gp.fit(X=X, y=y, options=gp_train_6)
+    gp.fit(X=X, y=y, options=gp_train_7)
+    gp.fit(X=X, y=y, options=gp_train_8)
 
 def test_fitting():
     rounds = 10
