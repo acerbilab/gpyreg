@@ -1,0 +1,7 @@
+# run: pip install -i requirements.txt
+numpy
+scipy>=1.7.0
+matplotlib
+pytest
+sphinx
+numpydoc
