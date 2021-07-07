@@ -31,24 +31,20 @@ class GP:
         The mean function to use.
     noise : object
         The noise function to use.
-    s2 : ndarray, shape (n, 1), optional
-        User-provided noise at each training point.
     """
 
-    def __init__(self, D, covariance, mean, noise, s2=None):
+    def __init__(self, D, covariance, mean, noise):
         self.D = D
         self.covariance = covariance
         self.mean = mean
         self.noise = noise
         self.s2 = None
-        if s2 is not None:
-            self.s2 = s2.copy()
         self.X = None
         self.y = None
         self.posteriors = None
         # This is necessary as a flag for set_bounds to not do anything
         # before set_priors has been called.
-        self.no_priors = None
+        self.no_prior = None
         self.normalization_constants = None
         self.set_bounds()
         self.set_priors()
@@ -126,12 +122,6 @@ class GP:
             A dictionary of hyperparameter names and tuples of their lower and
             upper bounds. If not given, the the lower bounds will be set
             to ``-Inf`` and upper bounds to ``+Inf``.
-
-        Returns
-        =======
-        missing : list
-            A list of missing hyperparameter bounds that should have been
-            given.
         """
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -143,38 +133,39 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
-        self.lower_bounds = np.full((hyp_N,), -np.inf)
-        self.upper_bounds = np.full((hyp_N,), np.inf)
-
-        if bounds is None:
-            return []
+        lower_bounds = np.full((hyp_N,), -np.inf)
+        upper_bounds = np.full((hyp_N,), np.inf)
 
         lower = 0
-        missing = []
 
         for info in hyper_info:
-            try:
-                vals = bounds[info[0]]
-            except KeyError:
-                missing.append(info[0])
+            if bounds is None:
                 vals = None
+            else:
+                try:
+                    vals = bounds[info[0]]
+                except KeyError:
+                    raise Exception("Missing hyperparameter " + info[0])
 
             # None indicates no bounds.
             if vals is not None:
                 upper = lower + info[1]
                 lb, ub = vals
                 i = range(lower, upper)
-                self.lower_bounds[i] = lb
-                self.upper_bounds[i] = ub
+                lower_bounds[i] = lb
+                upper_bounds[i] = ub
 
             lower += info[1]
+
+        # Only set the bounds here due to exceptions
+        # so that we don't only update say half of the bounds.
+        self.lower_bounds = lower_bounds
+        self.upper_bounds = upper_bounds
 
         # Make sure set_priors has been called so we can
         # recompute these.
         if self.no_prior is not None:
             self.__recompute_normalization_constants()
-
-        return missing
 
     def get_bounds(self):
         """Gets the current hyperparameter lower and upper bounds.
@@ -187,12 +178,12 @@ class GP:
         return self.bounds_to_dict(self.lower_bounds, self.upper_bounds)
 
     def bounds_to_dict(self, lower_bounds, upper_bounds):
-        """Converts the given hyperparemeter lower and upper bounds to
+        """Converts the given hyperparameter lower and upper bounds to
         a dictionary.
 
         Parameters
         ==========
-        lower_bounds : nadarray, shape (hyp_n,)
+        lower_bounds : ndarray, shape (hyp_n,)
             The lower bounds.
         upper_bounds : ndarray, shape (hyp_n,)
             The upper bounds.
@@ -215,13 +206,6 @@ class GP:
         for info in hyper_info:
             upper = lower + info[1]
             i = range(lower, upper)
-
-            # Check if we can compress the bounds dictionary.
-            lower_same = np.all(lower_bounds[i] == lower_bounds[lower])
-            upper_same = np.all(upper_bounds[i] == upper_bounds[lower])
-            if lower_same and upper_same:
-                i = lower
-
             bounds_dict[info[0]] = (lower_bounds[i], upper_bounds[i])
             lower += info[1]
 
@@ -303,23 +287,11 @@ class GP:
             upper = lower + info[1]
             i = range(lower, upper)
 
-            # Check if all the priors of this hyperparameter are equal
-            # If they are, we can compress the prior dictionary.
-            mu_same = np.all((mu[i] == mu[lower])) or np.all(np.isnan(mu[i]))
-            sigma_same = np.all((sigma[i] == sigma[lower])) or np.all(
-                np.isnan(sigma[i])
-            )
-            df_same = np.all((df[i] == df[lower])) or np.all(np.isnan(df[i]))
-            a_same = np.all((a[i] == a[lower])) or np.all(np.isnan(a[i]))
-            b_same = np.all((b[i] == b[lower])) or np.all(np.isnan(b[i]))
-            if mu_same and sigma_same and df_same and a_same and b_same:
-                i = lower
-
             prior_type = prior_params = None
             if (
-                np.isfinite(a[i])
-                and np.isfinite(b[i])
-                and np.isfinite(sigma[i])
+                np.all(np.isfinite(a[i]))
+                and np.all(np.isfinite(b[i]))
+                and np.all(np.isfinite(sigma[i]))
             ):
                 if df[i] == 0 or df[i] == np.inf:
                     prior_type = "smoothbox"
@@ -327,11 +299,11 @@ class GP:
                 elif df[i] > 0:
                     prior_type = "smoothbox_student_t"
                     prior_params = (a[i], b[i], sigma[i], df[i])
-            elif np.isfinite(mu[i]) and np.isfinite(sigma[i]):
-                if df[i] == 0 or df[i] == np.inf:
+            elif np.all(np.isfinite(mu[i])) and np.all(np.isfinite(sigma[i])):
+                if np.all(df[i] == 0) or np.all(df[i] == np.inf):
                     prior_type = "gaussian"
                     prior_params = (mu[i], sigma[i])
-                elif df[i] > 0:
+                elif np.all(df[i] > 0):
                     prior_type = "student_t"
                     prior_params = (mu[i], sigma[i], df[i])
 
@@ -352,14 +324,7 @@ class GP:
         priors : dict, optional
             A dictionary of hyperparameter names and their priors.
             If None is given, there will be no prior.
-
-        Returns
-        =======
-        missing : list
-            A list of missing hyperparameter priors that should have been
-            given. If not empty, the elements have been set to no prior.
         """
-
         self.no_prior = False
         if priors is None:
             self.no_prior = True
@@ -375,7 +340,7 @@ class GP:
         hyp_N = cov_N + mean_N + noise_N
         # Set up a hyperprior dictionary with default values which can
         # be updated individually later.
-        self.hyper_priors = {
+        hyper_priors = {
             "mu": np.full((hyp_N,), np.nan),
             "sigma": np.full((hyp_N,), np.nan),
             "df": np.full((hyp_N,), np.nan),
@@ -385,7 +350,6 @@ class GP:
 
         non_trivial_flag = False
         lower = 0
-        missing = []
 
         for info in hyper_info:
             if self.no_prior:
@@ -394,8 +358,7 @@ class GP:
                 try:
                     vals = priors[info[0]]
                 except KeyError:
-                    missing.append(info[0])
-                    vals = None
+                    raise Exception("Missing hyperparameter " + info[0])
 
             # None indicates no prior
             if vals is not None:
@@ -406,37 +369,37 @@ class GP:
 
                 if prior_type == "gaussian":
                     mu, sigma = prior_params
-                    self.hyper_priors["mu"][i] = mu
-                    self.hyper_priors["sigma"][i] = sigma
+                    hyper_priors["mu"][i] = mu
+                    hyper_priors["sigma"][i] = sigma
                     # Implicit flag for gaussian, is set to inf later.
-                    self.hyper_priors["df"][i] = 0
+                    hyper_priors["df"][i] = 0
                 elif prior_type == "student_t":
                     mu, sigma, df = prior_params
-                    self.hyper_priors["mu"][i] = mu
-                    self.hyper_priors["sigma"][i] = sigma
-                    self.hyper_priors["df"][i] = df
+                    hyper_priors["mu"][i] = mu
+                    hyper_priors["sigma"][i] = sigma
+                    hyper_priors["df"][i] = df
                 elif prior_type == "smoothbox":
                     a, b, sigma = prior_params
-                    self.hyper_priors["a"][i] = a
-                    self.hyper_priors["b"][i] = b
-                    self.hyper_priors["sigma"][i] = sigma
+                    hyper_priors["a"][i] = a
+                    hyper_priors["b"][i] = b
+                    hyper_priors["sigma"][i] = sigma
                     # Implicit flag for gaussian, is set to inf later.
-                    self.hyper_priors["df"][i] = 0
+                    hyper_priors["df"][i] = 0
                 elif prior_type == "smoothbox_student_t":
                     a, b, sigma, df = prior_params
-                    self.hyper_priors["a"][i] = a
-                    self.hyper_priors["b"][i] = b
-                    self.hyper_priors["sigma"][i] = sigma
+                    hyper_priors["a"][i] = a
+                    hyper_priors["b"][i] = b
+                    hyper_priors["sigma"][i] = sigma
                     # Implicit flag for gaussian, is set to inf later.
-                    self.hyper_priors["df"][i] = df
+                    hyper_priors["df"][i] = df
                 else:
                     raise ValueError("Unknown hyperprior type " + prior_type)
 
             lower += info[1]
 
+        self.hyper_priors = hyper_priors
         self.no_prior = non_trivial_flag is not True
         self.__recompute_normalization_constants()
-        return missing
 
     def get_hyperparameters(self, as_array=False):
         """Gets the current hyperparameters of the Gaussian process.
@@ -826,9 +789,9 @@ class GP:
             options = {}
         opts_N = options.get("opts_N", 3)
         init_N = options.get("init_N", 2 ** 10)
+        s_N = options.get("n_samples", 10)
         thin = options.get("thin", 5)
         df_base = options.get("df_base", 7)
-        s_N = options.get("n_samples", 10)
         burn_in = options.get("burn", thin * s_N)
         use_recommended_bounds = options.get("use_recommended_bounds", True)
 
@@ -896,27 +859,49 @@ class GP:
 
         # First evaluate GP log posterior on an informed space-filling design.
         t1_s = time.time()
-        X0, y0 = f_min_fill(
-            objective_f_1, hyp0, LB, UB, PLB, PUB, self.hyper_priors, init_N
-        )
-        hyp = X0[0:opts_N, :]
-        widths_default = np.std(X0, axis=0, ddof=1)
 
-        # Extract a good low-noise starting point for the 2nd optimization.
-        if noise_N > 0 and 1 < opts_N < init_N:
-            xx = X0[opts_N:, :]
-            noise_y = y0[opts_N:]
-            noise_params = xx[:, cov_N]
-
-            # Order by noise parameter magnitude.
-            order = np.argsort(noise_params)
-            xx = xx[order, :]
-            noise_y = noise_y[order]
-            # Take the best amongst bottom 20% vectors.
-            idx_best = np.argmin(
-                noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
+        if init_N > 0:
+            X0, y0 = f_min_fill(
+                objective_f_1,
+                hyp0,
+                LB,
+                UB,
+                PLB,
+                PUB,
+                self.hyper_priors,
+                init_N,
             )
-            hyp[1, :] = xx[idx_best, :]
+            # Make sure we have at least one hyperparameter to use later.
+            hyp = X0[0 : np.maximum(opts_N, 1), :]
+
+            # Extract a good low-noise starting point for the 2nd optimization.
+            if noise_N > 0 and 1 < opts_N < init_N:
+                xx = X0[opts_N:, :]
+                noise_y = y0[opts_N:]
+                noise_params = xx[:, cov_N]
+
+                # Order by noise parameter magnitude.
+                order = np.argsort(noise_params)
+                xx = xx[order, :]
+                noise_y = noise_y[order]
+                # Take the best amongst bottom 20% vectors.
+                idx_best = np.argmin(
+                    noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
+                )
+                hyp[1, :] = xx[idx_best, :]
+
+            if init_N > 1:
+                widths_default = np.std(X0, axis=0, ddof=1)
+            else:
+                widths_default = np.zeros(shape=PLB.shape)
+        else:
+            N = hyp0.shape[0]
+            nll = np.full((N,), -np.inf)
+            for i in range(0, N):
+                nll[i] = objective_f_1(hyp0[i, :])
+            order = np.argsort(nll)
+            hyp = hyp0[order, :]
+            widths_default = PUB - PLB
 
         # Fix zero widths.
         idx0 = widths_default == 0
@@ -948,9 +933,11 @@ class GP:
         # Perform optimization from most promising opts_N hyperparameter
         # vectors.
         objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
-        nll = np.full((opts_N,), np.inf)
+        nll = np.full((np.maximum(opts_N, 1),), np.inf)
 
         t2_s = time.time()
+        # Make sure we don'y overshoot.
+        opts_N = np.minimum(opts_N, hyp.shape[0])
         for i in range(0, opts_N):
             res = sp.optimize.minimize(
                 fun=objective_f_2,

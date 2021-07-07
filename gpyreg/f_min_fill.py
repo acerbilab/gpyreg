@@ -65,6 +65,8 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
     # Force provided points to be inside bounds
     x0 = np.minimum(np.maximum(x0, LB), UB)
 
+    sX = None
+
     if N > N0:
         # First test hyperparameters on a space-filling initial design
         if design == "sobol":
@@ -152,7 +154,10 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
                     S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
                     sX[:, i] = sp.stats.t.ppf(S_scaled, df) * sigma + mu
 
-    X = np.concatenate([x0, sX])
+    if sX is None:
+        X = x0
+    else:
+        X = np.concatenate([x0, sX])
     y = np.full((N,), np.inf)
     for i in range(0, N):
         y[i] = f(X[i, :])

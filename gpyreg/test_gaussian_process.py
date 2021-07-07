@@ -1,4 +1,5 @@
 import copy
+import pytest
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
@@ -137,8 +138,8 @@ def test_getters_setters():
         "mean_const": ("smoothbox", (np.min(y), np.max(y), 1.0)),
     }
 
-    mistaken = gp.set_priors(gp_priors_mistaken)
-    assert len(mistaken) == 1 and mistaken[0] == "covariance_log_outputscale"
+    with pytest.raises(Exception):
+        gp.set_priors(gp_priors_mistaken)
 
     gp_priors = {
         "covariance_log_outputscale": (
@@ -153,11 +154,9 @@ def test_getters_setters():
         "mean_const": ("smoothbox", (np.min(y), np.max(y), 1.0)),
     }
 
-    mistaken = gp.set_priors(gp_priors)
-    assert len(mistaken) == 0
+    gp.set_priors(gp_priors)
 
-    prior = gp.get_priors()
-    assert gp_priors == prior
+    prior1 = gp.get_priors()
 
     gp_bounds_mistaken = {
         "covariance_log_outputscal": (-np.inf, np.inf),
@@ -166,8 +165,8 @@ def test_getters_setters():
         "mean_const": (-np.inf, np.inf),
     }
 
-    mistaken = gp.set_bounds(gp_bounds_mistaken)
-    assert len(mistaken) == 1 and mistaken[0] == "covariance_log_outputscale"
+    with pytest.raises(Exception):
+        gp.set_bounds(gp_bounds_mistaken)
 
     hyp_arr = np.array(
         [[-0.4630094, -0.78566179, -0.2209450, -7.2947503, 0.03713608]]
@@ -191,8 +190,7 @@ def test_getters_setters():
         assert np.all(hyp_dict["noise_log_scale"] == hyp[i, 3])
         assert np.all(hyp_dict["mean_const"] == hyp[i, 4])
 
-    prior = gp.get_priors()
-    assert gp_priors == prior
+    prior2 = gp.get_priors()
 
     bounds = gp.get_bounds()
     assert np.all(

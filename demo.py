@@ -21,7 +21,6 @@ gp = gpr.GP(
         constant_add=True,
         user_provided_add=True
     ),
-    s2=s2,
 )
 
 # Define the priors of the GP hyperparameters (supported priors
@@ -42,7 +41,7 @@ gp.set_priors(gp_priors)
 gp_train = {"n_samples": 10}
 
 # Train the GP
-gp.fit(X=X, y=y, options=gp_train)
+gp.fit(X=X, y=y, s2=s2, options=gp_train)
 
 x_star = np.reshape(np.linspace(-15, 15, 200), (-1, 1))
 fmu, fs2 = gp.predict(x_star, add_noise=False)
