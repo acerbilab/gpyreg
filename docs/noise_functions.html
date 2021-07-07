@@ -1,0 +1,246 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>gpyreg.noise_functions &#8212; pyvbmc  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="gpyreg.gaussian_process" href="gaussian_process.html" />
+    <link rel="prev" title="gpyreg.mean_functions" href="mean_functions.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="gpyreg-noise-functions">
+<h1>gpyreg.noise_functions<a class="headerlink" href="#gpyreg-noise-functions" title="Permalink to this headline">¶</a></h1>
+<section id="module-gpyreg.noise_functions">
+<span id="noise-functions-module"></span><h2><code class="xref py py-mod docutils literal notranslate"><span class="pre">noise_functions</span></code> Module<a class="headerlink" href="#module-gpyreg.noise_functions" title="Permalink to this headline">¶</a></h2>
+<p>Module for different noise functions used by Gaussian processes.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gpyreg.noise_functions.GaussianNoise">
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">gpyreg.noise_functions.</span></span><span class="sig-name descname"><span class="pre">GaussianNoise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constant_add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_provided_add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale_user_provided</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rectified_linear_output_dependent_add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.noise_functions.GaussianNoise" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Gaussian noise function.</p>
+<p>Total noise variance is is obtained by summing the independent
+contribution of each noise feature.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>constant_add</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to add constant noise.</p>
+</dd>
+<dt><strong>user_provided_add</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to add user provided (input) noise.</p>
+</dd>
+<dt><strong>scale_user_provided</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to scale uncertainty in provided noise. If
+<code class="docutils literal notranslate"><span class="pre">user_provided_add</span> <span class="pre">=</span> <span class="pre">False</span></code> then this does nothing.</p>
+</dd>
+<dt><strong>rectified_linear_output_dependent_add</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to add rectified linear output-dependent noise.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.noise_functions.GaussianNoise.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constant_add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_provided_add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale_user_provided</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rectified_linear_output_dependent_add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.noise_functions.GaussianNoise.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.noise_functions.GaussianNoise.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.noise_functions.GaussianNoise.compute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the noise function at test points, that is the variance
+of observation noise evaluated at test points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (noise_n,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">noise_n</span></code> is
+the number returned by the function <code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>.</p>
+</dd>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (n, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+</dd>
+<dt><strong>s2</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>A 2D array of estimated noise variance associated
+with each test point. Only required if
+<code class="docutils literal notranslate"><span class="pre">user_provided_add</span> <span class="pre">=</span> <span class="pre">True</span></code>.</p>
+</dd>
+<dt><strong>compute_grad</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute the gradient with respect to the
+hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>sn2</strong><span class="classifier">ndarray</span></dt><dd><p>The variance of observation noise evaluated at test points.
+If there is no input or output dependent noise, <code class="docutils literal notranslate"><span class="pre">sn2</span></code> is
+a scalar since it does not change, while otherwise it
+is of the same shape as <code class="docutils literal notranslate"><span class="pre">s2</span></code>.</p>
+</dd>
+<dt><strong>dsn2</strong><span class="classifier">ndarray, optional</span></dt><dd><p>The gradient with respect to hyperparameters. If there is no
+input or output dependent noise, <code class="docutils literal notranslate"><span class="pre">dsn2</span></code> is of shape
+<code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">noise_n)</span></code> while otherwise it is of shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">noise_n)</span></code>.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.noise_functions.GaussianNoise.get_bounds_info">
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.noise_functions.GaussianNoise.get_bounds_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gives information on the lower, upper, plausible lower
+and plausible upper bounds of the hyperparameters of this
+noise function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (n, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt>noise_bound_info: dict</dt><dd><p>A dictionary containing the bound info.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.noise_functions.GaussianNoise.hyperparameter_count">
+<span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.noise_functions.GaussianNoise.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gives the number of hyperparameters this noise function has.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The amount of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.noise_functions.GaussianNoise.hyperparameter_info">
+<span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.noise_functions.GaussianNoise.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gives information on the names of hyperparameters for setting
+them in other parts of the program.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
+in the order they are used in computations.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">pyvbmc</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">gpyreg</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="covariance_functions.html">gpyreg.covariance_functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mean_functions.html">gpyreg.mean_functions</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">gpyreg.noise_functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gaussian_process.html">gpyreg.gaussian_process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="slice_sample.html">gpyreg.slice_sample</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  <li><a href="modules.html">gpyreg</a><ul>
+      <li>Previous: <a href="mean_functions.html" title="previous chapter">gpyreg.mean_functions</a></li>
+      <li>Next: <a href="gaussian_process.html" title="next chapter">gpyreg.gaussian_process</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/noise_functions.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
