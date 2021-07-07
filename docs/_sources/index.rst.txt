@@ -5,6 +5,7 @@
 
 Welcome to GPyReg's documentation!
 ==================================
+Note that this project is work in progress!
 
 .. toctree::
    :maxdepth: 2
