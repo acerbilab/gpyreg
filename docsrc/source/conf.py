@@ -12,17 +12,14 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../..'))
 
+sys.path.insert(0, os.path.abspath("../.."))
 
 # -- Project information -----------------------------------------------------
 
-project = 'GPyReg'
-copyright = '2021, TODO'
-author = 'TODO'
-
-# The full version, including alpha/beta/rc tags
-release = 'TODO'
+project = "pyvbmc"
+copyright = "2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki)"
+author = "Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki)"
 
 
 # -- General configuration ---------------------------------------------------
@@ -33,24 +30,23 @@ release = 'TODO'
 extensions = [
     "sphinx.ext.autodoc",
     "numpydoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.todo",
+    "sphinx.ext.coverage",
 ]
 numpydoc_show_class_members = False
 
-autodoc_default_options = { 
-    "members": True, 
-    "undoc-members": False, 
-    "private-members": False,
+autodoc_default_options = {
+    "members": "var1, var2",
+    "special-members": "__init__, __call__",
+    "undoc-members": True,
+    "exclude-members": "__weakref__",
 }
 
-# autodoc_default_options = {
-#    "members": "var1, var2",
-#    "special-members": "__init__, __call__",
-#    "undoc-members": True,
-#    "exclude-members": "__weakref__",
-#}
+coverage_show_missing_items = True
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -63,9 +59,12 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinxdoc'
+html_theme = "alabaster"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = []
+
+html_theme_options = {"page_width": "1200px"}
+todo_include_todos = True

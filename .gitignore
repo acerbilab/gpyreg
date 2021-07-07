@@ -47,6 +47,5 @@ coverage.xml
 *.log
 *.pot
 
-# Sphinx documentation
-docs/_build/
-
+# do not commit build docs in docsrc folder
+docsrc/_build/
