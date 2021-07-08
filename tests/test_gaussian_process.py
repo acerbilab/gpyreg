@@ -731,3 +731,82 @@ def test_fitting():
         )
 
     assert np.all(np.abs(total_diff / rounds) < 0.5)
+
+
+def test_get_recommended_bounds_no_bounds_set():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.get_recommended_bounds()
+    assert "GP does not have X or y set!" in execinfo.value.args[0]
+    gp.X = 1
+    with pytest.raises(Exception) as execinfo:
+        gp.get_recommended_bounds()
+    assert "GP does not have X or y set!" in execinfo.value.args[0]
+    gp.X = None
+    gp.y = 1
+    with pytest.raises(Exception) as execinfo:
+        gp.get_recommended_bounds()
+    assert "GP does not have X or y set!" in execinfo.value.args[0]
+
+
+def test_set_hyperparameters_wrong_shape():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.set_hyperparameters(np.ones((1, 20)))
+    assert (
+        "Input hyperparameter array is the wrong shape!"
+        in execinfo.value.args[0]
+    )
+
+
+def test_hyperparameters_to_dict_wrong_shape():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.hyperparameters_to_dict(np.ones((1, 20)))
+    assert (
+        "Input hyperparameter array is the wrong shape!"
+        in execinfo.value.args[0]
+    )
+
+
+def test_hyperparameters_from_dict_single_dict():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    hyper_dict = gp.get_hyperparameters()[0]
+    gp.hyperparameters_from_dict(hyper_dict)
+    for key in hyper_dict.keys():
+        assert np.all(
+            np.array_equal(
+                gp.get_hyperparameters()[0][key],
+                hyper_dict[key],
+                equal_nan=True,
+            )
+        )
