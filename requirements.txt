@@ -2,6 +2,7 @@
 numpy
 scipy>=1.7.0
 matplotlib
-pytest
+pytest>=6.2.4
+pytest-cov>=2.12.1
 sphinx
 numpydoc
