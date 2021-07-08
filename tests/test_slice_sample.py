@@ -1,18 +1,8 @@
 import numpy as np
 import pytest
-
-# import matplotlib.pyplot as plt
-
-from scipy.stats import (
-    norm,
-    expon,
-    uniform,
-    beta,
-    multivariate_normal,
-    multivariate_t,
-)
-
 from gpyreg.slice_sample import SliceSampler
+from scipy.stats import (beta, expon, multivariate_normal, multivariate_t,
+                         norm, uniform)
 
 options = {"display": "off", "diagnostics": True}
 threshold = 0.1

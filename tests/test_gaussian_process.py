@@ -1,13 +1,17 @@
 import copy
-import pytest
+
+import gpyreg as gpr
+import matplotlib.pyplot as plt
 import numpy as np
+import pytest
 import scipy.stats
 from scipy.integrate import quad
 from scipy.misc import derivative
-import matplotlib.pyplot as plt
-import gpyreg as gpr
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_empty_gp():
     N = 20
     D = 2
@@ -69,6 +73,9 @@ def test_empty_gp():
     gp.plot()
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_random_function():
     N = 20
     D = 2
@@ -214,6 +221,9 @@ def test_getters_setters():
     assert np.all(bounds["mean_const"][1] == gp.upper_bounds[4])
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_cleaning():
     N = 20
     D = 2
@@ -280,6 +290,9 @@ def check_grad(f, grad, x0):
     return np.abs(analytical_grad - numerical_grad)
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_gp_gradient_computations():
     N = 20
     D = 2
@@ -468,6 +481,9 @@ def test_split_update():
     assert gp.posteriors[0].L_chol and gp1.posteriors[0].L_chol
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_quadrature_without_noise():
     f = lambda x: np.exp(-((x - 0.35) ** 2 / (2 * 0.01))) + np.sin(10 * x) / 3
     f_p = lambda x: f(x) * scipy.stats.norm.pdf(x, scale=0.1)
@@ -526,6 +542,9 @@ def test_quadrature_without_noise():
     gp.plot()
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_quadrature_with_noise():
     N = 500
     D = 1
@@ -586,6 +605,9 @@ def test_quadrature_with_noise():
     gp.plot()
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_fitting_with_fixed_bounds():
     N = 20
     D = 1
@@ -623,7 +645,7 @@ def test_fitting_with_fixed_bounds():
     assert np.all(hyp[:, 3] == 0.5)
 
     gp.plot()
-    
+
 
 def test_fitting_options():
     N = 20
@@ -637,16 +659,16 @@ def test_fitting_options():
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    
-    gp_train_1 = {'opts_N': 0}
+
+    gp_train_1 = {"opts_N": 0}
     gp_train_2 = {"n_samples": 0}
     gp_train_3 = {"init_N": 0}
-    gp_train_4 =  {'opts_N': 0, "n_samples": 0}
-    gp_train_5 = {'n_samples': 0, "init_N": 0}
-    gp_train_6 = {'opts_N': 0, "init_N": 0}
-    gp_train_7 = {'opts_N': 0, 'n_samples': 0, "init_N": 0}
+    gp_train_4 = {"opts_N": 0, "n_samples": 0}
+    gp_train_5 = {"n_samples": 0, "init_N": 0}
+    gp_train_6 = {"opts_N": 0, "init_N": 0}
+    gp_train_7 = {"opts_N": 0, "n_samples": 0, "init_N": 0}
     gp_train_8 = {"init_N": 1}
-     
+
     # Test that all these at least can be run in a row.
     gp.fit(X=X, y=y, options=gp_train_1)
     gp.fit(X=X, y=y, options=gp_train_2)
@@ -656,6 +678,7 @@ def test_fitting_options():
     gp.fit(X=X, y=y, options=gp_train_6)
     gp.fit(X=X, y=y, options=gp_train_7)
     gp.fit(X=X, y=y, options=gp_train_8)
+
 
 def test_fitting():
     rounds = 10
