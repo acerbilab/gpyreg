@@ -1,7 +1,9 @@
 import copy
 import pytest
 import numpy as np
-import scipy as sp
+import scipy.stats
+from scipy.integrate import quad
+from scipy.misc import derivative
 import matplotlib.pyplot as plt
 import gpyreg as gpr
 
@@ -264,7 +266,7 @@ def compute_gradient(f, x0):
 
     for i in range(0, np.size(x0)):
         f_i = lambda x0_i: partial(f, x0, x0_i, i)
-        tmp = sp.misc.derivative(
+        tmp = scipy.misc.derivative(
             f_i, x0[i], dx=np.finfo(float).eps ** (1 / 5.0), order=5
         )
         num_grad[i] = tmp
@@ -468,7 +470,7 @@ def test_split_update():
 
 def test_quadrature_without_noise():
     f = lambda x: np.exp(-((x - 0.35) ** 2 / (2 * 0.01))) + np.sin(10 * x) / 3
-    f_p = lambda x: f(x) * sp.stats.norm.pdf(x, scale=0.1)
+    f_p = lambda x: f(x) * scipy.stats.norm.pdf(x, scale=0.1)
     N = 50
     D = 1
     X = np.linspace(-2.5, 2.5, N)
@@ -488,7 +490,7 @@ def test_quadrature_without_noise():
         X=np.reshape(X, (-1, 1)), y=np.reshape(y, (-1, 1)), options=gp_train
     )
 
-    F_true = sp.integrate.quad(f_p, -np.inf, np.inf)[0]
+    F_true = scipy.integrate.quad(f_p, -np.inf, np.inf)[0]
 
     mu_N = 1000
     x_star = np.reshape(np.linspace(-10, 10, mu_N), (-1, 1))
@@ -496,10 +498,10 @@ def test_quadrature_without_noise():
 
     F_predict = 0
     for i in range(0, mu_N):
-        F_predict += f_mu[i, 0] * sp.stats.norm.pdf(x_star[i], scale=0.1)
+        F_predict += f_mu[i, 0] * scipy.stats.norm.pdf(x_star[i], scale=0.1)
     F_predict *= 20 / mu_N
 
-    pdf_tmp = np.reshape(sp.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
+    pdf_tmp = np.reshape(scipy.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
     tmp = np.dot(pdf_tmp, pdf_tmp.T)
     F_var_predict = np.sum(np.sum(f_cov[:, :, 0] * tmp)) * (20 / mu_N) ** 2
 
@@ -534,7 +536,7 @@ def test_quadrature_with_noise():
     mu_N = 1000
     x_star = np.reshape(np.linspace(-15, 15, mu_N), (-1, 1))
 
-    y = np.sin(X) + np.sqrt(s2) * sp.stats.norm.ppf(
+    y = np.sin(X) + np.sqrt(s2) * scipy.stats.norm.ppf(
         np.random.random_sample(X.shape)
     )
     y[y < 0] = -np.abs(3 * y[y < 0]) ** 2
@@ -557,10 +559,10 @@ def test_quadrature_with_noise():
     f_mu, f_cov = gp.predict_full(x_star, s2_star=s2_constant, add_noise=True)
     F_predict = 0
     for i in range(0, mu_N):
-        F_predict += f_mu[i, 0] * sp.stats.norm.pdf(x_star[i], scale=0.11)
+        F_predict += f_mu[i, 0] * scipy.stats.norm.pdf(x_star[i], scale=0.11)
     F_predict *= 30 / mu_N
 
-    pdf_tmp = np.reshape(sp.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
+    pdf_tmp = np.reshape(scipy.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
     tmp = np.dot(pdf_tmp, pdf_tmp.T)
     F_predict_var = np.sum(np.sum(f_cov[:, :, 0] * tmp)) * (30 / mu_N) ** 2
 
@@ -575,9 +577,9 @@ def test_quadrature_with_noise():
             return -np.abs(3 * y) ** 2
         return y
 
-    f_p = lambda x: f(x) * sp.stats.norm.pdf(x, scale=0.1)
+    f_p = lambda x: f(x) * scipy.stats.norm.pdf(x, scale=0.1)
 
-    F_true = sp.integrate.quad(f_p, -np.inf, np.inf)[0]
+    F_true = scipy.integrate.quad(f_p, -np.inf, np.inf)[0]
 
     assert np.abs(F_true - F_bayes) < 0.1
 
