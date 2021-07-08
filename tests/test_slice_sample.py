@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 # import matplotlib.pyplot as plt
 
@@ -133,3 +134,94 @@ def test_multivariate_t():
     samples = slicer.sample(20000)["samples"]
 
     assert np.all(np.abs(x - np.mean(samples, axis=0)) < threshold)
+
+
+def test_init_sanity_checks():
+    """
+    Just some basic tests to check for incorrect input for __init__.
+    """
+    x = [1.0, -0.5]
+    loc = [[2.1, 0.3], [0.3, 1.5]]
+    rv = multivariate_t(x, loc, df=3)
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2, 2)))
+    assert "initial point x0 needs to be a scalar" in execinfo.value.args[0]
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2)), LB=np.zeros((2, 2)))
+    assert "LB and UB need to be None, scalars" in execinfo.value.args[0]
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(
+            rv.logpdf, np.zeros((2)), LB=np.zeros((2, 2)), UB=np.ones((2, 2))
+        )
+    assert "LB and UB need to be None, scalars" in execinfo.value.args[0]
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2)), UB=np.zeros((2, 2)))
+    assert "LB and UB need to be None, scalars" in execinfo.value.args[0]
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2)), LB=1, UB=0)
+    assert "UB need to be equal or greater than" in execinfo.value.args[0]
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2)), widths=-1, UB=0)
+    assert (
+        "The widths vector needs to be all positive real numbers"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2)), widths=1 + 2j, UB=0)
+    assert (
+        "The widths vector needs to be all positive real numbers"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2)), LB=1, UB=2)
+    assert (
+        "The initial starting point X0 is outside the bounds"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        SliceSampler(rv.logpdf, np.zeros((2)), LB=-2, UB=-1)
+    assert (
+        "The initial starting point X0 is outside the bounds"
+        in execinfo.value.args[0]
+    )
+
+
+def test_sample_sanity_checks():
+    """
+    Just some basic tests to check for incorrect input for sample.
+    """
+    mean = np.ones(3)
+    cov = np.eye(3)
+    rv = multivariate_normal(mean, cov)
+    slicer = SliceSampler(rv.logpdf, np.ones(3), options=options)
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, thin=-1)
+    assert (
+        "The thinning factor option needs to be a positive integer"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, thin=np.ones((3, 3)))
+    assert (
+        "The thinning factor option needs to be a positive integer"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, burn=-1)
+    assert (
+        "burn-in samples option needs to be a non-negative"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, burn=np.ones((3, 3)))
+    assert (
+        "burn-in samples option needs to be a non-negative"
+        in execinfo.value.args[0]
+    )
+    slicer.x0 = slicer.x0 * np.NaN
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3)
+    assert (
+        "The initial starting point X0 needs to evaluate to a"
+        in execinfo.value.args[0]
+    )
