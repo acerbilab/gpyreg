@@ -1,10 +1,9 @@
-import numpy as np
-import scipy.stats
 import matplotlib.pyplot as plt
-
-from scipy.integrate import quad
-
+import numpy as np
+import pytest
+import scipy.stats
 from gpyreg.f_min_fill import smoothbox_student_t_cdf, smoothbox_student_t_ppf
+from scipy.integrate import quad
 
 
 def pdf(x, sigma, df, a, b):
@@ -23,6 +22,9 @@ def pdf(x, sigma, df, a, b):
     return scipy.stats.t.pdf(x, df, loc=b, scale=sigma) / C
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_pdf():
     sigma = 3
     df = 3

@@ -1,11 +1,17 @@
 import copy
-import pytest
-import numpy as np
-import scipy as sp
-import matplotlib.pyplot as plt
+
 import gpyreg as gpr
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+import scipy.stats
+from scipy.integrate import quad
+from scipy.misc import derivative
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_empty_gp():
     N = 20
     D = 2
@@ -67,6 +73,9 @@ def test_empty_gp():
     gp.plot()
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_random_function():
     N = 20
     D = 2
@@ -212,6 +221,9 @@ def test_getters_setters():
     assert np.all(bounds["mean_const"][1] == gp.upper_bounds[4])
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_cleaning():
     N = 20
     D = 2
@@ -264,7 +276,7 @@ def compute_gradient(f, x0):
 
     for i in range(0, np.size(x0)):
         f_i = lambda x0_i: partial(f, x0, x0_i, i)
-        tmp = sp.misc.derivative(
+        tmp = scipy.misc.derivative(
             f_i, x0[i], dx=np.finfo(float).eps ** (1 / 5.0), order=5
         )
         num_grad[i] = tmp
@@ -278,6 +290,9 @@ def check_grad(f, grad, x0):
     return np.abs(analytical_grad - numerical_grad)
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_gp_gradient_computations():
     N = 20
     D = 2
@@ -466,9 +481,12 @@ def test_split_update():
     assert gp.posteriors[0].L_chol and gp1.posteriors[0].L_chol
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_quadrature_without_noise():
     f = lambda x: np.exp(-((x - 0.35) ** 2 / (2 * 0.01))) + np.sin(10 * x) / 3
-    f_p = lambda x: f(x) * sp.stats.norm.pdf(x, scale=0.1)
+    f_p = lambda x: f(x) * scipy.stats.norm.pdf(x, scale=0.1)
     N = 50
     D = 1
     X = np.linspace(-2.5, 2.5, N)
@@ -488,7 +506,7 @@ def test_quadrature_without_noise():
         X=np.reshape(X, (-1, 1)), y=np.reshape(y, (-1, 1)), options=gp_train
     )
 
-    F_true = sp.integrate.quad(f_p, -np.inf, np.inf)[0]
+    F_true = scipy.integrate.quad(f_p, -np.inf, np.inf)[0]
 
     mu_N = 1000
     x_star = np.reshape(np.linspace(-10, 10, mu_N), (-1, 1))
@@ -496,10 +514,10 @@ def test_quadrature_without_noise():
 
     F_predict = 0
     for i in range(0, mu_N):
-        F_predict += f_mu[i, 0] * sp.stats.norm.pdf(x_star[i], scale=0.1)
+        F_predict += f_mu[i, 0] * scipy.stats.norm.pdf(x_star[i], scale=0.1)
     F_predict *= 20 / mu_N
 
-    pdf_tmp = np.reshape(sp.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
+    pdf_tmp = np.reshape(scipy.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
     tmp = np.dot(pdf_tmp, pdf_tmp.T)
     F_var_predict = np.sum(np.sum(f_cov[:, :, 0] * tmp)) * (20 / mu_N) ** 2
 
@@ -524,6 +542,9 @@ def test_quadrature_without_noise():
     gp.plot()
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_quadrature_with_noise():
     N = 500
     D = 1
@@ -534,7 +555,7 @@ def test_quadrature_with_noise():
     mu_N = 1000
     x_star = np.reshape(np.linspace(-15, 15, mu_N), (-1, 1))
 
-    y = np.sin(X) + np.sqrt(s2) * sp.stats.norm.ppf(
+    y = np.sin(X) + np.sqrt(s2) * scipy.stats.norm.ppf(
         np.random.random_sample(X.shape)
     )
     y[y < 0] = -np.abs(3 * y[y < 0]) ** 2
@@ -557,10 +578,10 @@ def test_quadrature_with_noise():
     f_mu, f_cov = gp.predict_full(x_star, s2_star=s2_constant, add_noise=True)
     F_predict = 0
     for i in range(0, mu_N):
-        F_predict += f_mu[i, 0] * sp.stats.norm.pdf(x_star[i], scale=0.11)
+        F_predict += f_mu[i, 0] * scipy.stats.norm.pdf(x_star[i], scale=0.11)
     F_predict *= 30 / mu_N
 
-    pdf_tmp = np.reshape(sp.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
+    pdf_tmp = np.reshape(scipy.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
     tmp = np.dot(pdf_tmp, pdf_tmp.T)
     F_predict_var = np.sum(np.sum(f_cov[:, :, 0] * tmp)) * (30 / mu_N) ** 2
 
@@ -575,15 +596,18 @@ def test_quadrature_with_noise():
             return -np.abs(3 * y) ** 2
         return y
 
-    f_p = lambda x: f(x) * sp.stats.norm.pdf(x, scale=0.1)
+    f_p = lambda x: f(x) * scipy.stats.norm.pdf(x, scale=0.1)
 
-    F_true = sp.integrate.quad(f_p, -np.inf, np.inf)[0]
+    F_true = scipy.integrate.quad(f_p, -np.inf, np.inf)[0]
 
     assert np.abs(F_true - F_bayes) < 0.1
 
     gp.plot()
 
 
+@pytest.mark.filterwarnings(
+    """ignore:Matplotlib is currently using agg:UserWarning"""
+)
 def test_fitting_with_fixed_bounds():
     N = 20
     D = 1
@@ -621,7 +645,7 @@ def test_fitting_with_fixed_bounds():
     assert np.all(hyp[:, 3] == 0.5)
 
     gp.plot()
-    
+
 
 def test_fitting_options():
     N = 20
@@ -635,16 +659,16 @@ def test_fitting_options():
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    
-    gp_train_1 = {'opts_N': 0}
+
+    gp_train_1 = {"opts_N": 0}
     gp_train_2 = {"n_samples": 0}
     gp_train_3 = {"init_N": 0}
-    gp_train_4 =  {'opts_N': 0, "n_samples": 0}
-    gp_train_5 = {'n_samples': 0, "init_N": 0}
-    gp_train_6 = {'opts_N': 0, "init_N": 0}
-    gp_train_7 = {'opts_N': 0, 'n_samples': 0, "init_N": 0}
+    gp_train_4 = {"opts_N": 0, "n_samples": 0}
+    gp_train_5 = {"n_samples": 0, "init_N": 0}
+    gp_train_6 = {"opts_N": 0, "init_N": 0}
+    gp_train_7 = {"opts_N": 0, "n_samples": 0, "init_N": 0}
     gp_train_8 = {"init_N": 1}
-     
+
     # Test that all these at least can be run in a row.
     gp.fit(X=X, y=y, options=gp_train_1)
     gp.fit(X=X, y=y, options=gp_train_2)
@@ -654,6 +678,7 @@ def test_fitting_options():
     gp.fit(X=X, y=y, options=gp_train_6)
     gp.fit(X=X, y=y, options=gp_train_7)
     gp.fit(X=X, y=y, options=gp_train_8)
+
 
 def test_fitting():
     rounds = 10
@@ -706,3 +731,98 @@ def test_fitting():
         )
 
     assert np.all(np.abs(total_diff / rounds) < 0.5)
+
+
+def test_get_recommended_bounds_no_bounds_set():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.get_recommended_bounds()
+    assert "GP does not have X or y set!" in execinfo.value.args[0]
+    gp.X = 1
+    with pytest.raises(Exception) as execinfo:
+        gp.get_recommended_bounds()
+    assert "GP does not have X or y set!" in execinfo.value.args[0]
+    gp.X = None
+    gp.y = 1
+    with pytest.raises(Exception) as execinfo:
+        gp.get_recommended_bounds()
+    assert "GP does not have X or y set!" in execinfo.value.args[0]
+
+
+def test_set_hyperparameters_wrong_shape():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.set_hyperparameters(np.ones((1, 20)))
+    assert (
+        "Input hyperparameter array is the wrong shape!"
+        in execinfo.value.args[0]
+    )
+
+
+def test_hyperparameters_to_dict_wrong_shape():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.hyperparameters_to_dict(np.ones((1, 20)))
+    assert (
+        "Input hyperparameter array is the wrong shape!"
+        in execinfo.value.args[0]
+    )
+
+
+def test_hyperparameters_from_dict_single_dict():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    hyper_dict = gp.get_hyperparameters()[0]
+    gp.hyperparameters_from_dict(hyper_dict)
+    for key in hyper_dict.keys():
+        assert np.all(
+            np.array_equal(
+                gp.get_hyperparameters()[0][key],
+                hyper_dict[key],
+                equal_nan=True,
+            )
+        )
+
+def test_quad_not_squared_exponential():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.quad(0, 0.1, compute_var=True)
+    assert (
+        "Bayesian quadrature only supports the squared exponential"
+        in execinfo.value.args[0]
+    )    

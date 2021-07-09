@@ -276,6 +276,18 @@ class SliceSampler:
                 burn = 0
             else:
                 burn = round(N / 3)
+                
+        # Sanity checks
+        if not np.isscalar(thin) or thin <= 0:
+            raise ValueError(
+                "The thinning factor option needs to be a positive integer."
+            )
+
+        if not np.isscalar(burn) or burn < 0:
+            raise ValueError(
+                "The burn-in samples option needs to be a non-negative "
+                "integer."
+            )
 
         if (
             burn == 0
@@ -301,18 +313,6 @@ class SliceSampler:
         log_Px, f_val, log_prior = log_dist(xx)
         log_priors = np.zeros((N,))
         f_vals = np.zeros((N, np.size(f_val)))
-
-        # Sanity checks
-        if not np.isscalar(thin) or thin <= 0:
-            raise ValueError(
-                "The thinning factor option needs to be a positive integer."
-            )
-
-        if not np.isscalar(burn) or burn < 0:
-            raise ValueError(
-                "The burn-in samples option needs to be a non-negative "
-                "integer."
-            )
 
         if np.any(~np.isfinite(log_Px)):
             raise ValueError(
