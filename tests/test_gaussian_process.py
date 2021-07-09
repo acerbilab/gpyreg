@@ -810,3 +810,19 @@ def test_hyperparameters_from_dict_single_dict():
                 equal_nan=True,
             )
         )
+
+def test_quad_not_squared_exponential():
+    D = 3
+    d = 1 + 2 * np.random.randint(0, 3)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(d),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(Exception) as execinfo:
+        gp.quad(0, 0.1, compute_var=True)
+    assert (
+        "Bayesian quadrature only supports the squared exponential"
+        in execinfo.value.args[0]
+    )    
