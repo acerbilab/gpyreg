@@ -1,8 +1,14 @@
 import numpy as np
 import pytest
 from gpyreg.slice_sample import SliceSampler
-from scipy.stats import (beta, expon, multivariate_normal, multivariate_t,
-                         norm, uniform)
+from scipy.stats import (
+    beta,
+    expon,
+    multivariate_normal,
+    multivariate_t,
+    norm,
+    uniform,
+)
 
 options = {"display": "off", "diagnostics": True}
 threshold = 0.1
@@ -176,6 +182,21 @@ def test_init_sanity_checks():
     )
 
 
+def test_init_logger():
+    mean = np.ones(3)
+    cov = np.eye(3)
+    rv = multivariate_normal(mean, cov)
+    options = {"display": "off"}
+    slicer = SliceSampler(rv.logpdf, np.ones(3), options=options)
+    assert slicer.logger.getEffectiveLevel() == 30  # WARNING
+    options = {"display": "summary"}
+    slicer = SliceSampler(rv.logpdf, np.ones(3), options=options)
+    assert slicer.logger.getEffectiveLevel() == 20  # INFO
+    options = {"display": "full"}
+    slicer = SliceSampler(rv.logpdf, np.ones(3), options=options)
+    assert slicer.logger.getEffectiveLevel() == 10  # DEBUG
+
+
 def test_sample_sanity_checks():
     """
     Just some basic tests to check for incorrect input for sample.
@@ -183,7 +204,7 @@ def test_sample_sanity_checks():
     mean = np.ones(3)
     cov = np.eye(3)
     rv = multivariate_normal(mean, cov)
-    slicer = SliceSampler(rv.logpdf, np.ones(3), options=options)
+    slicer = SliceSampler(rv.logpdf, np.ones(3))
     with pytest.raises(ValueError) as execinfo:
         slicer.sample(3, thin=-1)
     assert (
