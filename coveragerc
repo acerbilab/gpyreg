@@ -1,2 +1,2 @@
 [run]
-omit = */demo.py,*/demo_new.py, */gpyreg/test_gaussian_process.py, */gpyreg/test_slice_sample.py, */gpyreg/test_smoothbox.py, */gpyreg/test_smoothbox_student_t.py
+omit = */examples/example_1.py,*/examples/example_2.py, */tests/test_gaussian_process.py, */tests/test_slice_sample.py, */tests/test_smoothbox.py, */tests/test_smoothbox_student_t.py, */setup.py

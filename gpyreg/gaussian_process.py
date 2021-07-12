@@ -144,8 +144,9 @@ class GP:
             else:
                 try:
                     vals = bounds[info[0]]
-                except KeyError:
-                    raise Exception("Missing hyperparameter " + info[0])
+                except KeyError as _:
+                    e_str = "Missing hyperparameter " + info[0]
+                    raise Exception(e_str) from None
 
             # None indicates no bounds.
             if vals is not None:
@@ -357,8 +358,9 @@ class GP:
             else:
                 try:
                     vals = priors[info[0]]
-                except KeyError:
-                    raise Exception("Missing hyperparameter " + info[0])
+                except KeyError as _:
+                    e_str = "Missing hyperparameter " + info[0]
+                    raise Exception(e_str) from None
 
             # None indicates no prior
             if vals is not None:
@@ -732,12 +734,12 @@ class GP:
 
         # Check if there are posteriors to clean.
         if self.posteriors is not None:
-            for i in range(0, len(self.posteriors)):
-                self.posteriors[i].alpha = None
-                self.posteriors[i].sW = None
-                self.posteriors[i].L = None
-                self.posteriors[i].sn2_mult = None
-                self.posteriors[i].L_chol = None
+            for posterior in self.posteriors:
+                posterior.alpha = None
+                posterior.sW = None
+                posterior.L = None
+                posterior.sn2_mult = None
+                posterior.L_chol = None
         # Maybe add a call to garbage collection here? This would
         # make sure that the things set to None are actually no longer
         # using memory.
@@ -775,11 +777,27 @@ class GP:
                 **use_recommended_bounds** : bool, defaults to True
                     Whether to only use user provided lower and upper bounds
                     or to try to choose them intelligently.
+                **init_method** : {'sobol', 'rand'}, defaults to 'sobol'
+                    Specify whether to use Sobol or random sequences for
+                    the initial space-filling design.
+                **sampler_name** : {'slicesample'}, defaults to 'slicesample'
+                    The name of the sampler to use. Currently only slice
+                    sampling is supported.
+                **tol_opt** : float, defaults to 1e-5
+                    Optimization tolerance for stopping.
+                **tol_opt_mcmc** : float, defaults to 1e-3
+                    Preliminary optimization tolerance when doing MCMC.
+                **widths** : ndarray, shape (hyp_n,), optional
+                    Default widths to use for sampling. If not provided
+                    appropriate ones will be computed.
 
         Returns
         =======
         hyp : ndarray, shape (hyp_samples, hyp_n)
             The fitted hyperparameters.
+        optimize_result : OptimizeResult
+            The optimization result represented as a ``OptimizeResult``
+            object. For more details see ``scipy.optimize.minimize``.
         sampling_result : dict
             If sampling was performed this is a dictionary with info on the
             sampling run, and None otherwise.
@@ -789,9 +807,17 @@ class GP:
             options = {}
         opts_N = options.get("opts_N", 3)
         init_N = options.get("init_N", 2 ** 10)
-        s_N = options.get("n_samples", 10)
+        init_method = options.get("init_method", "sobol")
         thin = options.get("thin", 5)
         df_base = options.get("df_base", 7)
+        widths = options.get("widths", None)
+        log_p = options.get("log_P", None)  # Not used since no slicelite
+        outwarp_fun = options.get("outwarp_fun", None)  # Not used
+        step_size = options.get("step_size", None)  # Not used since no MALA
+        tol_opt = options.get("tol_opt", 1e-5)
+        tol_opt_mcmc = options.get("tol_opt_mcmc", 1e-3)
+        sampler_name = options.get("sampler", "slicesample")
+        s_N = options.get("n_samples", 10)
         burn_in = options.get("burn", thin * s_N)
         use_recommended_bounds = options.get("use_recommended_bounds", True)
 
@@ -800,8 +826,6 @@ class GP:
             self.X = X
 
         if y is not None:
-            if y.ndim == 1:
-                y = np.reshape(y, (-1, 1))
             self.y = y
 
         if s2 is not None:
@@ -856,6 +880,10 @@ class GP:
 
         ## Hyperparameter optimization
         objective_f_1 = lambda hyp_: self.__gp_obj_fun(hyp_, False, False)
+        if s_N > 0 and sampler_name != "laplace":
+            tol = tol_opt_mcmc
+        else:
+            tol = tol_opt
 
         # First evaluate GP log posterior on an informed space-filling design.
         t1_s = time.time()
@@ -870,6 +898,7 @@ class GP:
                 PUB,
                 self.hyper_priors,
                 init_N,
+                init_method,
             )
             # Make sure we have at least one hyperparameter to use later.
             hyp = X0[0 : np.maximum(opts_N, 1), :]
@@ -934,9 +963,10 @@ class GP:
         # vectors.
         objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
         nll = np.full((np.maximum(opts_N, 1),), np.inf)
+        opt_results = []
 
         t2_s = time.time()
-        # Make sure we don'y overshoot.
+        # Make sure we don't overshoot.
         opts_N = np.minimum(opts_N, hyp.shape[0])
         for i in range(0, opts_N):
             res = sp.optimize.minimize(
@@ -944,12 +974,19 @@ class GP:
                 x0=hyp[i, :],
                 jac=True,
                 bounds=list(zip(LB, UB)),
+                tol=tol,
             )
+            opt_results.append(res)
             hyp[i, :] = res.x
             nll[i] = res.fun
 
         # Take the best hyperparameter vector.
-        hyp_start = hyp[np.argmin(nll), :]
+        if opts_N > 0:
+            optimize_result = opt_results[np.argmin(nll)]
+            hyp_start = hyp[np.argmin(nll), :].copy()
+        else:
+            optimize_result = None
+            hyp_start = hyp[0, :].copy()
         t2 = time.time() - t2_s
 
         # In case n_samples is 0, just return the optimized hyperparameter
@@ -957,7 +994,7 @@ class GP:
         if s_N == 0:
             hyp_start = np.reshape(hyp_start, (1, -1))
             self.update(hyp=hyp_start)
-            return hyp_start, None
+            return hyp_start, optimize_result, None
 
         ## Sample from best hyperparameter vector using slice sampling
 
@@ -965,11 +1002,16 @@ class GP:
         # Effective number of samples (thin after)
         eff_s_N = s_N * thin
 
+        if sampler_name != "slicesample":
+            raise ValueError("Unknown sampler!")
+
         sample_f = lambda hyp_: self.__gp_obj_fun(hyp_, False, True)
         options = {"display": "off", "diagnostics": False}
-        slicer = SliceSampler(
-            sample_f, hyp_start, widths_default, LB, UB, options
-        )
+        if widths is None:
+            widths = widths_default
+        else:
+            widths = np.minimum(widths, widths_default)
+        slicer = SliceSampler(sample_f, hyp_start, widths, LB, UB, options)
         sampling_result = slicer.sample(eff_s_N, burn=burn_in)
 
         # Thin samples
@@ -977,11 +1019,11 @@ class GP:
         hyp = hyp_pre_thin[thin - 1 :: thin, :]
 
         t3 = time.time() - t3_s
-        print(t1, t2, t3)
+        # print(t1, t2, t3)
 
         # Recompute GP with finalized hyperparameters.
         self.update(hyp=hyp)
-        return hyp, sampling_result
+        return hyp, optimize_result, sampling_result
 
     def __recompute_normalization_constants(self):
         self.normalization_constants = np.full(self.lower_bounds.shape, 1.0)
@@ -1957,7 +1999,7 @@ class GP:
         if self.y is None:
             # No data, draw from prior
             f_mu = m_star
-            C = K_star + np.spacing(200) * np.eye(N_star)
+            C = K_star + np.spacing(1) * np.eye(N_star)
         else:
             # Compute cross-kernel matrix Ks
             Ks = self.covariance.compute(hyp[0:cov_N], self.X, X_star=X_star)
@@ -1981,7 +2023,7 @@ class GP:
         C = (C + C.T) / 2
 
         # Draw random function
-        T = sp.linalg.cholesky(C, check_finite=False)
+        T = self.__robust_cholesky(C)
         f_star = np.dot(T.T, np.random.standard_normal((T.shape[0], 1))) + f_mu
 
         # Add observation noise.
@@ -2000,6 +2042,30 @@ class GP:
             return y_star
 
         return f_star
+
+    @staticmethod
+    def __robust_cholesky(sigma):
+        """Cholesky-like decomposition for a covariance matrix."""
+        try:
+            T = sp.linalg.cholesky(sigma, check_finite=False)
+        except sp.linalg.LinAlgError:
+            D, U = sp.linalg.eig((sigma + sigma.T) / 2)
+            maxidx = np.argmax(np.abs(U), axis=0)
+            negidx = U[maxidx] < 0
+            U[negidx] *= -1
+
+            D = np.real(D)  # symmetric so all are real
+            tol = np.spacing(np.max(D)) * D.shape[0]
+            t = np.abs(D) > tol
+            D = D[t]
+            p = np.sum(D < 0)  # negative eigenvalues
+
+            if p == 0:
+                T = np.dot(np.diag(np.sqrt(D)), np.real(U[:, t]).T)
+            else:
+                T = np.zeros(sigma.shape)
+
+        return T
 
     def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
         N, d = self.X.shape

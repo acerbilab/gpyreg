@@ -12,16 +12,12 @@ def test_constant_mean_compute_sanity_checks():
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones(D + 2)
         constantmean.compute(hyp, X)
-    assert (
-        "Expected 1 mean function hyperparameters"
-        in execinfo.value.args[0]
-    )
+    assert "Expected 1 mean function hyperparameters" in execinfo.value.args[0]
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones((1, 1))
         constantmean.compute(hyp, X)
     assert (
-        "Mean function output is available only for"
-        in execinfo.value.args[0]
+        "Mean function output is available only for" in execinfo.value.args[0]
     )
 
 
@@ -34,16 +30,12 @@ def test_negative_quadratic_compute_sanity_checks():
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones(D + 2)
         negative_quadratic.compute(hyp, X)
-    assert (
-        "Expected 7 mean function hyperparameters"
-        in execinfo.value.args[0]
-    )
+    assert "Expected 7 mean function hyperparameters" in execinfo.value.args[0]
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones((7, 1))
         negative_quadratic.compute(hyp, X)
     assert (
-        "Mean function output is available only for"
-        in execinfo.value.args[0]
+        "Mean function output is available only for" in execinfo.value.args[0]
     )
 
 
@@ -56,14 +48,10 @@ def test_zero_mean_compute_sanity_checks():
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones(D + 2)
         zeromean.compute(hyp, X)
-    assert (
-        "Expected 0 mean function hyperparameters"
-        in execinfo.value.args[0]
-    )
+    assert "Expected 0 mean function hyperparameters" in execinfo.value.args[0]
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones((0, 0))
         zeromean.compute(hyp, X)
     assert (
-        "Mean function output is available only for"
-        in execinfo.value.args[0]
+        "Mean function output is available only for" in execinfo.value.args[0]
     )

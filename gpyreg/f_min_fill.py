@@ -31,8 +31,9 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
         Hyperparameter prior dictionary.
     N : int
         Design size to use.
-    design : {'sobol', 'random'}, optional
-        Specify what kind of design to use. Defaults to 'sobol'.
+    init_method : {'sobol', 'rand'}, defaults to 'sobol'
+        Specify what kind of method to use to construct the space-filling
+        design.
 
     Returns
     =======
@@ -42,6 +43,9 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
     y : array_like
         An 1D array of the sorted values of f at the design points.
     """
+    if design is None:
+        design = "sobol"
+
     # Helper for comparing version numbers.
     def ge_versions(version1, version2):
         def normalize(v):
@@ -49,13 +53,10 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
 
         return operator.ge(normalize(version1), normalize(version2))
 
-    if design is None:
-        # Check version number to make sure qmc exists.
-        # Remove in the future when Anaconda has SciPy 1.7.0
-        if ge_versions(sp.__version__, "1.7.0"):
-            design = "sobol"
-        else:
-            design = "random"
+    # Check version number to make sure qmc exists.
+    # Remove in the future when Anaconda has SciPy 1.7.0
+    if design == "sobol" and not ge_versions(sp.__version__, "1.7.0"):
+        design = "rand"
 
     N0 = x0.shape[0]
     n_vars = np.max(
@@ -77,13 +78,13 @@ def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
                 S = sampler.random(n=N - N0 + 1)[1:, :]
             # Randomly permute columns
             np.random.shuffle(S.T)
-        elif design == "random":
+        elif design == "rand":
             S = np.random.uniform(size=(N - N0, n_vars))
         else:
             raise ValueError(
                 "Unknown design: got "
                 + design
-                + ' and expected either "sobol" or "random"'
+                + ' and expected either "sobol" or "rand"'
             )
         sX = np.zeros((N - N0, n_vars))
 

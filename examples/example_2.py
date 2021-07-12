@@ -1,6 +1,4 @@
 import numpy as np
-from scipy.stats import norm
-
 import gpyreg as gpr
 
 # Create toy training data for the GP
@@ -8,9 +6,9 @@ np.random.seed(1235)
 N = 20
 D = 2
 X = np.random.uniform(low=-3, high=3, size=(N, D))
-y = np.sin(np.sum(X, 1)) + norm.ppf(
-    np.random.random_sample(size=N), scale=0.1
-)  # np.random.normal(scale = 0.1, size = N)
+y = np.reshape(
+    np.sin(np.sum(X, 1)) + np.random.normal(scale=0.1, size=N), (-1, 1)
+)
 
 # Define the GP model
 
@@ -65,9 +63,9 @@ X_new = np.random.uniform(low=-5, high=5, size=(N, D))
 y_new = np.sin(np.sum(X_new, 1)) + np.random.normal(scale=0.1, size=N)
 y_new = np.reshape(y_new, (-1, 1))
 
-# This function updates the training data and (usually) the GP posterior but does not
-# retrain the GP hyperparameters - it also fills in the auxiliary data that might have
-# been stripped out.
+# This function updates the training data and (usually) the GP posterior but
+# does not retrain the GP hyperparameters - it also fills in the auxiliary
+# data that might have been stripped out.
 gp.update(X_new=X_new, y_new=y_new, compute_posterior=False)
 
 # In the case above we did not recompute the posterior as we are

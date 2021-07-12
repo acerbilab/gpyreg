@@ -18,8 +18,7 @@ gp = gpr.GP(
     covariance=gpr.covariance_functions.Matern(degree=3),
     mean=gpr.mean_functions.NegativeQuadratic(),
     noise=gpr.noise_functions.GaussianNoise(
-        constant_add=True,
-        user_provided_add=True
+        constant_add=True, user_provided_add=True
     ),
 )
 

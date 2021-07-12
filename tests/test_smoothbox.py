@@ -18,6 +18,7 @@ def pdf(x, sigma, a, b):
 
     return scipy.stats.norm.pdf(x, loc=b, scale=sigma) / C
 
+
 @pytest.mark.filterwarnings(
     """ignore:Matplotlib is currently using agg:UserWarning"""
 )

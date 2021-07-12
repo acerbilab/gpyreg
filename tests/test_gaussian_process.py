@@ -83,7 +83,7 @@ def test_random_function():
 
     gp = gpr.GP(
         D=D,
-        covariance=gpr.covariance_functions.Matern(5),
+        covariance=gpr.covariance_functions.Matern(1),
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
@@ -188,7 +188,7 @@ def test_getters_setters():
     assert np.all(gp.get_hyperparameters(as_array=True) == hyp_arr)
 
     gp_train = {"n_samples": 10}
-    hyp, _ = gp.fit(X=X, y=y, options=gp_train)
+    hyp, _, _ = gp.fit(X=X, y=y, options=gp_train)
 
     assert np.all(gp.get_hyperparameters(as_array=True) == hyp)
 
@@ -228,7 +228,9 @@ def test_cleaning():
     N = 20
     D = 2
     X = np.random.uniform(low=-3, high=3, size=(N, D))
-    y = np.sin(np.sum(X, 1)) + np.random.normal(scale=0.1, size=N)
+    y = np.reshape(
+        np.sin(np.sum(X, 1)) + np.random.normal(scale=0.1, size=N), (-1, 1)
+    )
 
     gp = gpr.GP(
         D=D,
@@ -238,7 +240,7 @@ def test_cleaning():
     )
 
     gp_train = {"n_samples": 10}
-    hyps, _ = gp.fit(X=X, y=y, options=gp_train)
+    hyps, _, _ = gp.fit(X=X, y=y, options=gp_train)
 
     posteriors = copy.deepcopy(gp.posteriors)
 
@@ -640,7 +642,7 @@ def test_fitting_with_fixed_bounds():
 
     assert gp.get_bounds() == gp_bounds
 
-    hyp, _ = gp.fit(X=X, y=y)
+    hyp, _, _ = gp.fit(X=X, y=y)
 
     assert np.all(hyp[:, 3] == 0.5)
 
@@ -681,56 +683,46 @@ def test_fitting_options():
 
 
 def test_fitting():
-    rounds = 10
-    N = 500
+    N = 1000
     D = 1
     X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
 
-    total_diff = np.array([0.0, 0.0, 0.0])
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(5),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
 
-    for i in range(0, rounds):
-        d = 1 + 2 * np.random.randint(0, 3)
+    cov_N = gp.covariance.hyperparameter_count(D)
+    mean_N = gp.mean.hyperparameter_count(D)
+    noise_N = gp.noise.hyperparameter_count()
 
-        gp = gpr.GP(
-            D=D,
-            covariance=gpr.covariance_functions.Matern(d),
-            mean=gpr.mean_functions.ZeroMean(),
-            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
-        )
+    N_s = 1
+    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    hyp[:, D] *= 0.3
+    hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
-        cov_N = gp.covariance.hyperparameter_count(D)
-        mean_N = gp.mean.hyperparameter_count(D)
-        noise_N = gp.noise.hyperparameter_count()
+    gp.update(hyp=hyp, compute_posterior=False)
+    y = gp.random_function(X, add_noise=True)
+    gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
 
-        N_s = 1
-        hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
-        hyp[:, D] *= 0.3
-        hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
+    gp1 = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(5),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
 
-        gp.update(hyp=hyp, compute_posterior=False)
-        y = gp.random_function(X, add_noise=True)
-        gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
+    gp_train = {"n_samples": 0}
+    hyp2, _, _ = gp1.fit(X=X, y=y, options=gp_train)
 
-        gp1 = gpr.GP(
-            D=D,
-            covariance=gpr.covariance_functions.Matern(d),
-            mean=gpr.mean_functions.ZeroMean(),
-            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
-        )
+    assert np.all(np.abs(hyp - hyp2)[0] < 0.5)
 
-        gp_train = {"n_samples": 0}
-        hyp2, _ = gp1.fit(X=X, y=y, options=gp_train)
-
-        total_diff += (hyp - hyp2)[0]
-
-        assert (
-            np.abs(
-                gp.log_likelihood(hyp[0, :]) - gp.log_likelihood(hyp2[0, :])
-            )
-            < 20
-        )
-
-    assert np.all(np.abs(total_diff / rounds) < 0.5)
+    assert (
+        np.abs(gp.log_likelihood(hyp[0, :]) - gp.log_likelihood(hyp2[0, :]))
+        < 20
+    )
 
 
 def test_get_recommended_bounds_no_bounds_set():
@@ -811,6 +803,7 @@ def test_hyperparameters_from_dict_single_dict():
             )
         )
 
+
 def test_quad_not_squared_exponential():
     D = 3
     d = 1 + 2 * np.random.randint(0, 3)
@@ -825,4 +818,4 @@ def test_quad_not_squared_exponential():
     assert (
         "Bayesian quadrature only supports the squared exponential"
         in execinfo.value.args[0]
-    )    
+    )

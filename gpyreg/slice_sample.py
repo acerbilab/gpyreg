@@ -276,7 +276,7 @@ class SliceSampler:
                 burn = 0
             else:
                 burn = round(N / 3)
-                
+
         # Sanity checks
         if not np.isscalar(thin) or thin <= 0:
             raise ValueError(
