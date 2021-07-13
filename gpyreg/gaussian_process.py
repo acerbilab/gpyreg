@@ -5,6 +5,7 @@ import time
 
 import numpy as np
 import scipy as sp
+import scipy.stats
 import matplotlib.pyplot as plt
 
 import gpyreg.covariance_functions

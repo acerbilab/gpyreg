@@ -1,8 +1,9 @@
 # run: pip install -i requirements.txt
 numpy
-scipy>=1.7.0
+scipy
 matplotlib
-pytest>=6.2.4
-pytest-cov>=2.12.1
+pytest
+pytest-cov
+pytest-rerunfailures
 sphinx
 numpydoc

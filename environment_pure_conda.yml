@@ -1,0 +1,13 @@
+# run: conda env create --file environment.yml
+name: gpyreg_pure_conda
+dependencies:
+  - python>=3.8
+  - pip
+  - numpy
+  - scipy
+  - matplotlib
+  - pytest
+  - pytest-cov
+  - pytest-rerunfailures
+  - sphinx
+  - numpydoc
