@@ -128,7 +128,8 @@ class GP:
         Raises
         ------
         ValueError
-            [tbd] "Missing hyperparameter " + info[0]
+            Raised when `bounds` is missing the entry of an expected 
+            hyperparameter.
         """        
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -343,7 +344,8 @@ class GP:
         Raises
         ------
         ValueError
-            [tbd] "Missing hyperparameter " + info[0]
+            Raised when `priors` is missing the entry of an expected 
+            hyperparameter.
         ValueError
             Raised when a hyperparameter name is unknown.
         """
