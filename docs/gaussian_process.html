@@ -60,8 +60,7 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covariance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
-</dd></dl>
+<dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.bounds_to_dict">
@@ -130,6 +129,19 @@ noise variances are used.</p>
 <dt><strong>use_recommended_bounds</strong><span class="classifier">bool, defaults to True</span></dt><dd><p>Whether to only use user provided lower and upper bounds
 or to try to choose them intelligently.</p>
 </dd>
+<dt><strong>init_method</strong><span class="classifier">{‘sobol’, ‘rand’}, defaults to ‘sobol’</span></dt><dd><p>Specify whether to use Sobol or random sequences for
+the initial space-filling design.</p>
+</dd>
+<dt><strong>sampler_name</strong><span class="classifier">{‘slicesample’}, defaults to ‘slicesample’</span></dt><dd><p>The name of the sampler to use. Currently only slice
+sampling is supported.</p>
+</dd>
+<dt><strong>tol_opt</strong><span class="classifier">float, defaults to 1e-5</span></dt><dd><p>Optimization tolerance for stopping.</p>
+</dd>
+<dt><strong>tol_opt_mcmc</strong><span class="classifier">float, defaults to 1e-3</span></dt><dd><p>Preliminary optimization tolerance when doing MCMC.</p>
+</dd>
+<dt><strong>widths</strong><span class="classifier">ndarray, shape (hyp_n,), optional</span></dt><dd><p>Default widths to use for sampling. If not provided
+appropriate ones will be computed.</p>
+</dd>
 </dl>
 </div></blockquote>
 </dd>
@@ -139,8 +151,17 @@ or to try to choose them intelligently.</p>
 <dd class="field-even"><dl class="simple">
 <dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_samples, hyp_n)</span></dt><dd><p>The fitted hyperparameters.</p>
 </dd>
+<dt><strong>optimize_result</strong><span class="classifier">OptimizeResult</span></dt><dd><p>The optimization result represented as a <code class="docutils literal notranslate"><span class="pre">OptimizeResult</span></code>
+object. For more details see <code class="docutils literal notranslate"><span class="pre">scipy.optimize.minimize</span></code>.</p>
+</dd>
 <dt><strong>sampling_result</strong><span class="classifier">dict</span></dt><dd><p>If sampling was performed this is a dictionary with info on the
 sampling run, and None otherwise.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raise when the <cite>sampler_name</cite> is not slicesample.</p>
 </dd>
 </dl>
 </dd>
@@ -211,6 +232,12 @@ upper bounds.</p>
 </dd>
 </dl>
 </dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raise when GP does not have X or y set yet.</p>
+</dd>
+</dl>
+</dd>
 </dl>
 </dd></dl>
 
@@ -257,6 +284,12 @@ containing hyperparameters.</p>
 <dd class="field-even"><dl class="simple">
 <dt><strong>hyp_dict</strong><span class="classifier">object</span></dt><dd><p>A list which contains a dictonary with hyperparameter names and
 values for each sample.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the input hyperparameter array has the wrong shape.</p>
 </dd>
 </dl>
 </dd>
@@ -449,6 +482,13 @@ shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <s
 </dd>
 </dl>
 </dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the method is called and the covariance of the GP is not
+squared exponential.</p>
+</dd>
+</dl>
+</dd>
 </dl>
 </dd></dl>
 
@@ -487,6 +527,12 @@ to <code class="docutils literal notranslate"><span class="pre">-Inf</span></cod
 </dd>
 </dl>
 </dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>[tbd] “Missing hyperparameter ” + info[0]</p>
+</dd>
+</dl>
+</dd>
 </dl>
 </dd></dl>
 
@@ -509,6 +555,12 @@ is equivalent.</p>
 </dd>
 </dl>
 </dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the input hyperparameter array has the wrong shape.</p>
+</dd>
+</dl>
+</dd>
 </dl>
 </dd></dl>
 
@@ -521,6 +573,14 @@ is equivalent.</p>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>priors</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of hyperparameter names and their priors.
 If None is given, there will be no prior.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>[tbd] “Missing hyperparameter ” + info[0]</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when a hyperparameter name is unknown.</p>
 </dd>
 </dl>
 </dd>
@@ -561,8 +621,7 @@ inputs.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.Posterior.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.Posterior.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
-</dd></dl>
+<dd></dd></dl>
 
 </dd></dl>
 
@@ -586,7 +645,7 @@ inputs.</p>
 
 
 <h3>Navigation</h3>
-<p class="caption"><span class="caption-text">Contents:</span></p>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">gpyreg</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="covariance_functions.html">gpyreg.covariance_functions</a></li>
@@ -613,7 +672,7 @@ inputs.</p>
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
@@ -635,7 +694,7 @@ inputs.</p>
       &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.1.0</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
