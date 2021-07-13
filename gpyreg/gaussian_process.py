@@ -839,7 +839,7 @@ class GP:
         Raises
         ------
         ValueError
-            Raise when the `sampler_name` is not slicesample.
+            Raised when the `sampler_name` is not slicesample.
         """        
         ## Default options
         if options is None:
