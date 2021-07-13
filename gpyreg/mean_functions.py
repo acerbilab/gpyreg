@@ -82,6 +82,13 @@ class ZeroMean:
             The mean values.
         dm : ndarray, shape (n, mean_n), optional
             The gradient with respect to hyperparameters.
+
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
         """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
@@ -184,6 +191,13 @@ class ConstantMean:
             The mean values.
         dm : ndarray, shape (n, mean_n), optional
             The gradient with respect to hyperparameters.
+
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
         """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
@@ -287,6 +301,13 @@ class NegativeQuadratic:
             The mean values.
         dm : ndarray, shape (n, mean_n), optional
             The gradient with respect to hyperparameters.
+
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
         """
         N, D = X.shape
         mean_N = self.hyperparameter_count(D)
