@@ -117,6 +117,22 @@ the end of the run. The diagnostic tests are from <a class="reference internal" 
 </dd>
 </dl>
 </dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>x0</cite> is not  a scalar or a 1D array.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>LB</cite> or <cite>UB</cite> are not None, scalars, or 1D arrays of the
+same size as <cite>x0</cite>.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>LB</cite> &gt; <cite>UB</cite>.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>widths</cite> does not only contain positive real numbers.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the initial starting point <cite>x0</cite> is outside the bounds (<cite>LB</cite>
+and <cite>UB</cite>)</p>
+</dd>
+</dl>
+</dd>
 </dl>
 <p class="rubric">Notes</p>
 <p>Inspired by a MATLAB implementation of slice sampling by Iain Murray.
@@ -209,6 +225,17 @@ dimension.</p>
 </dd>
 </dl>
 </div></blockquote>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>thin</cite> is not a positive integer.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>burn</cite> is not a integer &gt;= 0.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the initial starting point X0 does not evaluate to a
+real number (e.g. Inf or NaN).</p>
 </dd>
 </dl>
 </dd>
