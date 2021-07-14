@@ -191,6 +191,13 @@ class GaussianNoise:
             The gradient with respect to hyperparameters. If there is no
             input or output dependent noise, ``dsn2`` is of shape
             ``(1, noise_n)`` while otherwise it is of shape ``(n, noise_n)``.
+
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
         """
         N, _ = X.shape
         noise_N = self.hyperparameter_count()

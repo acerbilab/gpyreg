@@ -147,7 +147,7 @@ def test_getters_setters():
         "mean_const": ("smoothbox", (np.min(y), np.max(y), 1.0)),
     }
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         gp.set_priors(gp_priors_mistaken)
 
     gp_priors = {
@@ -174,7 +174,7 @@ def test_getters_setters():
         "mean_const": (-np.inf, np.inf),
     }
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         gp.set_bounds(gp_bounds_mistaken)
 
     hyp_arr = np.array(
@@ -734,16 +734,16 @@ def test_get_recommended_bounds_no_bounds_set():
         mean=gpr.mean_functions.ZeroMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    with pytest.raises(Exception) as execinfo:
+    with pytest.raises(ValueError) as execinfo:
         gp.get_recommended_bounds()
     assert "GP does not have X or y set!" in execinfo.value.args[0]
     gp.X = 1
-    with pytest.raises(Exception) as execinfo:
+    with pytest.raises(ValueError) as execinfo:
         gp.get_recommended_bounds()
     assert "GP does not have X or y set!" in execinfo.value.args[0]
     gp.X = None
     gp.y = 1
-    with pytest.raises(Exception) as execinfo:
+    with pytest.raises(ValueError) as execinfo:
         gp.get_recommended_bounds()
     assert "GP does not have X or y set!" in execinfo.value.args[0]
 
@@ -757,7 +757,7 @@ def test_set_hyperparameters_wrong_shape():
         mean=gpr.mean_functions.ZeroMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    with pytest.raises(Exception) as execinfo:
+    with pytest.raises(ValueError) as execinfo:
         gp.set_hyperparameters(np.ones((1, 20)))
     assert (
         "Input hyperparameter array is the wrong shape!"
@@ -774,7 +774,7 @@ def test_hyperparameters_to_dict_wrong_shape():
         mean=gpr.mean_functions.ZeroMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    with pytest.raises(Exception) as execinfo:
+    with pytest.raises(ValueError) as execinfo:
         gp.hyperparameters_to_dict(np.ones((1, 20)))
     assert (
         "Input hyperparameter array is the wrong shape!"
@@ -813,7 +813,7 @@ def test_quad_not_squared_exponential():
         mean=gpr.mean_functions.ZeroMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    with pytest.raises(Exception) as execinfo:
+    with pytest.raises(ValueError) as execinfo:
         gp.quad(0, 0.1, compute_var=True)
     assert (
         "Bayesian quadrature only supports the squared exponential"

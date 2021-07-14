@@ -80,6 +80,21 @@ class SliceSampler:
                 Specifies whether convergence diagnostics are performed at
                 the end of the run. The diagnostic tests are from [4]_.
 
+    Raises
+    ------
+    ValueError
+        Raised when `x0` is not  a scalar or a 1D array.
+    ValueError
+        Raised when `LB` or `UB` are not None, scalars, or 1D arrays of the
+        same size as `x0`.
+    ValueError
+        Raised when `LB` > `UB`.
+    ValueError
+        Raised when `widths` does not only contain positive real numbers.     
+    ValueError
+        Raised when the initial starting point `x0` is outside the bounds (`LB`
+        and `UB`)
+
     Notes
     -----
 
@@ -262,7 +277,16 @@ class SliceSampler:
             **eff_N** : array_like
                 Estimate of the effective number of samples in each
                 dimension.
-
+        
+        Raises
+        ------
+        ValueError
+            Raised when `thin` is not a positive integer.
+        ValueError
+            Raised when `burn` is not a integer >= 0.
+        ValueError
+            Raised when the initial starting point X0 does not evaluate to a
+            real number (e.g. Inf or NaN).
         """
 
         # Reference to x0 so it is updated as we go along, allowing us to
@@ -680,6 +704,13 @@ class SliceSampler:
         Rhat : float
           Return the potential scale reduction factor, :math:`\\hat{R}`
 
+        Raises
+        ------
+        ValueError
+            Raised when `x` only contains one trace of a stochastic parameter.
+            As the Gelman-Rubin diagnostic requires multiple chains of the same
+            length.
+
         Notes
         -----
 
@@ -745,6 +776,12 @@ class SliceSampler:
         n_eff : float
           Return the effective sample size, :math:`\\hat{n}_{eff}`
 
+        Raises
+        ------
+        ValueError
+            Raised when `x` only contains one trace of a stochastic parameter.
+            As the calculation of effective sample size requires multiple chains
+            of the same length.
         """
         if np.shape(x) < (2,):
             raise ValueError(

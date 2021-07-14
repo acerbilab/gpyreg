@@ -56,8 +56,7 @@ some other degree is provided we throw a <code class="docutils literal notransla
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.Matern.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">degree</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.covariance_functions.Matern.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
-</dd></dl>
+<dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.Matern.compute">
@@ -91,6 +90,14 @@ if we only requested the diagonal, in which case the shape is
 </dd>
 <dt><strong>dK</strong><span class="classifier">ndarray, shape (n, n, cov_n), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
 </dd>
 </dl>
 </dd>
@@ -173,8 +180,7 @@ in the order they are used in computations.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.SquaredExponential.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
-</dd></dl>
+<dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.SquaredExponential.compute">
@@ -208,6 +214,14 @@ if we only requested the diagonal, in which case the shape is
 </dd>
 <dt><strong>dK</strong><span class="classifier">ndarray, shape (n, n, cov_n), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
 </dd>
 </dl>
 </dd>
@@ -302,7 +316,7 @@ in the order they are used in computations.</p>
 
 
 <h3>Navigation</h3>
-<p class="caption"><span class="caption-text">Contents:</span></p>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">gpyreg</a><ul class="current">
 <li class="toctree-l2 current"><a class="current reference internal" href="#">gpyreg.covariance_functions</a></li>
@@ -329,7 +343,7 @@ in the order they are used in computations.</p>
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
@@ -351,7 +365,7 @@ in the order they are used in computations.</p>
       &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.1.0</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |

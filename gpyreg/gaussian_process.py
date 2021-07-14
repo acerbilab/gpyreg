@@ -115,7 +115,8 @@ class GP:
         return total
 
     def set_bounds(self, bounds=None):
-        """Sets the hyperparameter lower and upper bounds.
+        """
+        Sets the hyperparameter lower and upper bounds.
 
         Parameters
         ==========
@@ -123,7 +124,13 @@ class GP:
             A dictionary of hyperparameter names and tuples of their lower and
             upper bounds. If not given, the the lower bounds will be set
             to ``-Inf`` and upper bounds to ``+Inf``.
-        """
+
+        Raises
+        ------
+        ValueError
+            Raised when `bounds` is missing the entry of an expected 
+            hyperparameter.
+        """        
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -147,7 +154,7 @@ class GP:
                     vals = bounds[info[0]]
                 except KeyError as _:
                     e_str = "Missing hyperparameter " + info[0]
-                    raise Exception(e_str) from None
+                    raise ValueError(e_str) from None
 
             # None indicates no bounds.
             if vals is not None:
@@ -214,16 +221,22 @@ class GP:
         return bounds_dict
 
     def get_recommended_bounds(self):
-        """Gets the recommended hyperparameter lower and upper bounds.
+        """
+        Gets the recommended hyperparameter lower and upper bounds.
 
         Returns
         =======
         bounds_dict : dict
             A dictionary of the hyperparameter names and tuples of lower
             upper bounds.
+
+        Raises
+        ------
+        ValueError
+            Raise when GP does not have X or y set yet.
         """
         if self.X is None or self.y is None:
-            raise Exception("GP does not have X or y set!")
+            raise ValueError("GP does not have X or y set!")
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
@@ -319,13 +332,22 @@ class GP:
         return hyper_priors
 
     def set_priors(self, priors=None):
-        """Sets the hyperparameter priors.
+        """
+        Sets the hyperparameter priors.
 
         Parameters
         ==========
         priors : dict, optional
             A dictionary of hyperparameter names and their priors.
             If None is given, there will be no prior.
+
+        Raises
+        ------
+        ValueError
+            Raised when `priors` is missing the entry of an expected 
+            hyperparameter.
+        ValueError
+            Raised when a hyperparameter name is unknown.
         """
         self.no_prior = False
         if priors is None:
@@ -361,7 +383,7 @@ class GP:
                     vals = priors[info[0]]
                 except KeyError as _:
                     e_str = "Missing hyperparameter " + info[0]
-                    raise Exception(e_str) from None
+                    raise ValueError(e_str) from None
 
             # None indicates no prior
             if vals is not None:
@@ -442,7 +464,8 @@ class GP:
         return self.hyperparameters_to_dict(hyp)
 
     def set_hyperparameters(self, hyp_new, compute_posterior=True):
-        """Sets new hyperparameters for the Gaussian process.
+        """
+        Sets new hyperparameters for the Gaussian process.
 
         Parameters
         ==========
@@ -456,7 +479,12 @@ class GP:
             is equivalent.
         compute_posterior : bool, defaults to True
             Whether to compute the posterior for the new hyperparameters.
-        """
+
+        Raises
+        ------
+        ValueError
+            Raised when the input hyperparameter array has the wrong shape.
+        """        
         if isinstance(hyp_new, np.ndarray):
             cov_N = self.covariance.hyperparameter_count(self.D)
             mean_N = self.mean.hyperparameter_count(self.D)
@@ -475,7 +503,8 @@ class GP:
             self.update(hyp=hyp_new_arr, compute_posterior=compute_posterior)
 
     def hyperparameters_to_dict(self, hyp_arr):
-        """Converts a hyperparameter array to a list which contains a
+        """
+        Converts a hyperparameter array to a list which contains a
         dictionary with hyperparameter names and values for each
         hyperparameter sample.
 
@@ -491,7 +520,12 @@ class GP:
         hyp_dict : object
             A list which contains a dictonary with hyperparameter names and
             values for each sample.
-        """
+
+        Raises
+        ------
+        ValueError
+            Raised when the input hyperparameter array has the wrong shape.
+        """        
         hyp = []
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -746,7 +780,8 @@ class GP:
         # using memory.
 
     def fit(self, X=None, y=None, s2=None, hyp0=None, options=None):
-        """Trains gaussian process hyperparameters.
+        """
+        Trains gaussian process hyperparameters.
 
         Parameters
         ==========
@@ -802,7 +837,12 @@ class GP:
         sampling_result : dict
             If sampling was performed this is a dictionary with info on the
             sampling run, and None otherwise.
-        """
+
+        Raises
+        ------
+        ValueError
+            Raised when the `sampler_name` is not slicesample.
+        """        
         ## Default options
         if options is None:
             options = {}
@@ -1554,7 +1594,8 @@ class GP:
         return mu, s2
 
     def quad(self, mu, sigma, compute_var=False, separate_samples=False):
-        """Bayesian quadrature for a Gaussian process.
+        """
+        Bayesian quadrature for a Gaussian process.
 
         Computes the integral of a function represented by a Gaussian
         process with respect to a given Gaussian measure.
@@ -1585,12 +1626,18 @@ class GP:
             The computed variances of the integrals in an array with
             shape ``(n, 1)`` if samples are averaged and shape
             ``(n, hyp_samples)`` if requested separately.
-        """
+
+        Raises
+        ------
+        ValueError
+            Raised when the method is called and the covariance of the GP is not
+            squared exponential.
+        """        
 
         if not isinstance(
             self.covariance, gpyreg.covariance_functions.SquaredExponential
         ):
-            raise Exception(
+            raise ValueError(
                 "Bayesian quadrature only supports the squared exponential "
                 "kernel."
             )

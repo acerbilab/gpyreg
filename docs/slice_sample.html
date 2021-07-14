@@ -117,6 +117,22 @@ the end of the run. The diagnostic tests are from <a class="reference internal" 
 </dd>
 </dl>
 </dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>x0</cite> is not  a scalar or a 1D array.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>LB</cite> or <cite>UB</cite> are not None, scalars, or 1D arrays of the
+same size as <cite>x0</cite>.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>LB</cite> &gt; <cite>UB</cite>.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>widths</cite> does not only contain positive real numbers.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the initial starting point <cite>x0</cite> is outside the bounds (<cite>LB</cite>
+and <cite>UB</cite>)</p>
+</dd>
+</dl>
+</dd>
 </dl>
 <p class="rubric">Notes</p>
 <p>Inspired by a MATLAB implementation of slice sampling by Iain Murray.
@@ -145,8 +161,7 @@ Boca Raton, FL, USA: Chapman &amp; Hall/CRC.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.slice_sample.SliceSampler.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">log_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">widths</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">LB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">UB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.slice_sample.SliceSampler.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
-</dd></dl>
+<dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.slice_sample.SliceSampler.sample">
@@ -213,6 +228,17 @@ dimension.</p>
 </dd>
 </dl>
 </dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>thin</cite> is not a positive integer.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>burn</cite> is not a integer &gt;= 0.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the initial starting point X0 does not evaluate to a
+real number (e.g. Inf or NaN).</p>
+</dd>
+</dl>
+</dd>
 </dl>
 </dd></dl>
 
@@ -238,7 +264,7 @@ dimension.</p>
 
 
 <h3>Navigation</h3>
-<p class="caption"><span class="caption-text">Contents:</span></p>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">gpyreg</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="covariance_functions.html">gpyreg.covariance_functions</a></li>
@@ -264,7 +290,7 @@ dimension.</p>
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
@@ -286,7 +312,7 @@ dimension.</p>
       &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.1.0</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |

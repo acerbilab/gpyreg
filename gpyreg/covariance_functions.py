@@ -99,6 +99,13 @@ class SquaredExponential:
         dK : ndarray, shape (n, n, cov_n), optional
             The gradient of the covariance matrix with respect to the
             hyperparameters.
+
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
         """
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
@@ -142,7 +149,8 @@ class SquaredExponential:
 
 
 class Matern:
-    """Matern kernel.
+    """
+    Matern kernel.
 
     Parameters
     ----------
@@ -231,7 +239,8 @@ class Matern:
     def compute(
         self, hyp, X, X_star=None, compute_diag=False, compute_grad=False
     ):
-        """Computes the covariance matrix for given training points
+        """
+        Computes the covariance matrix for given training points
         and test points.
 
         Parameters
@@ -260,7 +269,14 @@ class Matern:
         dK : ndarray, shape (n, n, cov_n), optional
             The gradient of the covariance matrix with respect to the
             hyperparameters.
-        """
+
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
+        """    
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
 
