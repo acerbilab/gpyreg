@@ -461,7 +461,7 @@ class GP:
         Returns
         =======
         hyp : object
-            The hyperparameteres in the form specified by ``as_array``.
+            The hyperparameters in the form specified by ``as_array``.
         """
         # If no hyperparameters have been set return an array/dict with NaN.
         if self.posteriors is None:
@@ -493,7 +493,7 @@ class GP:
         hyp_new : object
             The new hyperparameters. This can be an array of shape
             ``(hyp_samples, hyp_n)`` where ``hyp_n`` is the number of
-            hyperparametes, and ``hyp_samples`` is the amount of
+            hyperparameters, and ``hyp_samples`` is the amount of
             hyperparameter samples, a single dictionary with
             hyperparameter names and values, or a list of dictionaries.
             Passing a single dictionary or a list with one dictionary
