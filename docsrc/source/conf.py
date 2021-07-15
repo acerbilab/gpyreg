@@ -33,6 +33,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
+    "sphinx.ext.linkcode",
 ]
 numpydoc_show_class_members = False
 
@@ -44,6 +45,17 @@ autodoc_default_options = {
 }
 
 coverage_show_missing_items = True
+
+def linkcode_resolve(domain, info):
+    """
+    Used for sphinx.ext.linkcode
+    """    
+    if domain != 'py':
+        return None
+    if not info['module']:
+        return None
+    filename = info['module'].replace('.', '/')
+    return "https://github.com/lacerbi/gpyreg/tree/main/%s.py" % filename
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
