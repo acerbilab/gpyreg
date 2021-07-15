@@ -2,7 +2,6 @@
 
 import numpy as np
 
-
 class ZeroMean:
     """Zero mean function."""
 
@@ -11,29 +10,31 @@ class ZeroMean:
 
     @staticmethod
     def hyperparameter_count(_):
-        """Gives the number of hyperparameters this mean function has.
+        """
+        Return the number of hyperparameters of this mean function.
 
         Parameters
         ----------
         d : int
-            The degree of the mean function.
+            The degree of the mean function (unused).
 
         Returns
         -------
         count : int
-            The amount of hyperparameters.
+            The number of hyperparameters.
         """
         return 0
 
     @staticmethod
     def hyperparameter_info(_):
-        """Gives information on the names of hyperparameters for setting
+        """
+        Return information on the names of hyperparameters for setting
         them in other parts of the program.
 
         Parameters
         ----------
         d : int
-            The degree of the kernel.
+            The degree of the kernel (unused).
 
         Returns
         -------
@@ -43,8 +44,9 @@ class ZeroMean:
         """
         return []
 
-    def get_bounds_info(self, X, y):
-        """Gives information on the lower, upper, plausible lower
+    def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
+        """
+        Return information on the lower, upper, plausible lower
         and plausible upper bounds of the hyperparameters of this
         mean function.
 
@@ -58,13 +60,29 @@ class ZeroMean:
         Returns
         -------
         mean_bound_info: dict
-            A dictionary containing the bound info.
+            A dictionary containing the bound info with the following elements:
+
+            **LB** : np.ndarray, shape (mean_N, 1)
+                    The lower bounds of the hyperparameters.
+            **UB** : np.ndarray, shape (mean_N, 1)
+                    The upper bounds of the hyperparameters.
+            **PLB** : np.ndarray, shape (mean_N, 1)
+                    The plausible lower bounds of the hyperparameters.
+            **PUB** : np.ndarray, shape (mean_N, 1)
+                    The plausible upper bounds of the hyperparameters.
+            **x0** : np.ndarray, shape (mean_N, 1)
+                    The plausible starting point.
+
+            where ``mean_N`` is the number of hyperparameters.
         """
         mean_N = self.hyperparameter_count(X.shape[1])
         return _bounds_info_helper(mean_N, X, y, 0)
 
-    def compute(self, hyp, X, compute_grad=False):
-        """Computes the mean function at given test points.
+    def compute(
+        self, hyp: np.ndarray, X: np.ndarray, compute_grad: bool = False
+    ):
+        """
+        Compute the mean function at given test points.
 
         Parameters
         ----------
@@ -120,29 +138,31 @@ class ConstantMean:
 
     @staticmethod
     def hyperparameter_count(_):
-        """Gives the number of hyperparameters this mean function has.
+        """
+        Return the number of hyperparameters of this mean function.
 
         Parameters
         ----------
         d : int
-            The degree of the mean function.
+            The degree of the mean function (unused).
 
         Returns
         -------
         count : int
-            The amount of hyperparameters.
+            The number of hyperparameters.
         """
         return 1
 
     @staticmethod
     def hyperparameter_info(_):
-        """Gives information on the names of hyperparameters for setting
+        """
+        Return information on the names of hyperparameters for setting
         them in other parts of the program.
 
         Parameters
         ----------
         d : int
-            The degree of the kernel.
+            The degree of the kernel (unused).
 
         Returns
         -------
@@ -152,8 +172,9 @@ class ConstantMean:
         """
         return [("mean_const", 1)]
 
-    def get_bounds_info(self, X, y):
-        """Gives information on the lower, upper, plausible lower
+    def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
+        """
+        Return information on the lower, upper, plausible lower
         and plausible upper bounds of the hyperparameters of this
         mean function.
 
@@ -167,13 +188,29 @@ class ConstantMean:
         Returns
         -------
         mean_bound_info: dict
-            A dictionary containing the bound info.
+            A dictionary containing the bound info with the following elements:
+
+            **LB** : np.ndarray, shape (mean_N, 1)
+                    The lower bounds of the hyperparameters.
+            **UB** : np.ndarray, shape (mean_N, 1)
+                    The upper bounds of the hyperparameters.
+            **PLB** : np.ndarray, shape (mean_N, 1)
+                    The plausible lower bounds of the hyperparameters.
+            **PUB** : np.ndarray, shape (mean_N, 1)
+                    The plausible upper bounds of the hyperparameters.
+            **x0** : np.ndarray, shape (mean_N, 1)
+                    The plausible starting point.
+
+            where ``mean_N`` is the number of hyperparameters.
         """
         mean_N = self.hyperparameter_count(X.shape[1])
         return _bounds_info_helper(mean_N, X, y, 1)
 
-    def compute(self, hyp, X, compute_grad=False):
-        """Computes the mean function at given test points.
+    def compute(
+        self, hyp: np.ndarray, X: np.ndarray, compute_grad: bool = False
+    ):
+        """
+        Compute the mean function at given test points.
 
         Parameters
         ----------
@@ -229,8 +266,9 @@ class NegativeQuadratic:
         pass
 
     @staticmethod
-    def hyperparameter_count(d):
-        """Gives the number of hyperparameters this mean function has.
+    def hyperparameter_count(d: int):
+        """
+        Return the number of hyperparameters this mean function has.
 
         Parameters
         ----------
@@ -240,13 +278,14 @@ class NegativeQuadratic:
         Returns
         -------
         count : int
-            The amount of hyperparameters.
+            The number of hyperparameters.
         """
         return 1 + 2 * d
 
     @staticmethod
-    def hyperparameter_info(d):
-        """Gives information on the names of hyperparameters for setting
+    def hyperparameter_info(d: int):
+        """
+        Return information on the names of hyperparameters for setting
         them in other parts of the program.
 
         Parameters
@@ -262,8 +301,9 @@ class NegativeQuadratic:
         """
         return [("mean_const", 1), ("mean_location", d), ("mean_log_scale", d)]
 
-    def get_bounds_info(self, X, y):
-        """Gives information on the lower, upper, plausible lower
+    def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
+        """
+        Return information on the lower, upper, plausible lower
         and plausible upper bounds of the hyperparameters of this
         mean function.
 
@@ -277,13 +317,30 @@ class NegativeQuadratic:
         Returns
         -------
         mean_bound_info: dict
-            A dictionary containing the bound info.
+            A dictionary containing the bound info with the following elements:
+
+            **LB** : np.ndarray, shape (mean_N, 1)
+                    The lower bounds of the hyperparameters.
+            **UB** : np.ndarray, shape (mean_N, 1)
+                    The upper bounds of the hyperparameters.
+            **PLB** : np.ndarray, shape (mean_N, 1)
+                    The plausible lower bounds of the hyperparameters.
+            **PUB** : np.ndarray, shape (mean_N, 1)
+                    The plausible upper bounds of the hyperparameters.
+            **x0** : np.ndarray, shape (mean_N, 1)
+                    The plausible starting point.
+
+            where ``mean_N`` is the number of hyperparameters.
+
         """
         mean_N = self.hyperparameter_count(X.shape[1])
         return _bounds_info_helper(mean_N, X, y, 2)
 
-    def compute(self, hyp, X, compute_grad=False):
-        """Computes the mean function at given test points.
+    def compute(
+        self, hyp: np.ndarray, X: np.ndarray, compute_grad: bool = False
+    ):
+        """
+        Compute the mean function at given test points.
 
         Parameters
         ----------
