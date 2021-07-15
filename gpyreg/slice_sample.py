@@ -33,27 +33,27 @@ class SliceSampler:
     x0 : ndarray, shape (n,)
         Initial value of the random sample sequence. It must be within the
         domain of the target distribution. The number of independent
-        variables is 'n'.
+        variables is ``n``.
     widths : array_like, optional
         A parameter for typical widths. Either a scalar or a 1D array.
         If it is a scalar, all dimensions are assumed to have the same
         typical widths. If it is a 1D array, each element of the array
         is the typical width of the marginal target distribution in that
         dimension. The default value of ``widths[i]`` is ``(UB[i]-LB[i])/2``
-        if the ``i``-th bounds are finite, or 10 otherwise. By default we
-        use an adaptive widths method during the burn-in period, so
+        if the ``i``-th bounds are finite, or 10 otherwise. By default an
+        an adaptive widths method during the burn-in period os being used, so
         the choice of typical widths is not crucial.
     LB : array_like, optional
         An array of lower bounds on the domain of the target density
         function, which is assumed to be zero outside the range
-        ``LB <= x <= UB``. If not given we assume no lower bounds.
+        ``LB <= x <= UB``. If not given no lower bounds are assumed.
         Set ``LB[i] = -inf`` if ``x[i]`` is unbounded below. If
         ``LB[i] == UB[i]``, the variable is assumed to be fixed on
         that dimension.
     UB : array_like, optional
         An array of upper bounds on the domain of the target density
         function, which is assumed to be zero outside the range
-        ``LB <= x <= UB``. If not given we assume no upper bounds.
+        ``LB <= x <= UB``. If not given no upper bounds are assumed.
         Set ``UB[i] = inf`` if ``x[i]`` is unbounded above. If
         ``LB[i] == UB[i]``, the variable is assumed to be fixed on that
         dimension.
@@ -90,10 +90,10 @@ class SliceSampler:
     ValueError
         Raised when `LB` > `UB`.
     ValueError
-        Raised when `widths` does not only contain positive real numbers.     
+        Raised when `widths` does not only contain positive real numbers.
     ValueError
         Raised when the initial starting point `x0` is outside the bounds (`LB`
-        and `UB`)
+        and `UB`).
 
     Notes
     -----
@@ -116,7 +116,15 @@ class SliceSampler:
 
     """
 
-    def __init__(self, log_f, x0, widths=None, LB=None, UB=None, options=None):
+    def __init__(
+        self,
+        log_f,
+        x0: np.ndarray,
+        widths=None,
+        LB=None,
+        UB=None,
+        options: dict = None,
+    ):
         D = x0.size
         self.log_f = log_f
         self.x0 = x0.copy()
@@ -219,7 +227,7 @@ class SliceSampler:
         elif self.display == "full":
             self.logger.setLevel(logging.DEBUG)
 
-    def sample(self, N, thin=1, burn=None):
+    def sample(self, N: int, thin: int = 1, burn: int = None):
         """Samples an arbitrary number of points from the distribution.
 
         Parameters
@@ -277,7 +285,7 @@ class SliceSampler:
             **eff_N** : array_like
                 Estimate of the effective number of samples in each
                 dimension.
-        
+
         Raises
         ------
         ValueError
@@ -588,7 +596,7 @@ class SliceSampler:
 
         return sampling_result
 
-    def __diagnose(self, samples):
+    def __diagnose(self, samples : np.ndarray):
         """Performs a quick and dirty diagnosis of convergence."""
         N = samples.shape[0]
         # split psrf
