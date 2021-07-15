@@ -12,6 +12,7 @@
 #
 import os
 import sys
+import inspect
 
 sys.path.insert(0, os.path.abspath("../.."))
 
@@ -48,14 +49,22 @@ coverage_show_missing_items = True
 
 def linkcode_resolve(domain, info):
     """
-    Used for sphinx.ext.linkcode
-    """    
-    if domain != 'py':
+    Used for sphinx.ext.linkcode.
+    Modified from the basic example from the extension.
+    """
+    if domain != "py" or not info["module"]:
         return None
-    if not info['module']:
-        return None
-    filename = info['module'].replace('.', '/')
-    return "https://github.com/lacerbi/gpyreg/tree/main/%s.py" % filename
+
+    obj = sys.modules[info["module"]]
+    for part in info["fullname"].split("."):
+        obj = getattr(obj, part)
+
+    # unwrap to get rid of decorators.
+    filename = inspect.getsourcefile(inspect.unwrap(obj))
+    
+    # to get rid of the local path, quiet hacky, but works
+    filename = filename[filename.index("gpyreg/") + 7 :]
+    return "https://github.com/lacerbi/gpyreg/tree/main/%s" % filename
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
