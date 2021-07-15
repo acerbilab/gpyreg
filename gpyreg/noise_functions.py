@@ -4,7 +4,8 @@ import numpy as np
 
 
 class GaussianNoise:
-    """Gaussian noise function.
+    """
+    Gaussian noise function.
 
     Total noise variance is is obtained by summing the independent
     contribution of each noise feature.
@@ -24,10 +25,10 @@ class GaussianNoise:
 
     def __init__(
         self,
-        constant_add=False,
-        user_provided_add=False,
-        scale_user_provided=False,
-        rectified_linear_output_dependent_add=False,
+        constant_add: bool = False,
+        user_provided_add: bool = False,
+        scale_user_provided: bool = False,
+        rectified_linear_output_dependent_add: bool = False,
     ):
         self.parameters = np.zeros((3,))
         if constant_add:
@@ -40,12 +41,13 @@ class GaussianNoise:
             self.parameters[2] = 1
 
     def hyperparameter_count(self):
-        """Gives the number of hyperparameters this noise function has.
+        """
+        Returns the number of hyperparameters this noise function has.
 
         Returns
         -------
         count : int
-            The amount of hyperparameters.
+            The number of hyperparameters.
         """
         noise_N = 0
         if self.parameters[0] == 1:
@@ -57,7 +59,8 @@ class GaussianNoise:
         return noise_N
 
     def hyperparameter_info(self):
-        """Gives information on the names of hyperparameters for setting
+        """
+        Returns information on the names of hyperparameters for setting
         them in other parts of the program.
 
         Returns
@@ -76,8 +79,9 @@ class GaussianNoise:
 
         return hyper_info
 
-    def get_bounds_info(self, X, y):
-        """Gives information on the lower, upper, plausible lower
+    def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
+        """
+        Returns information on the lower, upper, plausible lower
         and plausible upper bounds of the hyperparameters of this
         noise function.
 
@@ -91,7 +95,20 @@ class GaussianNoise:
         Returns
         -------
         noise_bound_info: dict
-            A dictionary containing the bound info.
+            A dictionary containing the bound info with the following elements:
+
+            **LB** : np.ndarray, shape (noise_N, 1)
+                    The lower bounds of the hyperparameters.
+            **UB** : np.ndarray, shape (noise_N, 1)
+                    The upper bounds of the hyperparameters.
+            **PLB** : np.ndarray, shape (noise_N, 1)
+                    The plausible lower bounds of the hyperparameters.
+            **PUB** : np.ndarray, shape (noise_N, 1)
+                    The plausible upper bounds of the hyperparameters.
+            **x0** : np.ndarray, shape (noise_N, 1)
+                    The plausible starting point.
+
+            where ``noise_N`` is the number of hyperparameters.
         """
         _, D = X.shape
         noise_N = self.hyperparameter_count()
@@ -159,9 +176,17 @@ class GaussianNoise:
         }
         return noise_bound_info
 
-    def compute(self, hyp, X, y, s2=None, compute_grad=False):
-        """Computes the noise function at test points, that is the variance
-        of observation noise evaluated at test points.
+    def compute(
+        self,
+        hyp: np.ndarray,
+        X: np.ndarray,
+        y: np.ndarray,
+        s2: np.ndarray = None,
+        compute_grad: bool = False,
+    ):
+        """
+        Compute the noise function at test points, that is the variance
+        of observation noise evaluated at the test points.
 
         Parameters
         ----------
