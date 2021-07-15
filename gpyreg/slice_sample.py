@@ -41,7 +41,7 @@ class SliceSampler:
         is the typical width of the marginal target distribution in that
         dimension. The default value of ``widths[i]`` is ``(UB[i]-LB[i])/2``
         if the ``i``-th bounds are finite, or 10 otherwise. By default an
-        an adaptive widths method during the burn-in period os being used, so
+        an adaptive widths method during the burn-in period is being used, so
         the choice of typical widths is not crucial.
     LB : array_like, optional
         An array of lower bounds on the domain of the target density
