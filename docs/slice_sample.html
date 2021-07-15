@@ -39,7 +39,7 @@
 <p>Module for slice sampling.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.slice_sample.SliceSampler">
-<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">gpyreg.slice_sample.</span></span><span class="sig-name descname"><span class="pre">SliceSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">log_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">widths</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">LB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">UB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.slice_sample.SliceSampler" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">gpyreg.slice_sample.</span></span><span class="sig-name descname"><span class="pre">SliceSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">log_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">widths</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">LB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">UB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.slice_sample.SliceSampler" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Class for drawing random samples from a target distribution with a
 given log probability density function using the coordinate-wise
@@ -65,27 +65,27 @@ information criterion (WAIC); see <a class="reference internal" href="#r6f8715ba
 </dd>
 <dt><strong>x0</strong><span class="classifier">ndarray, shape (n,)</span></dt><dd><p>Initial value of the random sample sequence. It must be within the
 domain of the target distribution. The number of independent
-variables is ‘n’.</p>
+variables is <code class="docutils literal notranslate"><span class="pre">n</span></code>.</p>
 </dd>
 <dt><strong>widths</strong><span class="classifier">array_like, optional</span></dt><dd><p>A parameter for typical widths. Either a scalar or a 1D array.
 If it is a scalar, all dimensions are assumed to have the same
 typical widths. If it is a 1D array, each element of the array
 is the typical width of the marginal target distribution in that
 dimension. The default value of <code class="docutils literal notranslate"><span class="pre">widths[i]</span></code> is <code class="docutils literal notranslate"><span class="pre">(UB[i]-LB[i])/2</span></code>
-if the <code class="docutils literal notranslate"><span class="pre">i</span></code>-th bounds are finite, or 10 otherwise. By default we
-use an adaptive widths method during the burn-in period, so
+if the <code class="docutils literal notranslate"><span class="pre">i</span></code>-th bounds are finite, or 10 otherwise. By default an
+an adaptive widths method during the burn-in period is being used, so
 the choice of typical widths is not crucial.</p>
 </dd>
 <dt><strong>LB</strong><span class="classifier">array_like, optional</span></dt><dd><p>An array of lower bounds on the domain of the target density
 function, which is assumed to be zero outside the range
-<code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">&lt;=</span> <span class="pre">x</span> <span class="pre">&lt;=</span> <span class="pre">UB</span></code>. If not given we assume no lower bounds.
+<code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">&lt;=</span> <span class="pre">x</span> <span class="pre">&lt;=</span> <span class="pre">UB</span></code>. If not given no lower bounds are assumed.
 Set <code class="docutils literal notranslate"><span class="pre">LB[i]</span> <span class="pre">=</span> <span class="pre">-inf</span></code> if <code class="docutils literal notranslate"><span class="pre">x[i]</span></code> is unbounded below. If
 <code class="docutils literal notranslate"><span class="pre">LB[i]</span> <span class="pre">==</span> <span class="pre">UB[i]</span></code>, the variable is assumed to be fixed on
 that dimension.</p>
 </dd>
 <dt><strong>UB</strong><span class="classifier">array_like, optional</span></dt><dd><p>An array of upper bounds on the domain of the target density
 function, which is assumed to be zero outside the range
-<code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">&lt;=</span> <span class="pre">x</span> <span class="pre">&lt;=</span> <span class="pre">UB</span></code>. If not given we assume no upper bounds.
+<code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">&lt;=</span> <span class="pre">x</span> <span class="pre">&lt;=</span> <span class="pre">UB</span></code>. If not given no upper bounds are assumed.
 Set <code class="docutils literal notranslate"><span class="pre">UB[i]</span> <span class="pre">=</span> <span class="pre">inf</span></code> if <code class="docutils literal notranslate"><span class="pre">x[i]</span></code> is unbounded above. If
 <code class="docutils literal notranslate"><span class="pre">LB[i]</span> <span class="pre">==</span> <span class="pre">UB[i]</span></code>, the variable is assumed to be fixed on that
 dimension.</p>
@@ -129,7 +129,7 @@ same size as <cite>x0</cite>.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>widths</cite> does not only contain positive real numbers.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when the initial starting point <cite>x0</cite> is outside the bounds (<cite>LB</cite>
-and <cite>UB</cite>)</p>
+and <cite>UB</cite>).</p>
 </dd>
 </dl>
 </dd>
@@ -159,13 +159,8 @@ Boca Raton, FL, USA: Chapman &amp; Hall/CRC.</p>
 </dd>
 </dl>
 <dl class="py method">
-<dt class="sig sig-object py" id="gpyreg.slice_sample.SliceSampler.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">log_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">widths</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">LB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">UB</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.slice_sample.SliceSampler.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.slice_sample.SliceSampler.sample">
-<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">N</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">burn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.slice_sample.SliceSampler.sample" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thin</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">burn</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.slice_sample.SliceSampler.sample" title="Permalink to this definition">¶</a></dt>
 <dd><p>Samples an arbitrary number of points from the distribution.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters</dt>

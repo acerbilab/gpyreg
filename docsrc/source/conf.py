@@ -38,7 +38,7 @@ numpydoc_show_class_members = False
 
 autodoc_default_options = {
     "members": "var1, var2",
-    "special-members": "__init__, __call__",
+    "special-members": "__call__",
     "undoc-members": True,
     "exclude-members": "__weakref__",
 }
@@ -64,7 +64,7 @@ html_theme = "alabaster"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
+html_static_path = ["css/custom.css"]
 
 html_theme_options = {"page_width": "1200px"}
 todo_include_todos = True

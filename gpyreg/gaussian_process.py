@@ -1,4 +1,4 @@
-"""Module for Gaussian processes."""
+"""Module for Gaussian Processes."""
 
 import math
 import time
@@ -20,21 +20,27 @@ from gpyreg.slice_sample import SliceSampler
 
 
 class GP:
-    """A single gaussian process.
+    """
+    A single Gaussian Process (GP).
 
     Parameters
     ==========
     D : int
-        The dimension of the gaussian process.
+        The dimension of the Gaussian Process.
     covariance : object
-        The covariance function to use.
+        The covariance function to use. This can be one of the objects
+        from the following module: :py:mod:`gpyreg.covariance_functions`.
     mean : object
-        The mean function to use.
+        The mean function to use. This can be one of the objects from the
+        following module: :py:mod:`gpyreg.mean_functions`.
     noise : object
-        The noise function to use.
+        The noise function to use. This can be one of the objects from the
+        following module: :py:mod:`gpyreg.noise_functions`.
     """
 
-    def __init__(self, D, covariance, mean, noise):
+    def __init__(
+        self, D: int, covariance: object, mean: object, noise: object
+    ):
         self.D = D
         self.covariance = covariance
         self.mean = mean
@@ -114,23 +120,27 @@ class GP:
         total = dimension + cov + mean + noise + priors + samples
         return total
 
-    def set_bounds(self, bounds=None):
+    def set_bounds(self, bounds: dict = None):
         """
-        Sets the hyperparameter lower and upper bounds.
+        Set the hyperparameter lower and upper bounds.
 
         Parameters
         ==========
         bounds : dict, optional
-            A dictionary of hyperparameter names and tuples of their lower and
-            upper bounds. If not given, the the lower bounds will be set
-            to ``-Inf`` and upper bounds to ``+Inf``.
+            A dictionary of GP hyperparameter names and tuples of their lower
+            and upper bounds. All hyperparameters need to appear in the
+            dictionary. Use the value None to set no bounds for a hyperparameter
+            (equivalent to setting the lower bound to ``-Inf`` and upper bound
+            to ``+Inf``). If bounds is None, all hyperparameter bounds are
+            removed, that is for all hyperparameters the lower bounds will be
+            set to ``-Inf`` and upper bounds to ``+Inf``.
 
         Raises
         ------
         ValueError
-            Raised when `bounds` is missing the entry of an expected 
+            Raised when `bounds` is missing the entry of an expected
             hyperparameter.
-        """        
+        """
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -177,7 +187,9 @@ class GP:
             self.__recompute_normalization_constants()
 
     def get_bounds(self):
-        """Gets the current hyperparameter lower and upper bounds.
+        """
+        Return a dict of the current lower and upper bounds of the
+        hyperparameters.
 
         Returns
         =======
@@ -186,9 +198,11 @@ class GP:
         """
         return self.bounds_to_dict(self.lower_bounds, self.upper_bounds)
 
-    def bounds_to_dict(self, lower_bounds, upper_bounds):
-        """Converts the given hyperparameter lower and upper bounds to
-        a dictionary.
+    def bounds_to_dict(
+        self, lower_bounds: np.ndarray, upper_bounds: np.ndarray
+    ):
+        """
+        Convert the given hyperparameter lower and upper bounds to a dict.
 
         Parameters
         ==========
@@ -222,7 +236,7 @@ class GP:
 
     def get_recommended_bounds(self):
         """
-        Gets the recommended hyperparameter lower and upper bounds.
+        Return the recommended hyperparameter lower and upper bounds as a dict.
 
         Returns
         =======
@@ -233,7 +247,7 @@ class GP:
         Raises
         ------
         ValueError
-            Raise when GP does not have X or y set yet.
+            Raise when GP does not have `X` or `y` set yet.
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
@@ -276,7 +290,8 @@ class GP:
         return self.bounds_to_dict(lb, ub)
 
     def get_priors(self):
-        """Gets the current hyperparameter priors.
+        """
+        Return the current hyperparameter priors as a dict.
 
         Returns
         =======
@@ -331,23 +346,26 @@ class GP:
 
         return hyper_priors
 
-    def set_priors(self, priors=None):
+    def set_priors(self, priors: dict = None):
         """
-        Sets the hyperparameter priors.
+        Set the hyperparameter priors.
 
         Parameters
         ==========
         priors : dict, optional
-            A dictionary of hyperparameter names and their priors.
-            If None is given, there will be no prior.
+            A dictionary of GP hyperparameter names and tuples of their priors.
+            All hyperparameters need to appear in the dictionary.
+            Use the value None to set no priors for a hyperparameter.
+            If `priors` is None, all hyperparameter priors are removed.
 
         Raises
         ------
         ValueError
-            Raised when `priors` is missing the entry of an expected 
+            Raised when `priors` is given, but missing the entry of an expected
             hyperparameter.
         ValueError
-            Raised when a hyperparameter name is unknown.
+            Raised when `priors` is given, but a specified hyperparameter is
+            unknown.
         """
         self.no_prior = False
         if priors is None:
@@ -426,8 +444,9 @@ class GP:
         self.no_prior = non_trivial_flag is not True
         self.__recompute_normalization_constants()
 
-    def get_hyperparameters(self, as_array=False):
-        """Gets the current hyperparameters of the Gaussian process.
+    def get_hyperparameters(self, as_array: bool = False):
+        """
+        Return the current hyperparameters of the Gaussian Process.
 
         If hyperparameters have not been set yet, the result will
         be filled with ``NaN``.
@@ -442,7 +461,7 @@ class GP:
         Returns
         =======
         hyp : object
-            The hyperparameteres in the form specified by ``as_array``.
+            The hyperparameters in the form specified by ``as_array``.
         """
         # If no hyperparameters have been set return an array/dict with NaN.
         if self.posteriors is None:
@@ -463,16 +482,18 @@ class GP:
 
         return self.hyperparameters_to_dict(hyp)
 
-    def set_hyperparameters(self, hyp_new, compute_posterior=True):
+    def set_hyperparameters(
+        self, hyp_new: object, compute_posterior: bool = True
+    ):
         """
-        Sets new hyperparameters for the Gaussian process.
+        Set new hyperparameters for the Gaussian Process.
 
         Parameters
         ==========
         hyp_new : object
             The new hyperparameters. This can be an array of shape
-            ``(hyp_samples, hyp_n)`` where ``hyp_N`` is the number of
-            hyperparametes, and ``hyp_samples`` is the amount of
+            ``(hyp_samples, hyp_n)`` where ``hyp_n`` is the number of
+            hyperparameters, and ``hyp_samples`` is the amount of
             hyperparameter samples, a single dictionary with
             hyperparameter names and values, or a list of dictionaries.
             Passing a single dictionary or a list with one dictionary
@@ -483,8 +504,8 @@ class GP:
         Raises
         ------
         ValueError
-            Raised when the input hyperparameter array has the wrong shape.
-        """        
+            Raised when `hyp_new` is an array of the wrong shape.
+        """
         if isinstance(hyp_new, np.ndarray):
             cov_N = self.covariance.hyperparameter_count(self.D)
             mean_N = self.mean.hyperparameter_count(self.D)
@@ -502,9 +523,9 @@ class GP:
             hyp_new_arr = self.hyperparameters_from_dict(hyp_new)
             self.update(hyp=hyp_new_arr, compute_posterior=compute_posterior)
 
-    def hyperparameters_to_dict(self, hyp_arr):
+    def hyperparameters_to_dict(self, hyp_arr: np.ndarray):
         """
-        Converts a hyperparameter array to a list which contains a
+        Convert a hyperparameter array to a list which contains a
         dictionary with hyperparameter names and values for each
         hyperparameter sample.
 
@@ -525,7 +546,7 @@ class GP:
         ------
         ValueError
             Raised when the input hyperparameter array has the wrong shape.
-        """        
+        """
         hyp = []
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -557,8 +578,8 @@ class GP:
         return hyp
 
     def hyperparameters_from_dict(self, hyp_dict_list):
-        """Converts a list of hyperparameter dictionaries to a hyperparameter
-        array.
+        """
+        Convert a list of hyperparameter dictionaries to a hyperparameter array.
 
         Parameters
         ==========
@@ -599,13 +620,14 @@ class GP:
 
     def update(
         self,
-        X_new=None,
-        y_new=None,
-        s2_new=None,
-        hyp=None,
-        compute_posterior=True,
+        X_new: np.ndarray = None,
+        y_new: np.ndarray = None,
+        s2_new: np.ndarray = None,
+        hyp: np.ndarray = None,
+        compute_posterior: bool = True,
     ):
-        """Adds new data to the Gaussian process.
+        """
+        Add new data to the Gaussian Process.
 
         Parameters
         ==========
@@ -613,7 +635,7 @@ class GP:
             New training inputs that will be added to the old training
             inputs.
         y_new : narray, shape (n, 1) optional
-            New training targets that will be addded to the old training
+            New training targets that will be added to the old training
             targets.
         s2_new : ndarray, shape (n, 1), optional
             New input-dependent noise that will be added to the old training
@@ -762,9 +784,10 @@ class GP:
                     )
 
     def clean(self):
-        """Cleans auxiliary computational structures from the Gaussian
-        process, thus reducing memory usage. These can be reconstructed
-        with a call to ``update`` with ``compute_posterior=True``.
+        """
+        Clean auxiliary computational structures from the Gaussian Process,
+        thus reducing memory usage. These can be reconstructed with a call to
+        :py:func:`update` with ``compute_posterior=True``.
         """
 
         # Check if there are posteriors to clean.
@@ -779,9 +802,16 @@ class GP:
         # make sure that the things set to None are actually no longer
         # using memory.
 
-    def fit(self, X=None, y=None, s2=None, hyp0=None, options=None):
+    def fit(
+        self,
+        X: np.ndarray = None,
+        y: np.ndarray = None,
+        s2: np.ndarray = None,
+        hyp0=None,
+        options: dict = None,
+    ):
         """
-        Trains gaussian process hyperparameters.
+        Train the hyperparameters of the Gaussian Process.
 
         Parameters
         ==========
@@ -833,7 +863,7 @@ class GP:
             The fitted hyperparameters.
         optimize_result : OptimizeResult
             The optimization result represented as a ``OptimizeResult``
-            object. For more details see ``scipy.optimize.minimize``.
+            object. For more details see :py:func:`scipy.optimize.minimize`.
         sampling_result : dict
             If sampling was performed this is a dictionary with info on the
             sampling run, and None otherwise.
@@ -842,7 +872,7 @@ class GP:
         ------
         ValueError
             Raised when the `sampler_name` is not slicesample.
-        """        
+        """
         ## Default options
         if options is None:
             options = {}
@@ -1107,7 +1137,7 @@ class GP:
 
             self.normalization_constants[i] = cdf_ub - cdf_lb
 
-    def __compute_log_priors(self, hyp, compute_grad):
+    def __compute_log_priors(self, hyp: np.ndarray, compute_grad: bool):
         lp = 0
         dlp = None
         if compute_grad:
@@ -1300,7 +1330,7 @@ class GP:
 
         return lp
 
-    def log_likelihood(self, hyp, compute_grad=False):
+    def log_likelihood(self, hyp: object, compute_grad: bool = False):
         """Computes (positive) log marginal likelihood of the GP for given
         hyperparameters.
 
@@ -1322,7 +1352,7 @@ class GP:
             hyp = self.hyperparameters_from_dict(hyp)
         return -self.__compute_nlZ(hyp, compute_grad, False)
 
-    def log_posterior(self, hyp, compute_grad=False):
+    def log_posterior(self, hyp: object, compute_grad: bool = False):
         """Computes (positive) log marginal likelihood of the GP with added
         log prior for given hyperparameters (that is, the unnormalized log
         posterior).
@@ -1387,8 +1417,15 @@ class GP:
 
         return nlZ
 
-    def predict_full(self, x_star, y_star=None, s2_star=0, add_noise=False):
-        """Computes the GP posterior mean and full covariance matrix for each
+    def predict_full(
+        self,
+        x_star: np.ndarray,
+        y_star: np.ndarray = None,
+        s2_star: np.ndarray = 0,
+        add_noise: bool = False,
+    ):
+        """
+        Compute the GP posterior mean and full covariance matrix for each
         hyperparameter sample.
 
         Parameters
@@ -1484,13 +1521,14 @@ class GP:
 
     def predict(
         self,
-        x_star,
-        y_star=None,
-        s2_star=0,
-        add_noise=False,
-        separate_samples=False,
+        x_star: np.ndarray,
+        y_star: np.ndarray = None,
+        s2_star: np.ndarray = 0,
+        add_noise: bool = False,
+        separate_samples: bool = False,
     ):
-        """Computes the GP posterior mean and noise variance at given points.
+        """
+        Compute the GP posterior mean and noise variance at given points.
 
         Parameters
         ==========
@@ -1593,12 +1631,18 @@ class GP:
 
         return mu, s2
 
-    def quad(self, mu, sigma, compute_var=False, separate_samples=False):
+    def quad(
+        self,
+        mu,
+        sigma,
+        compute_var: bool = False,
+        separate_samples: bool = False,
+    ):
         """
-        Bayesian quadrature for a Gaussian process.
+        Bayesian quadrature for a Gaussian Process.
 
         Computes the integral of a function represented by a Gaussian
-        process with respect to a given Gaussian measure.
+        Process with respect to a given Gaussian measure.
 
         Parameters
         ==========
@@ -1632,7 +1676,7 @@ class GP:
         ValueError
             Raised when the method is called and the covariance of the GP is not
             squared exponential.
-        """        
+        """
 
         if not isinstance(
             self.covariance, gpyreg.covariance_functions.SquaredExponential
@@ -1754,11 +1798,19 @@ class GP:
 
     # sigma doesn't work, requires gplite_quad implementation
     # quantile doesn't work, requires gplite_qpred implementation
-    def plot(self, x0=None, lb=None, ub=None, delta_y=None, max_min_flag=True):
-        """Plot the gaussian process profile centered around a given point.
+    def plot(
+        self,
+        x0: np.ndarray = None,
+        lb: np.ndarray = None,
+        ub: np.ndarray = None,
+        delta_y: float = None,
+        max_min_flag: bool = True,
+    ):
+        """
+        Plot the Gaussian Process profile centered around a given point.
 
         The plot is a D-by-D panel matrix, in which panels on the diagonal
-        show the profile of the gaussian process prediction (mean and +/- 1 SD)
+        show the profile of the Gaussian Process prediction (mean and +/- 1 SD)
         by varying one dimension at a time, whereas off-diagonal panels show
         2-D contour plots of the GP mean and standard deviation (respectively,
         above and below diagonal). In each panel, black lines indicate the
@@ -2002,8 +2054,9 @@ class GP:
 
         return pos_vec
 
-    def random_function(self, X_star, add_noise=False):
-        """Draws a random function from the Gaussian process.
+    def random_function(self, X_star: np.ndarray, add_noise: bool = False):
+        """
+        Draw a random function from the Gaussian Process.
 
         Parameters
         ==========
@@ -2271,6 +2324,9 @@ class GP:
 
 
 class Posterior:
+    """
+    This object represents the posterior.
+    """
     def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
         self.hyp = hyp
         self.alpha = alpha

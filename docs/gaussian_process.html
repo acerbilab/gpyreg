@@ -37,36 +37,33 @@
 <h1>gpyreg.gaussian_process<a class="headerlink" href="#gpyreg-gaussian-process" title="Permalink to this headline">¶</a></h1>
 <section id="module-gpyreg.gaussian_process">
 <span id="gaussian-process-module"></span><h2><code class="xref py py-mod docutils literal notranslate"><span class="pre">gaussian_process</span></code> Module<a class="headerlink" href="#module-gpyreg.gaussian_process" title="Permalink to this headline">¶</a></h2>
-<p>Module for Gaussian processes.</p>
+<p>Module for Gaussian Processes.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP">
-<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">GP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covariance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">GP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covariance</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>A single gaussian process.</p>
+<p>A single Gaussian Process (GP).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimension of the gaussian process.</p>
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimension of the Gaussian Process.</p>
 </dd>
-<dt><strong>covariance</strong><span class="classifier">object</span></dt><dd><p>The covariance function to use.</p>
+<dt><strong>covariance</strong><span class="classifier">object</span></dt><dd><p>The covariance function to use. This can be one of the objects
+from the following module: <a class="reference internal" href="covariance_functions.html#module-gpyreg.covariance_functions" title="gpyreg.covariance_functions"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gpyreg.covariance_functions</span></code></a>.</p>
 </dd>
-<dt><strong>mean</strong><span class="classifier">object</span></dt><dd><p>The mean function to use.</p>
+<dt><strong>mean</strong><span class="classifier">object</span></dt><dd><p>The mean function to use. This can be one of the objects from the
+following module: <a class="reference internal" href="mean_functions.html#module-gpyreg.mean_functions" title="gpyreg.mean_functions"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gpyreg.mean_functions</span></code></a>.</p>
 </dd>
-<dt><strong>noise</strong><span class="classifier">object</span></dt><dd><p>The noise function to use.</p>
+<dt><strong>noise</strong><span class="classifier">object</span></dt><dd><p>The noise function to use. This can be one of the objects from the
+following module: <a class="reference internal" href="noise_functions.html#module-gpyreg.noise_functions" title="gpyreg.noise_functions"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gpyreg.noise_functions</span></code></a>.</p>
 </dd>
 </dl>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covariance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.bounds_to_dict">
-<span class="sig-name descname"><span class="pre">bounds_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lower_bounds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_bounds</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.bounds_to_dict" title="Permalink to this definition">¶</a></dt>
-<dd><p>Converts the given hyperparameter lower and upper bounds to
-a dictionary.</p>
+<span class="sig-name descname"><span class="pre">bounds_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lower_bounds</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_bounds</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.bounds_to_dict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert the given hyperparameter lower and upper bounds to a dict.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -89,15 +86,15 @@ of their lower and upper bounds.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.clean">
 <span class="sig-name descname"><span class="pre">clean</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.clean" title="Permalink to this definition">¶</a></dt>
-<dd><p>Cleans auxiliary computational structures from the Gaussian
-process, thus reducing memory usage. These can be reconstructed
-with a call to <code class="docutils literal notranslate"><span class="pre">update</span></code> with <code class="docutils literal notranslate"><span class="pre">compute_posterior=True</span></code>.</p>
+<dd><p>Clean auxiliary computational structures from the Gaussian Process,
+thus reducing memory usage. These can be reconstructed with a call to
+<a class="reference internal" href="#gpyreg.gaussian_process.GP.update" title="gpyreg.gaussian_process.GP.update"><code class="xref py py-func docutils literal notranslate"><span class="pre">update()</span></code></a> with <code class="docutils literal notranslate"><span class="pre">compute_posterior=True</span></code>.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.fit">
-<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.fit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Trains gaussian process hyperparameters.</p>
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the hyperparameters of the Gaussian Process.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl>
@@ -152,7 +149,7 @@ appropriate ones will be computed.</p>
 <dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_samples, hyp_n)</span></dt><dd><p>The fitted hyperparameters.</p>
 </dd>
 <dt><strong>optimize_result</strong><span class="classifier">OptimizeResult</span></dt><dd><p>The optimization result represented as a <code class="docutils literal notranslate"><span class="pre">OptimizeResult</span></code>
-object. For more details see <code class="docutils literal notranslate"><span class="pre">scipy.optimize.minimize</span></code>.</p>
+object. For more details see <code class="xref py py-func docutils literal notranslate"><span class="pre">scipy.optimize.minimize()</span></code>.</p>
 </dd>
 <dt><strong>sampling_result</strong><span class="classifier">dict</span></dt><dd><p>If sampling was performed this is a dictionary with info on the
 sampling run, and None otherwise.</p>
@@ -171,7 +168,8 @@ sampling run, and None otherwise.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.get_bounds">
 <span class="sig-name descname"><span class="pre">get_bounds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.get_bounds" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gets the current hyperparameter lower and upper bounds.</p>
+<dd><p>Return a dict of the current lower and upper bounds of the
+hyperparameters.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
 <dd class="field-odd"><dl class="simple">
@@ -184,8 +182,8 @@ sampling run, and None otherwise.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.get_hyperparameters">
-<span class="sig-name descname"><span class="pre">get_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">as_array</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.get_hyperparameters" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gets the current hyperparameters of the Gaussian process.</p>
+<span class="sig-name descname"><span class="pre">get_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">as_array</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.get_hyperparameters" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the current hyperparameters of the Gaussian Process.</p>
 <p>If hyperparameters have not been set yet, the result will
 be filled with <code class="docutils literal notranslate"><span class="pre">NaN</span></code>.</p>
 <dl class="field-list simple">
@@ -199,7 +197,7 @@ sample.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>hyp</strong><span class="classifier">object</span></dt><dd><p>The hyperparameteres in the form specified by <code class="docutils literal notranslate"><span class="pre">as_array</span></code>.</p>
+<dt><strong>hyp</strong><span class="classifier">object</span></dt><dd><p>The hyperparameters in the form specified by <code class="docutils literal notranslate"><span class="pre">as_array</span></code>.</p>
 </dd>
 </dl>
 </dd>
@@ -209,7 +207,7 @@ sample.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.get_priors">
 <span class="sig-name descname"><span class="pre">get_priors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.get_priors" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gets the current hyperparameter priors.</p>
+<dd><p>Return the current hyperparameter priors as a dict.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
 <dd class="field-odd"><dl class="simple">
@@ -223,7 +221,7 @@ sample.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.get_recommended_bounds">
 <span class="sig-name descname"><span class="pre">get_recommended_bounds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.get_recommended_bounds" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gets the recommended hyperparameter lower and upper bounds.</p>
+<dd><p>Return the recommended hyperparameter lower and upper bounds as a dict.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
 <dd class="field-odd"><dl class="simple">
@@ -234,7 +232,7 @@ upper bounds.</p>
 </dd>
 <dt class="field-even">Raises</dt>
 <dd class="field-even"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raise when GP does not have X or y set yet.</p>
+<dt>ValueError</dt><dd><p>Raise when GP does not have <cite>X</cite> or <cite>y</cite> set yet.</p>
 </dd>
 </dl>
 </dd>
@@ -244,8 +242,7 @@ upper bounds.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.hyperparameters_from_dict">
 <span class="sig-name descname"><span class="pre">hyperparameters_from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_dict_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.hyperparameters_from_dict" title="Permalink to this definition">¶</a></dt>
-<dd><p>Converts a list of hyperparameter dictionaries to a hyperparameter
-array.</p>
+<dd><p>Convert a list of hyperparameter dictionaries to a hyperparameter array.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -267,8 +264,8 @@ the list <code class="docutils literal notranslate"><span class="pre">hyp_dict_l
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.hyperparameters_to_dict">
-<span class="sig-name descname"><span class="pre">hyperparameters_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_arr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.hyperparameters_to_dict" title="Permalink to this definition">¶</a></dt>
-<dd><p>Converts a hyperparameter array to a list which contains a
+<span class="sig-name descname"><span class="pre">hyperparameters_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_arr</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.hyperparameters_to_dict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a hyperparameter array to a list which contains a
 dictionary with hyperparameter names and values for each
 hyperparameter sample.</p>
 <dl class="field-list simple">
@@ -298,7 +295,7 @@ values for each sample.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.log_likelihood">
-<span class="sig-name descname"><span class="pre">log_likelihood</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.log_likelihood" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">log_likelihood</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.log_likelihood" title="Permalink to this definition">¶</a></dt>
 <dd><p>Computes (positive) log marginal likelihood of the GP for given
 hyperparameters.</p>
 <dl class="field-list simple">
@@ -323,7 +320,7 @@ hyperparameters.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.log_posterior">
-<span class="sig-name descname"><span class="pre">log_posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.log_posterior" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">log_posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.log_posterior" title="Permalink to this definition">¶</a></dt>
 <dd><p>Computes (positive) log marginal likelihood of the GP with added
 log prior for given hyperparameters (that is, the unnormalized log
 posterior).</p>
@@ -349,10 +346,10 @@ posterior).</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ub</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_min_flag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.plot" title="Permalink to this definition">¶</a></dt>
-<dd><p>Plot the gaussian process profile centered around a given point.</p>
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lb</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ub</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_y</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_min_flag</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot the Gaussian Process profile centered around a given point.</p>
 <p>The plot is a D-by-D panel matrix, in which panels on the diagonal
-show the profile of the gaussian process prediction (mean and +/- 1 SD)
+show the profile of the Gaussian Process prediction (mean and +/- 1 SD)
 by varying one dimension at a time, whereas off-diagonal panels show
 2-D contour plots of the GP mean and standard deviation (respectively,
 above and below diagonal). In each panel, black lines indicate the
@@ -382,8 +379,8 @@ point.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.predict">
-<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.predict" title="Permalink to this definition">¶</a></dt>
-<dd><p>Computes the GP posterior mean and noise variance at given points.</p>
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the GP posterior mean and noise variance at given points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -418,8 +415,8 @@ otherwise it is <code class="docutils literal notranslate"><span class="pre">(n,
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.predict_full">
-<span class="sig-name descname"><span class="pre">predict_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.predict_full" title="Permalink to this definition">¶</a></dt>
-<dd><p>Computes the GP posterior mean and full covariance matrix for each
+<span class="sig-name descname"><span class="pre">predict_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.predict_full" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the GP posterior mean and full covariance matrix for each
 hyperparameter sample.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -448,10 +445,10 @@ sample.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.quad">
-<span class="sig-name descname"><span class="pre">quad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_var</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.quad" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bayesian quadrature for a Gaussian process.</p>
+<span class="sig-name descname"><span class="pre">quad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_var</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.quad" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bayesian quadrature for a Gaussian Process.</p>
 <p>Computes the integral of a function represented by a Gaussian
-process with respect to a given Gaussian measure.</p>
+Process with respect to a given Gaussian measure.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -494,8 +491,8 @@ squared exponential.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.random_function">
-<span class="sig-name descname"><span class="pre">random_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_star</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.random_function" title="Permalink to this definition">¶</a></dt>
-<dd><p>Draws a random function from the Gaussian process.</p>
+<span class="sig-name descname"><span class="pre">random_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_star</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.random_function" title="Permalink to this definition">¶</a></dt>
+<dd><p>Draw a random function from the Gaussian Process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -516,20 +513,24 @@ squared exponential.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.set_bounds">
-<span class="sig-name descname"><span class="pre">set_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.set_bounds" title="Permalink to this definition">¶</a></dt>
-<dd><p>Sets the hyperparameter lower and upper bounds.</p>
+<span class="sig-name descname"><span class="pre">set_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bounds</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.set_bounds" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the hyperparameter lower and upper bounds.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>bounds</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of hyperparameter names and tuples of their lower and
-upper bounds. If not given, the the lower bounds will be set
-to <code class="docutils literal notranslate"><span class="pre">-Inf</span></code> and upper bounds to <code class="docutils literal notranslate"><span class="pre">+Inf</span></code>.</p>
+<dt><strong>bounds</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of GP hyperparameter names and tuples of their lower
+and upper bounds. All hyperparameters need to appear in the
+dictionary. Use the value None to set no bounds for a hyperparameter
+(equivalent to setting the lower bound to <code class="docutils literal notranslate"><span class="pre">-Inf</span></code> and upper bound
+to <code class="docutils literal notranslate"><span class="pre">+Inf</span></code>). If bounds is None, all hyperparameter bounds are
+removed, that is for all hyperparameters the lower bounds will be
+set to <code class="docutils literal notranslate"><span class="pre">-Inf</span></code> and upper bounds to <code class="docutils literal notranslate"><span class="pre">+Inf</span></code>.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Raises</dt>
 <dd class="field-even"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when <cite>bounds</cite> is missing the entry of an expected 
+<dt>ValueError</dt><dd><p>Raised when <cite>bounds</cite> is missing the entry of an expected
 hyperparameter.</p>
 </dd>
 </dl>
@@ -539,14 +540,14 @@ hyperparameter.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.set_hyperparameters">
-<span class="sig-name descname"><span class="pre">set_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_new</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.set_hyperparameters" title="Permalink to this definition">¶</a></dt>
-<dd><p>Sets new hyperparameters for the Gaussian process.</p>
+<span class="sig-name descname"><span class="pre">set_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_new</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.set_hyperparameters" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set new hyperparameters for the Gaussian Process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>hyp_new</strong><span class="classifier">object</span></dt><dd><p>The new hyperparameters. This can be an array of shape
-<code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_n)</span></code> where <code class="docutils literal notranslate"><span class="pre">hyp_N</span></code> is the number of
-hyperparametes, and <code class="docutils literal notranslate"><span class="pre">hyp_samples</span></code> is the amount of
+<code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_n)</span></code> where <code class="docutils literal notranslate"><span class="pre">hyp_n</span></code> is the number of
+hyperparameters, and <code class="docutils literal notranslate"><span class="pre">hyp_samples</span></code> is the amount of
 hyperparameter samples, a single dictionary with
 hyperparameter names and values, or a list of dictionaries.
 Passing a single dictionary or a list with one dictionary
@@ -558,7 +559,7 @@ is equivalent.</p>
 </dd>
 <dt class="field-even">Raises</dt>
 <dd class="field-even"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when the input hyperparameter array has the wrong shape.</p>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp_new</cite> is an array of the wrong shape.</p>
 </dd>
 </dl>
 </dd>
@@ -567,22 +568,25 @@ is equivalent.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.set_priors">
-<span class="sig-name descname"><span class="pre">set_priors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">priors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.set_priors" title="Permalink to this definition">¶</a></dt>
-<dd><p>Sets the hyperparameter priors.</p>
+<span class="sig-name descname"><span class="pre">set_priors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">priors</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.set_priors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the hyperparameter priors.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>priors</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of hyperparameter names and their priors.
-If None is given, there will be no prior.</p>
+<dt><strong>priors</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of GP hyperparameter names and tuples of their priors.
+All hyperparameters need to appear in the dictionary.
+Use the value None to set no priors for a hyperparameter.
+If <cite>priors</cite> is None, all hyperparameter priors are removed.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Raises</dt>
 <dd class="field-even"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when <cite>priors</cite> is missing the entry of an expected 
+<dt>ValueError</dt><dd><p>Raised when <cite>priors</cite> is given, but missing the entry of an expected
 hyperparameter.</p>
 </dd>
-<dt>ValueError</dt><dd><p>Raised when a hyperparameter name is unknown.</p>
+<dt>ValueError</dt><dd><p>Raised when <cite>priors</cite> is given, but a specified hyperparameter is
+unknown.</p>
 </dd>
 </dl>
 </dd>
@@ -591,15 +595,15 @@ hyperparameter.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.update">
-<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_new</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_new</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_new</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.update" title="Permalink to this definition">¶</a></dt>
-<dd><p>Adds new data to the Gaussian process.</p>
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_new</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_new</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_new</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.GP.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add new data to the Gaussian Process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>X_new</strong><span class="classifier">ndarray, shape (n, d), optional</span></dt><dd><p>New training inputs that will be added to the old training
 inputs.</p>
 </dd>
-<dt><strong>y_new</strong><span class="classifier">narray, shape (n, 1) optional</span></dt><dd><p>New training targets that will be addded to the old training
+<dt><strong>y_new</strong><span class="classifier">narray, shape (n, 1) optional</span></dt><dd><p>New training targets that will be added to the old training
 targets.</p>
 </dd>
 <dt><strong>s2_new</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>New input-dependent noise that will be added to the old training
@@ -620,11 +624,7 @@ inputs.</p>
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.Posterior">
 <em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">Posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.Posterior" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<dl class="py method">
-<dt class="sig sig-object py" id="gpyreg.gaussian_process.Posterior.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.gaussian_process.Posterior.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
+<p>This object represents the posterior.</p>
 </dd></dl>
 
 </section>
