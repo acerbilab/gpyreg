@@ -1,14 +1,25 @@
 """Module for helper functions for GP training."""
-import warnings
 import operator
 import re
+import warnings
 
 import numpy as np
 import scipy as sp
 
 
-def f_min_fill(f, x0, LB, UB, PLB, PUB, hprior, N, design=None):
-    """Creates a space-filling design, evaluates the function f
+def f_min_fill(
+    f,
+    x0,
+    LB: np.ndarray,
+    UB: np.ndarray,
+    PLB: np.ndarray,
+    PUB: np.ndarray,
+    hprior: dict,
+    N: int,
+    design: str = None,
+):
+    """
+    Create a space-filling design, evaluates the function f
     on the points of the design and sorts the points from smallest
     value of f to largest.
 
@@ -194,8 +205,9 @@ def __uuinv(p, B, w):
     return x
 
 
-def smoothbox_cdf(x, sigma, a, b):
-    """Computes the value of the cumulative distribution function
+def smoothbox_cdf(x: float, sigma: float, a: float, b: float):
+    """
+    Compute the value of the cumulative distribution function
     for the smooth box distribution.
 
     Parameters
@@ -221,8 +233,11 @@ def smoothbox_cdf(x, sigma, a, b):
     return (C - 1.0 + sp.stats.norm.cdf(x, loc=b, scale=sigma)) / C
 
 
-def smoothbox_student_t_cdf(x, df, sigma, a, b):
-    """Computes the value of the cumulative distribution function
+def smoothbox_student_t_cdf(
+    x: float, df: float, sigma: float, a: float, b: float
+):
+    """
+    Compute the value of the cumulative distribution function
     for the smooth box student t distribution.
 
     Parameters
@@ -253,8 +268,9 @@ def smoothbox_student_t_cdf(x, df, sigma, a, b):
     return (C - 1.0 + sp.stats.t.cdf(x, df, loc=b, scale=sigma)) / C
 
 
-def smoothbox_ppf(q, sigma, a, b):
-    """Computes the value of the percent point function for
+def smoothbox_ppf(q: float, sigma: float, a: float, b: float):
+    """
+    Compute the value of the percent point function for
     the smooth box distribution.
 
     Parameters
@@ -280,8 +296,11 @@ def smoothbox_ppf(q, sigma, a, b):
     return sp.stats.norm.ppf(C * q - (C - 1), loc=b, scale=sigma)
 
 
-def smoothbox_student_t_ppf(q, df, sigma, a, b):
-    """Computes the value of the percent point function for
+def smoothbox_student_t_ppf(
+    q: float, df: float, sigma: float, a: float, b: float
+):
+    """
+    Compute the value of the percent point function for
     the smooth box student t distribution.
 
     Parameters
