@@ -44,14 +44,9 @@
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Constant mean function.</p>
 <dl class="py method">
-<dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.compute">
-<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.compute" title="Permalink to this definition">¶</a></dt>
-<dd><p>Computes the mean function at given test points.</p>
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.compute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the mean function at given test points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -85,11 +80,11 @@ the number returned by the function <code class="docutils literal notranslate"><
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.get_bounds_info">
-<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.get_bounds_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives information on the lower, upper, plausible lower
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.get_bounds_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return information on the lower, upper, plausible lower
 and plausible upper bounds of the hyperparameters of this
 mean function.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
@@ -99,8 +94,21 @@ mean function.</p>
 </dl>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><dl class="simple">
-<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info.</p>
+<dd class="field-even"><dl>
+<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info with the following elements:</p>
+<dl class="simple">
+<dt><strong>LB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>UB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PLB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PUB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>x0</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible starting point.</p>
+</dd>
+</dl>
+<p>where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is the number of hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -110,17 +118,17 @@ mean function.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.hyperparameter_count">
 <em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives the number of hyperparameters this mean function has.</p>
+<dd><p>Return the number of hyperparameters of this mean function.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the mean function.</p>
+<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the mean function (unused).</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The amount of hyperparameters.</p>
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The number of hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -130,12 +138,12 @@ mean function.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.hyperparameter_info">
 <em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives information on the names of hyperparameters for setting
+<dd><p>Return information on the names of hyperparameters for setting
 them in other parts of the program.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel.</p>
+<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel (unused).</p>
 </dd>
 </dl>
 </dd>
@@ -157,14 +165,9 @@ in the order they are used in computations.</p>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Centered negative quadratic mean functions.</p>
 <dl class="py method">
-<dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.compute">
-<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.compute" title="Permalink to this definition">¶</a></dt>
-<dd><p>Computes the mean function at given test points.</p>
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.compute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the mean function at given test points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -198,11 +201,11 @@ the number returned by the function <code class="docutils literal notranslate"><
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.get_bounds_info">
-<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.get_bounds_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives information on the lower, upper, plausible lower
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.get_bounds_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return information on the lower, upper, plausible lower
 and plausible upper bounds of the hyperparameters of this
 mean function.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
@@ -212,8 +215,21 @@ mean function.</p>
 </dl>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><dl class="simple">
-<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info.</p>
+<dd class="field-even"><dl>
+<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info with the following elements:</p>
+<dl class="simple">
+<dt><strong>LB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>UB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PLB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PUB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>x0</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible starting point.</p>
+</dd>
+</dl>
+<p>where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is the number of hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -222,8 +238,8 @@ mean function.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.hyperparameter_count">
-<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives the number of hyperparameters this mean function has.</p>
+<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the number of hyperparameters this mean function has.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -233,7 +249,7 @@ mean function.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The amount of hyperparameters.</p>
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The number of hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -242,8 +258,8 @@ mean function.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.hyperparameter_info">
-<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives information on the names of hyperparameters for setting
+<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return information on the names of hyperparameters for setting
 them in other parts of the program.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -270,14 +286,9 @@ in the order they are used in computations.</p>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Zero mean function.</p>
 <dl class="py method">
-<dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.compute">
-<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.compute" title="Permalink to this definition">¶</a></dt>
-<dd><p>Computes the mean function at given test points.</p>
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.compute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the mean function at given test points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -311,11 +322,11 @@ the number returned by the function <code class="docutils literal notranslate"><
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.get_bounds_info">
-<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.get_bounds_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives information on the lower, upper, plausible lower
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.get_bounds_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return information on the lower, upper, plausible lower
 and plausible upper bounds of the hyperparameters of this
 mean function.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
@@ -325,8 +336,21 @@ mean function.</p>
 </dl>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><dl class="simple">
-<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info.</p>
+<dd class="field-even"><dl>
+<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info with the following elements:</p>
+<dl class="simple">
+<dt><strong>LB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>UB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PLB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PUB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>x0</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible starting point.</p>
+</dd>
+</dl>
+<p>where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is the number of hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -336,17 +360,17 @@ mean function.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.hyperparameter_count">
 <em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives the number of hyperparameters this mean function has.</p>
+<dd><p>Return the number of hyperparameters of this mean function.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the mean function.</p>
+<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the mean function (unused).</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The amount of hyperparameters.</p>
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The number of hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -356,12 +380,12 @@ mean function.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.hyperparameter_info">
 <em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Gives information on the names of hyperparameters for setting
+<dd><p>Return information on the names of hyperparameters for setting
 them in other parts of the program.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel.</p>
+<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel (unused).</p>
 </dd>
 </dl>
 </dd>
