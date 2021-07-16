@@ -11,41 +11,41 @@ class SquaredExponential:
         pass
 
     @staticmethod
-    def hyperparameter_count(d: int):
+    def hyperparameter_count(D: int):
         """
         Return the number of hyperparameters this covariance function has.
 
         Parameters
         ----------
-        d : int
-            The degree of the kernel (unused).
+        D : int
+            The dimensionality of the kernel.
 
         Returns
         -------
         count : int
             The number of hyperparameters.
         """
-        return d + 1
+        return D + 1
 
     @staticmethod
-    def hyperparameter_info(d: int):
+    def hyperparameter_info(D: int):
         """
         Return information on the names of hyperparameters for setting
         them in other parts of the program.
 
         Parameters
         ----------
-        d : int
-            The degree of the kernel (unused).
+        D : int
+            The dimensionality of the kernel.
 
         Returns
         -------
         hyper_info : array_like
             A list of tuples of hyperparameter names and their number,
-            in the order they are used in computations.
+            in the order they are in the hyperparameter array.
         """
         return [
-            ("covariance_log_lengthscale", d),
+            ("covariance_log_lengthscale", D),
             ("covariance_log_outputscale", 1),
         ]
 
@@ -57,9 +57,9 @@ class SquaredExponential:
 
         Parameters
         ----------
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
-        y : ndarray, shape (n, 1)
+        y : ndarray, shape (N, 1)
             A 2D array where each row is a test target.
 
         Returns
@@ -97,12 +97,12 @@ class SquaredExponential:
 
         Parameters
         ----------
-        hyp : ndarray, shape (cov_n,)
-            A 1D array of hyperparameters, where ``cov_n`` is
+        hyp : ndarray, shape (cov_N,)
+            A 1D array of hyperparameters, where ``cov_N`` is
             the number of hyperparameters.
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a training point.
-        X_star : ndarray, shape (m, d), optional
+        X_star : ndarray, shape (M, D), optional
             A 2D array where each row is a test point. If this is not
             given, the self-covariance matrix is being computed.
         compute_diag : bool, defaults to False
@@ -115,9 +115,9 @@ class SquaredExponential:
         Returns
         -------
         K : ndarray
-            The covariance matrix which is by default of shape ``(n, n)``. If
-            ``compute_diag = True`` the shape is ``(n,)``.
-        dK : ndarray, shape (n, n, cov_n), optional
+            The covariance matrix which is by default of shape ``(N, N)``. If
+            ``compute_diag = True`` the shape is ``(N,)``.
+        dK : ndarray, shape (N, N, cov_N), optional
             The gradient of the covariance matrix with respect to the
             hyperparameters.
 
@@ -201,41 +201,41 @@ class Matern:
             self.df = lambda t: (1 + t) / 3
 
     @staticmethod
-    def hyperparameter_count(d: int):
+    def hyperparameter_count(D: int):
         """
         Return the number of hyperparameters this covariance function has.
 
         Parameters
         ----------
-        d : int
-            The degree of the kernel.
+        D : int
+            The dimensionality of the kernel.
 
         Returns
         -------
         count : int
             The number of hyperparameters.
         """
-        return d + 1
+        return D + 1
 
     @staticmethod
-    def hyperparameter_info(d: int):
+    def hyperparameter_info(D: int):
         """
         Return information on the names of hyperparameters for setting
         them in other parts of the program.
 
         Parameters
         ----------
-        d : int
-            The degree of the kernel.
+        D : int
+            The dimensionality of the kernel.
 
         Returns
         -------
         hyper_info : array_like
             A list of tuples of hyperparameter names and their number,
-            in the order they are used in computations.
+            in the order they are in the hyperparameter array.
         """
         return [
-            ("covariance_log_lengthscale", d),
+            ("covariance_log_lengthscale", D),
             ("covariance_log_outputscale", 1),
         ]
 
@@ -247,9 +247,9 @@ class Matern:
 
         Parameters
         ----------
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
-        y : ndarray, shape (n, 1)
+        y : ndarray, shape (N, 1)
             A 2D array where each row is a test target.
 
         Returns
@@ -287,12 +287,12 @@ class Matern:
 
         Parameters
         ----------
-        hyp : ndarray, shape (cov_n,)
-            A 1D array of hyperparameters, where ``cov_n`` is
+        hyp : ndarray, shape (cov_N,)
+            A 1D array of hyperparameters, where ``cov_N`` is
             the number of hyperparameters.
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, d)
             A 2D array where each row is a training point.
-        X_star : ndarray, shape (m, d), optional
+        X_star : ndarray, shape (M, d), optional
             A 2D array where each row is a test point. If this is not
             given, the self-covariance matrix is being computed.
         compute_diag : bool, defaults to False
@@ -305,9 +305,9 @@ class Matern:
         Returns
         -------
         K : ndarray
-            The covariance matrix, which is by default of shape ``(n, n)``. If
-            ``compute_diag = True`` the shape is ``(n,)``.
-        dK : ndarray, shape (n, n, cov_n), optional
+            The covariance matrix, which is by default of shape ``(N, N)``. If
+            ``compute_diag = True`` the shape is ``(N,)``.
+        dK : ndarray, shape (N, N, cov_N), optional
             The gradient of the covariance matrix with respect to the
             hyperparameters.
 
@@ -360,8 +360,9 @@ class Matern:
                         "sqeuclidean",
                     )
                 )
-                # With d=1 kernel there will be issues caused by zero divisions.
-                # This is OK, the kernel is just not differentiable there.
+                # With d=1 kernel there will be issues caused by zero
+                # divisions. This is OK, the kernel is just not
+                # differentiable there.
                 with np.errstate(all="ignore"):
                     dK[:, :, i] = sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki
             # Gradient of cov output scale

@@ -19,24 +19,24 @@ def f_min_fill(
     design: str = None,
 ):
     """
-    Create a space-filling design, evaluates the function f
+    Create a space-filling design, evaluates the function ``f``
     on the points of the design and sorts the points from smallest
-    value of f to largest.
+    value of ``f`` to largest.
 
     Parameters
     ==========
     f : callable
         The function to evaluate on the design points.
-    x0 : array_like
+    x0 : ndarray, shape (M, hyp_N)
         A 2D array of points to include in the design, with each row
         containing a design point.
-    LB : ndarray, shape (hyp_n,)
+    LB : ndarray, shape (hyp_N,)
         The lower bounds.
-    UB : ndarray, shape (hyp_n,)
+    UB : ndarray, shape (hyp_N,)
         The upper bounds.
-    PLB : ndarray, shape (hyp_n,)
+    PLB : ndarray, shape (hyp_N,)
         The plausible lower bounds.
-    PUB : ndarray, shape (hyp_n,)
+    PUB : ndarray, shape (hyp_N,)
         The plausible upper bounds.
     hprior : dict
         Hyperparameter prior dictionary.
@@ -48,11 +48,11 @@ def f_min_fill(
 
     Returns
     =======
-    X : array_like
-        A 2D array of the design points sorted according to the value
-        f has at those points.
-    y : array_like
-        An 1D array of the sorted values of f at the design points.
+    X : ndarray, shape (N, hyp_N)
+        An array of the design points sorted according to the value
+        ``f`` has at those points.
+    y : ndarray, shape (N,)
+        An array of the sorted values of ``f`` at the design points.
     """
     if design is None:
         design = "sobol"
