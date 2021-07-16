@@ -63,9 +63,9 @@ log pdf of the sampled points per each data point can be useful to
 compute estimates of predictive error such as the widely applicable
 information criterion (WAIC); see <a class="reference internal" href="#r6f8715ba5828-3" id="id1">[3]</a>.</p>
 </dd>
-<dt><strong>x0</strong><span class="classifier">ndarray, shape (n,)</span></dt><dd><p>Initial value of the random sample sequence. It must be within the
+<dt><strong>x0</strong><span class="classifier">ndarray, shape (D,)</span></dt><dd><p>Initial value of the random sample sequence. It must be within the
 domain of the target distribution. The number of independent
-variables is <code class="docutils literal notranslate"><span class="pre">n</span></code>.</p>
+variables is <code class="docutils literal notranslate"><span class="pre">D</span></code>.</p>
 </dd>
 <dt><strong>widths</strong><span class="classifier">array_like, optional</span></dt><dd><p>A parameter for typical widths. Either a scalar or a 1D array.
 If it is a scalar, all dimensions are assumed to have the same
@@ -307,7 +307,7 @@ real number (e.g. Inf or NaN).</p>
       &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.2</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
