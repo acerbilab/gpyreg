@@ -2,6 +2,7 @@
 
 import numpy as np
 
+
 class ZeroMean:
     """Zero mean function."""
 
@@ -15,8 +16,8 @@ class ZeroMean:
 
         Parameters
         ----------
-        d : int
-            The degree of the mean function (unused).
+        D : int
+            The dimensionality of the mean function (unused).
 
         Returns
         -------
@@ -33,14 +34,14 @@ class ZeroMean:
 
         Parameters
         ----------
-        d : int
-            The degree of the kernel (unused).
+        D : int
+            The dimensionality of the mean function (unused).
 
         Returns
         -------
         hyper_info : array_like
             A list of tuples of hyperparameter names and their number,
-            in the order they are used in computations.
+            in the order they are in the hyperparameter array.
         """
         return []
 
@@ -52,9 +53,9 @@ class ZeroMean:
 
         Parameters
         ----------
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
-        y : ndarray, shape (n, 1)
+        y : ndarray, shape (N, 1)
             A 2D array where each row is a test target.
 
         Returns
@@ -86,19 +87,19 @@ class ZeroMean:
 
         Parameters
         ----------
-        hyp : ndarray, shape (mean_n,)
-            A 1D array of hyperparameters, where ``mean_n`` is
+        hyp : ndarray, shape (mean_N,)
+            A 1D array of hyperparameters, where ``mean_N`` is
             the number returned by the function ``hyperparameter_count``.
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
         compute_grad : bool, defaults to False
             Whether to compute the gradient with respect to hyperparameters.
 
         Returns
         -------
-        m : ndarray, shape (n,)
+        m : ndarray, shape (N,)
             The mean values.
-        dm : ndarray, shape (n, mean_n), optional
+        dm : ndarray, shape (N, mean_N), optional
             The gradient with respect to hyperparameters.
 
         Raises
@@ -143,8 +144,8 @@ class ConstantMean:
 
         Parameters
         ----------
-        d : int
-            The degree of the mean function (unused).
+        D : int
+            The dimensionality of the mean function (unused).
 
         Returns
         -------
@@ -161,14 +162,14 @@ class ConstantMean:
 
         Parameters
         ----------
-        d : int
-            The degree of the kernel (unused).
+        D : int
+            The dimensionality of the mean function (unused).
 
         Returns
         -------
         hyper_info : array_like
             A list of tuples of hyperparameter names and their number,
-            in the order they are used in computations.
+            in the order they are in the hyperparameter array.
         """
         return [("mean_const", 1)]
 
@@ -180,9 +181,9 @@ class ConstantMean:
 
         Parameters
         ----------
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
-        y : ndarray, shape (n, 1)
+        y : ndarray, shape (N, 1)
             A 2D array where each row is a test target.
 
         Returns
@@ -214,19 +215,19 @@ class ConstantMean:
 
         Parameters
         ----------
-        hyp : ndarray, shape (mean_n,)
-            A 1D array of hyperparameters, where ``mean_n`` is
+        hyp : ndarray, shape (mean_N,)
+            A 1D array of hyperparameters, where ``mean_N`` is
             the number returned by the function ``hyperparameter_count``.
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
         compute_grad : bool, defaults to False
             Whether to compute the gradient with respect to hyperparameters.
 
         Returns
         -------
-        m : ndarray, shape (n,)
+        m : ndarray, shape (N,)
             The mean values.
-        dm : ndarray, shape (n, mean_n), optional
+        dm : ndarray, shape (N, mean_N), optional
             The gradient with respect to hyperparameters.
 
         Raises
@@ -266,40 +267,40 @@ class NegativeQuadratic:
         pass
 
     @staticmethod
-    def hyperparameter_count(d: int):
+    def hyperparameter_count(D: int):
         """
         Return the number of hyperparameters this mean function has.
 
         Parameters
         ----------
-        d : int
-            The degree of the mean function.
+        D : int
+            The dimensionality of the mean function.
 
         Returns
         -------
         count : int
             The number of hyperparameters.
         """
-        return 1 + 2 * d
+        return 1 + 2 * D
 
     @staticmethod
-    def hyperparameter_info(d: int):
+    def hyperparameter_info(D: int):
         """
         Return information on the names of hyperparameters for setting
         them in other parts of the program.
 
         Parameters
         ----------
-        d : int
-            The degree of the kernel.
+        D : int
+            The dimensionality of the mean function.
 
         Returns
         -------
         hyper_info : array_like
             A list of tuples of hyperparameter names and their number,
-            in the order they are used in computations.
+            in the order they are in the hyperparameter array.
         """
-        return [("mean_const", 1), ("mean_location", d), ("mean_log_scale", d)]
+        return [("mean_const", 1), ("mean_location", D), ("mean_log_scale", D)]
 
     def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
         """
@@ -309,9 +310,9 @@ class NegativeQuadratic:
 
         Parameters
         ----------
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
-        y : ndarray, shape (n, 1)
+        y : ndarray, shape (N, 1)
             A 2D array where each row is a test target.
 
         Returns
@@ -344,19 +345,19 @@ class NegativeQuadratic:
 
         Parameters
         ----------
-        hyp : ndarray, shape (mean_n,)
-            A 1D array of hyperparameters, where ``mean_n`` is
+        hyp : ndarray, shape (mean_N,)
+            A 1D array of hyperparameters, where ``mean_N`` is
             the number returned by the function ``hyperparameter_count``.
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
         compute_grad : bool, defaults to False
             Whether to compute the gradient with respect to hyperparameters.
 
         Returns
         -------
-        m : ndarray, shape (n,)
+        m : ndarray, shape (N,)
             The mean values.
-        dm : ndarray, shape (n, mean_n), optional
+        dm : ndarray, shape (N, mean_N), optional
             The gradient with respect to hyperparameters.
 
         Raises

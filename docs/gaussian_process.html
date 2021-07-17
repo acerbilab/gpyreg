@@ -67,9 +67,9 @@ following module: <a class="reference internal" href="noise_functions.html#modul
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>lower_bounds</strong><span class="classifier">ndarray, shape (hyp_n,)</span></dt><dd><p>The lower bounds.</p>
+<dt><strong>lower_bounds</strong><span class="classifier">ndarray, shape (hyp_N,)</span></dt><dd><p>The lower bounds.</p>
 </dd>
-<dt><strong>upper_bounds</strong><span class="classifier">ndarray, shape (hyp_n,)</span></dt><dd><p>The upper bounds.</p>
+<dt><strong>upper_bounds</strong><span class="classifier">ndarray, shape (hyp_N,)</span></dt><dd><p>The upper bounds.</p>
 </dd>
 </dl>
 </dd>
@@ -98,13 +98,13 @@ thus reducing memory usage. These can be reconstructed with a call to
 <dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl>
-<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d), optional</span></dt><dd><p>Training points that will replace the current training points
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D), optional</span></dt><dd><p>Training points that will replace the current training points
 of the GP. If not given the current training points are used.</p>
 </dd>
-<dt><strong>y</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>Training targets that will replace the current training targets
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1), optional</span></dt><dd><p>Training targets that will replace the current training targets
 of the GP. If not given the current training targets are used.</p>
 </dd>
-<dt><strong>s2</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>Noise variance at training points that will replace the
+<dt><strong>s2</strong><span class="classifier">ndarray, shape (N, 1), optional</span></dt><dd><p>Noise variance at training points that will replace the
 current noise variances of the GP. If not given the current
 noise variances are used.</p>
 </dd>
@@ -146,7 +146,7 @@ appropriate ones will be computed.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_samples, hyp_n)</span></dt><dd><p>The fitted hyperparameters.</p>
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_samples, hyp_N)</span></dt><dd><p>The fitted hyperparameters.</p>
 </dd>
 <dt><strong>optimize_result</strong><span class="classifier">OptimizeResult</span></dt><dd><p>The optimization result represented as a <code class="docutils literal notranslate"><span class="pre">OptimizeResult</span></code>
 object. For more details see <code class="xref py py-func docutils literal notranslate"><span class="pre">scipy.optimize.minimize()</span></code>.</p>
@@ -168,7 +168,7 @@ sampling run, and None otherwise.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.get_bounds">
 <span class="sig-name descname"><span class="pre">get_bounds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.GP.get_bounds" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return a dict of the current lower and upper bounds of the
+<dd><p>Gets a dictionary with the current lower and upper bounds of the
 hyperparameters.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
@@ -183,14 +183,14 @@ hyperparameters.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.get_hyperparameters">
 <span class="sig-name descname"><span class="pre">get_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">as_array</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.GP.get_hyperparameters" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return the current hyperparameters of the Gaussian Process.</p>
+<dd><p>Get the current hyperparameters of the GP.</p>
 <p>If hyperparameters have not been set yet, the result will
 be filled with <code class="docutils literal notranslate"><span class="pre">NaN</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>as_array</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to return the hyperparameters as an array of shape
-<code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_n)</span></code>, or a list of dictionaries for each
+<code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_N)</span></code>, or a list of dictionaries for each
 sample.</p>
 </dd>
 </dl>
@@ -242,7 +242,8 @@ upper bounds.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.hyperparameters_from_dict">
 <span class="sig-name descname"><span class="pre">hyperparameters_from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_dict_list</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.GP.hyperparameters_from_dict" title="Permalink to this definition">¶</a></dt>
-<dd><p>Convert a list of hyperparameter dictionaries to a hyperparameter array.</p>
+<dd><p>Convert a list of hyperparameter dictionaries to a hyperparameter
+array.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
@@ -254,7 +255,7 @@ list with one element.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>hyp_arr</strong><span class="classifier">ndarray, shape (hyp_samples, hyp_n)</span></dt><dd><p>The hyperparameter array where <code class="docutils literal notranslate"><span class="pre">hyp_samples</span></code> is the length of
+<dt><strong>hyp_arr</strong><span class="classifier">ndarray, shape (hyp_samples, hyp_N)</span></dt><dd><p>The hyperparameter array where <code class="docutils literal notranslate"><span class="pre">hyp_samples</span></code> is the length of
 the list <code class="docutils literal notranslate"><span class="pre">hyp_dict_list</span></code>.</p>
 </dd>
 </dl>
@@ -271,8 +272,8 @@ hyperparameter sample.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>hyp_arr</strong><span class="classifier">ndarray</span></dt><dd><p>An array of shape <code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_n)</span></code> or shape
-<code class="docutils literal notranslate"><span class="pre">(hyp_n,)</span></code>, which is interpreted as shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">hyp_n)</span></code>,
+<dt><strong>hyp_arr</strong><span class="classifier">ndarray</span></dt><dd><p>An array of shape <code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_N)</span></code> or shape
+<code class="docutils literal notranslate"><span class="pre">(hyp_N,)</span></code>, which is interpreted as shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">hyp_N)</span></code>,
 containing hyperparameters.</p>
 </dd>
 </dl>
@@ -296,7 +297,7 @@ values for each sample.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.log_likelihood">
 <span class="sig-name descname"><span class="pre">log_likelihood</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.GP.log_likelihood" title="Permalink to this definition">¶</a></dt>
-<dd><p>Computes (positive) log marginal likelihood of the GP for given
+<dd><p>Compute the (positive) log marginal likelihood of the GP for given
 hyperparameters.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -311,7 +312,7 @@ hyperparameters.</p>
 <dd class="field-even"><dl class="simple">
 <dt><strong>lZ</strong><span class="classifier">float</span></dt><dd><p>The positive log marginal likelihood.</p>
 </dd>
-<dt><strong>dlZ</strong><span class="classifier">ndarray, shape (hyp_n,), optional</span></dt><dd><p>The gradient with respect to hyperparameters.</p>
+<dt><strong>dlZ</strong><span class="classifier">ndarray, shape (hyp_N,), optional</span></dt><dd><p>The gradient with respect to hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -321,7 +322,7 @@ hyperparameters.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.log_posterior">
 <span class="sig-name descname"><span class="pre">log_posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.GP.log_posterior" title="Permalink to this definition">¶</a></dt>
-<dd><p>Computes (positive) log marginal likelihood of the GP with added
+<dd><p>Compute the (positive) log marginal likelihood of the GP with added
 log prior for given hyperparameters (that is, the unnormalized log
 posterior).</p>
 <dl class="field-list simple">
@@ -337,7 +338,7 @@ posterior).</p>
 <dd class="field-even"><dl class="simple">
 <dt><strong>lZ_plus_posterior</strong><span class="classifier">float</span></dt><dd><p>The positive log marginal likelihood with added log prior.</p>
 </dd>
-<dt><strong>dlZ_plus_d_posterior</strong><span class="classifier">ndarray, shape (hyp_n,), optional</span></dt><dd><p>The gradient with respect to hyperparameters.</p>
+<dt><strong>dlZ_plus_d_posterior</strong><span class="classifier">ndarray, shape (hyp_N,), optional</span></dt><dd><p>The gradient with respect to hyperparameters.</p>
 </dd>
 </dl>
 </dd>
@@ -357,11 +358,11 @@ location of the reference point.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>x0</strong><span class="classifier">ndarray, shape (d,), optional</span></dt><dd><p>The reference point.</p>
+<dt><strong>x0</strong><span class="classifier">ndarray, shape (D,), optional</span></dt><dd><p>The reference point.</p>
 </dd>
-<dt><strong>lb</strong><span class="classifier">ndarray, shape (d,), optional</span></dt><dd><p>Lower bounds for the plotting.</p>
+<dt><strong>lb</strong><span class="classifier">ndarray, shape (D,), optional</span></dt><dd><p>Lower bounds for the plotting.</p>
 </dd>
-<dt><strong>ub</strong><span class="classifier">ndarray, shape (d,), optional</span></dt><dd><p>Upper bounds for the plotting.</p>
+<dt><strong>ub</strong><span class="classifier">ndarray, shape (D,), optional</span></dt><dd><p>Upper bounds for the plotting.</p>
 </dd>
 <dt><strong>delta_y</strong><span class="classifier">float, optional</span></dt><dd><p>Range of the plot such that the plotted predictive GP mean
 approximately brackets <code class="docutils literal notranslate"><span class="pre">[y0-delta_y,</span> <span class="pre">y0+delta_y]</span></code> where
@@ -384,11 +385,11 @@ point.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>x_star</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>The points we want to predict the values at.</p>
+<dt><strong>x_star</strong><span class="classifier">ndarray, shape (M, D)</span></dt><dd><p>The points we want to predict the values at.</p>
 </dd>
-<dt><strong>y_star</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>True values at the points.</p>
+<dt><strong>y_star</strong><span class="classifier">ndarray, shape (M, 1), optional</span></dt><dd><p>True values at the points.</p>
 </dd>
-<dt><strong>s2_star</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>Noise variance at the points.</p>
+<dt><strong>s2_star</strong><span class="classifier">ndarray, shape (M, 1), optional</span></dt><dd><p>Noise variance at the points.</p>
 </dd>
 <dt><strong>add_noise</strong><span class="classifier">bool, defaults to True</span></dt><dd><p>Whether to add noise to the prediction results.</p>
 </dd>
@@ -400,13 +401,13 @@ sample or averaged.</p>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>mu</strong><span class="classifier">ndarray</span></dt><dd><p>Posterior mean at the requested points. If we requested
-separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">sample_n)</span></code> while
-otherwise it is  <code class="docutils literal notranslate"><span class="pre">(n,)</span></code>.
+separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">sample_N)</span></code> while
+otherwise it is  <code class="docutils literal notranslate"><span class="pre">(M,)</span></code>.
 sample.</p>
 </dd>
 <dt><strong>s2</strong><span class="classifier">ndarray</span></dt><dd><p>Noise variance at each point. If we requested
-separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">sample_n)</span></code> while
-otherwise it is <code class="docutils literal notranslate"><span class="pre">(n,)</span></code>.</p>
+separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">sample_N)</span></code> while
+otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,)</span></code>.</p>
 </dd>
 </dl>
 </dd>
@@ -421,11 +422,11 @@ hyperparameter sample.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>x_star</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>The points we want to predict the values at.</p>
+<dt><strong>x_star</strong><span class="classifier">ndarray, shape (M, D)</span></dt><dd><p>The points we want to predict the values at.</p>
 </dd>
-<dt><strong>y_star</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>True values at the points.</p>
+<dt><strong>y_star</strong><span class="classifier">ndarray, shape (M, 1), optional</span></dt><dd><p>True values at the points.</p>
 </dd>
-<dt><strong>s2_star</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>Noise variance at the points.</p>
+<dt><strong>s2_star</strong><span class="classifier">ndarray, shape (M, 1), optional</span></dt><dd><p>Noise variance at the points.</p>
 </dd>
 <dt><strong>add_noise</strong><span class="classifier">bool, defaults to True</span></dt><dd><p>Whether to add noise to the prediction results.</p>
 </dd>
@@ -433,10 +434,10 @@ hyperparameter sample.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>mu</strong><span class="classifier">ndarray, shape (n, sample_n)</span></dt><dd><p>Posterior mean at the requested points for each hyperparameter
+<dt><strong>mu</strong><span class="classifier">ndarray, shape (M, sample_N)</span></dt><dd><p>Posterior mean at the requested points for each hyperparameter
 sample.</p>
 </dd>
-<dt><strong>cov</strong><span class="classifier">ndarray, shape (n, n, sample_n)</span></dt><dd><p>Covariance matrix for each hyperparameter sample.</p>
+<dt><strong>cov</strong><span class="classifier">ndarray, shape (M, M, sample_N)</span></dt><dd><p>Covariance matrix for each hyperparameter sample.</p>
 </dd>
 </dl>
 </dd>
@@ -447,18 +448,18 @@ sample.</p>
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.GP.quad">
 <span class="sig-name descname"><span class="pre">quad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_var</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.GP.quad" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bayesian quadrature for a Gaussian Process.</p>
-<p>Computes the integral of a function represented by a Gaussian
+<p>Compute the integral of a function represented by a Gaussian
 Process with respect to a given Gaussian measure.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>mu</strong><span class="classifier">array_like</span></dt><dd><p>Either a array of shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">d)</span></code> with each row containing the
+<dt><strong>mu</strong><span class="classifier">array_like</span></dt><dd><p>Either a array of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">D)</span></code> with each row containing the
 mean of a single Gaussian measure, or a single floating point
-number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">d)</span></code>.</p>
+number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>.</p>
 </dd>
-<dt><strong>sigma</strong><span class="classifier">array_like</span></dt><dd><p>Either a array of shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">d)</span></code> with each row containing the
+<dt><strong>sigma</strong><span class="classifier">array_like</span></dt><dd><p>Either a array of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">D)</span></code> with each row containing the
 variance of a single Gaussian measure, or a single floating point
-number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">d)</span></code>.</p>
+number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>.</p>
 </dd>
 <dt><strong>compute_var</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute variance for each integral.</p>
 </dd>
@@ -469,20 +470,20 @@ sample, or averaged.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>F</strong><span class="classifier">ndarray</span></dt><dd><p>The conputed integrals in an array with shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">1)</span></code> if
-samples are averaged and shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">hyp_samples)</span></code> if
+<dt><strong>F</strong><span class="classifier">ndarray</span></dt><dd><p>The conputed integrals in an array with shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code> if
+samples are averaged and shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">hyp_samples)</span></code> if
 requested separately.</p>
 </dd>
 <dt><strong>F_var</strong><span class="classifier">ndarray, optional</span></dt><dd><p>The computed variances of the integrals in an array with
-shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">1)</span></code> if samples are averaged and shape
-<code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">hyp_samples)</span></code> if requested separately.</p>
+shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code> if samples are averaged and shape
+<code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">hyp_samples)</span></code> if requested separately.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-odd">Raises</dt>
 <dd class="field-odd"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when the method is called and the covariance of the GP is not
-squared exponential.</p>
+<dt>ValueError</dt><dd><p>Raised when the method is called and the covariance of the GP is
+not squared exponential.</p>
 </dd>
 </dl>
 </dd>
@@ -496,7 +497,7 @@ squared exponential.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>X_star</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>The points at which to evaluate the drawn function.</p>
+<dt><strong>X_star</strong><span class="classifier">ndarray, shape (M, D)</span></dt><dd><p>The points at which to evaluate the drawn function.</p>
 </dd>
 <dt><strong>add_noise</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to add noise to the values of the drawn function.</p>
 </dd>
@@ -504,7 +505,7 @@ squared exponential.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>f_star</strong><span class="classifier">ndarray, shape (n, 1)</span></dt><dd><p>The values of the drawn function at the requested points.</p>
+<dt><strong>f_star</strong><span class="classifier">ndarray, shape (M, 1)</span></dt><dd><p>The values of the drawn function at the requested points.</p>
 </dd>
 </dl>
 </dd>
@@ -520,11 +521,12 @@ squared exponential.</p>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>bounds</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of GP hyperparameter names and tuples of their lower
 and upper bounds. All hyperparameters need to appear in the
-dictionary. Use the value None to set no bounds for a hyperparameter
-(equivalent to setting the lower bound to <code class="docutils literal notranslate"><span class="pre">-Inf</span></code> and upper bound
-to <code class="docutils literal notranslate"><span class="pre">+Inf</span></code>). If bounds is None, all hyperparameter bounds are
-removed, that is for all hyperparameters the lower bounds will be
-set to <code class="docutils literal notranslate"><span class="pre">-Inf</span></code> and upper bounds to <code class="docutils literal notranslate"><span class="pre">+Inf</span></code>.</p>
+dictionary. Use the value <code class="docutils literal notranslate"><span class="pre">None</span></code> to set no bounds for a
+hyperparameter (equivalent to setting the lower bound to <code class="docutils literal notranslate"><span class="pre">-Inf</span></code>
+and upper bound to <code class="docutils literal notranslate"><span class="pre">+Inf</span></code>). If <code class="docutils literal notranslate"><span class="pre">bounds=None</span></code>, all
+hyperparameter bounds are removed, that is for all
+hyperparameters the lower bounds will be set to <code class="docutils literal notranslate"><span class="pre">-Inf</span></code> and
+upper bounds to <code class="docutils literal notranslate"><span class="pre">+Inf</span></code>.</p>
 </dd>
 </dl>
 </dd>
@@ -546,7 +548,7 @@ hyperparameter.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>hyp_new</strong><span class="classifier">object</span></dt><dd><p>The new hyperparameters. This can be an array of shape
-<code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_n)</span></code> where <code class="docutils literal notranslate"><span class="pre">hyp_n</span></code> is the number of
+<code class="docutils literal notranslate"><span class="pre">(hyp_samples,</span> <span class="pre">hyp_N)</span></code> where <code class="docutils literal notranslate"><span class="pre">hyp_N</span></code> is the number of
 hyperparameters, and <code class="docutils literal notranslate"><span class="pre">hyp_samples</span></code> is the amount of
 hyperparameter samples, a single dictionary with
 hyperparameter names and values, or a list of dictionaries.
@@ -575,18 +577,18 @@ is equivalent.</p>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>priors</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of GP hyperparameter names and tuples of their priors.
 All hyperparameters need to appear in the dictionary.
-Use the value None to set no priors for a hyperparameter.
-If <cite>priors</cite> is None, all hyperparameter priors are removed.</p>
+Use the value <code class="docutils literal notranslate"><span class="pre">None</span></code> to set no priors for a hyperparameter.
+If <code class="docutils literal notranslate"><span class="pre">priors=None</span></code>, all hyperparameter priors are removed.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Raises</dt>
 <dd class="field-even"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when <cite>priors</cite> is given, but missing the entry of an expected
-hyperparameter.</p>
+<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">priors</span></code> is given, but missing the entry of an
+expected hyperparameter.</p>
 </dd>
-<dt>ValueError</dt><dd><p>Raised when <cite>priors</cite> is given, but a specified hyperparameter is
-unknown.</p>
+<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">priors</span></code> is given, but a specified
+hyperparameter is unknown.</p>
 </dd>
 </dl>
 </dd>
@@ -600,16 +602,16 @@ unknown.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>X_new</strong><span class="classifier">ndarray, shape (n, d), optional</span></dt><dd><p>New training inputs that will be added to the old training
+<dt><strong>X_new</strong><span class="classifier">ndarray, shape (N, D), optional</span></dt><dd><p>New training inputs that will be added to the old training
 inputs.</p>
 </dd>
-<dt><strong>y_new</strong><span class="classifier">narray, shape (n, 1) optional</span></dt><dd><p>New training targets that will be added to the old training
+<dt><strong>y_new</strong><span class="classifier">narray, shape (N, 1) optional</span></dt><dd><p>New training targets that will be added to the old training
 targets.</p>
 </dd>
-<dt><strong>s2_new</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>New input-dependent noise that will be added to the old training
+<dt><strong>s2_new</strong><span class="classifier">ndarray, shape (N, 1), optional</span></dt><dd><p>New input-dependent noise that will be added to the old training
 inputs.</p>
 </dd>
-<dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_n,), optional</span></dt><dd><p>New hyperparameters that will replace the old ones.</p>
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_N,), optional</span></dt><dd><p>New hyperparameters that will replace the old ones.</p>
 </dd>
 <dt><strong>compute_posterior</strong><span class="classifier">bool, defaults to True</span></dt><dd><p>Whether to compute the new posterior or not.</p>
 </dd>
@@ -696,7 +698,7 @@ inputs.</p>
       &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.2</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |

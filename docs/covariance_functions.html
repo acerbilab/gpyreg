@@ -61,12 +61,12 @@ and test points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>hyp</strong><span class="classifier">ndarray, shape (cov_n,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">cov_n</span></code> is
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (cov_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">cov_N</span></code> is
 the number of hyperparameters.</p>
 </dd>
-<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a training point.</p>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, d)</span></dt><dd><p>A 2D array where each row is a training point.</p>
 </dd>
-<dt><strong>X_star</strong><span class="classifier">ndarray, shape (m, d), optional</span></dt><dd><p>A 2D array where each row is a test point. If this is not
+<dt><strong>X_star</strong><span class="classifier">ndarray, shape (M, d), optional</span></dt><dd><p>A 2D array where each row is a test point. If this is not
 given, the self-covariance matrix is being computed.</p>
 </dd>
 <dt><strong>compute_diag</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to only compute the diagonal of the self-covariance
@@ -79,10 +79,10 @@ hyperparameters.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix, which is by default of shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">n)</span></code>. If
-<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(n,)</span></code>.</p>
+<dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix, which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,)</span></code>.</p>
 </dd>
-<dt><strong>dK</strong><span class="classifier">ndarray, shape (n, n, cov_n), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
+<dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
 </dd>
 </dl>
@@ -107,9 +107,9 @@ covariance function.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
 </dd>
-<dt><strong>y</strong><span class="classifier">ndarray, shape (n, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
 </dd>
 </dl>
 </dd>
@@ -137,12 +137,12 @@ covariance function.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.Matern.hyperparameter_count">
-<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.Matern.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.Matern.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the number of hyperparameters this covariance function has.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel.</p>
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the kernel.</p>
 </dd>
 </dl>
 </dd>
@@ -157,20 +157,20 @@ covariance function.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.Matern.hyperparameter_info">
-<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.Matern.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.Matern.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return information on the names of hyperparameters for setting
 them in other parts of the program.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel.</p>
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the kernel.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
-in the order they are used in computations.</p>
+in the order they are in the hyperparameter array.</p>
 </dd>
 </dl>
 </dd>
@@ -192,12 +192,12 @@ and test points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>hyp</strong><span class="classifier">ndarray, shape (cov_n,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">cov_n</span></code> is
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (cov_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">cov_N</span></code> is
 the number of hyperparameters.</p>
 </dd>
-<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a training point.</p>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a training point.</p>
 </dd>
-<dt><strong>X_star</strong><span class="classifier">ndarray, shape (m, d), optional</span></dt><dd><p>A 2D array where each row is a test point. If this is not
+<dt><strong>X_star</strong><span class="classifier">ndarray, shape (M, D), optional</span></dt><dd><p>A 2D array where each row is a test point. If this is not
 given, the self-covariance matrix is being computed.</p>
 </dd>
 <dt><strong>compute_diag</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to only compute the diagonal of the self-covariance
@@ -210,10 +210,10 @@ hyperparameters.</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">n)</span></code>. If
-<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(n,)</span></code>.</p>
+<dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,)</span></code>.</p>
 </dd>
-<dt><strong>dK</strong><span class="classifier">ndarray, shape (n, n, cov_n), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
+<dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
 </dd>
 </dl>
@@ -238,9 +238,9 @@ covariance function.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
 </dd>
-<dt><strong>y</strong><span class="classifier">ndarray, shape (n, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
 </dd>
 </dl>
 </dd>
@@ -268,12 +268,12 @@ covariance function.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.SquaredExponential.hyperparameter_count">
-<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential.hyperparameter_count" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the number of hyperparameters this covariance function has.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel (unused).</p>
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the kernel.</p>
 </dd>
 </dl>
 </dd>
@@ -288,20 +288,20 @@ covariance function.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.SquaredExponential.hyperparameter_info">
-<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">static</span> </em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/lacerbi/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential.hyperparameter_info" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return information on the names of hyperparameters for setting
 them in other parts of the program.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>d</strong><span class="classifier">int</span></dt><dd><p>The degree of the kernel (unused).</p>
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the kernel.</p>
 </dd>
 </dl>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
-in the order they are used in computations.</p>
+in the order they are in the hyperparameter array.</p>
 </dd>
 </dl>
 </dd>
@@ -379,7 +379,7 @@ in the order they are used in computations.</p>
       &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.2</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |

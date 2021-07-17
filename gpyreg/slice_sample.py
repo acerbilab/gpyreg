@@ -30,10 +30,10 @@ class SliceSampler:
         log pdf of the sampled points per each data point can be useful to
         compute estimates of predictive error such as the widely applicable
         information criterion (WAIC); see [3]_.
-    x0 : ndarray, shape (n,)
+    x0 : ndarray, shape (D,)
         Initial value of the random sample sequence. It must be within the
         domain of the target distribution. The number of independent
-        variables is ``n``.
+        variables is ``D``.
     widths : array_like, optional
         A parameter for typical widths. Either a scalar or a 1D array.
         If it is a scalar, all dimensions are assumed to have the same
@@ -596,7 +596,7 @@ class SliceSampler:
 
         return sampling_result
 
-    def __diagnose(self, samples : np.ndarray):
+    def __diagnose(self, samples: np.ndarray):
         """Performs a quick and dirty diagnosis of convergence."""
         N = samples.shape[0]
         # split psrf
@@ -698,11 +698,10 @@ class SliceSampler:
 
         Parameters
         ----------
-        x : array_like
+        x : ndarray, shape (m, n, k)
           An array containing the 2 or more traces of a stochastic parameter.
-          That is, an array of dimension m x n x k, where m is the number of
-          traces, n the number of samples, and k the dimension of the
-          stochastic.
+          Here m is the number of traces, n the number of samples, and k
+          the dimension of the stochastic.
 
         return_var : bool
           Flag for returning the marginal posterior variance instead of R-hat.
@@ -773,11 +772,10 @@ class SliceSampler:
 
         Parameters
         ----------
-        x : array_like
+        x : ndarray, shape (m, n, k)
           An array containing the 2 or more traces of a stochastic parameter.
-          That is, an array of dimension m x n x k, where m is the number of
-          traces, n the number of samples, and k the dimension of the
-          stochastic.
+          Here m is the number of traces, n the number of samples, and k the
+          dimension of the stochastic.
 
         Returns
         -------
@@ -788,8 +786,8 @@ class SliceSampler:
         ------
         ValueError
             Raised when `x` only contains one trace of a stochastic parameter.
-            As the calculation of effective sample size requires multiple chains
-            of the same length.
+            As the calculation of effective sample size requires multiple
+            chains of the same length.
         """
         if np.shape(x) < (2,):
             raise ValueError(

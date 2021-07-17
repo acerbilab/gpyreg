@@ -129,11 +129,12 @@ class GP:
         bounds : dict, optional
             A dictionary of GP hyperparameter names and tuples of their lower
             and upper bounds. All hyperparameters need to appear in the
-            dictionary. Use the value None to set no bounds for a hyperparameter
-            (equivalent to setting the lower bound to ``-Inf`` and upper bound
-            to ``+Inf``). If bounds is None, all hyperparameter bounds are
-            removed, that is for all hyperparameters the lower bounds will be
-            set to ``-Inf`` and upper bounds to ``+Inf``.
+            dictionary. Use the value ``None`` to set no bounds for a
+            hyperparameter (equivalent to setting the lower bound to ``-Inf``
+            and upper bound to ``+Inf``). If ``bounds=None``, all
+            hyperparameter bounds are removed, that is for all
+            hyperparameters the lower bounds will be set to ``-Inf`` and
+            upper bounds to ``+Inf``.
 
         Raises
         ------
@@ -188,7 +189,7 @@ class GP:
 
     def get_bounds(self):
         """
-        Return a dict of the current lower and upper bounds of the
+        Gets a dictionary with the current lower and upper bounds of the
         hyperparameters.
 
         Returns
@@ -206,9 +207,9 @@ class GP:
 
         Parameters
         ==========
-        lower_bounds : ndarray, shape (hyp_n,)
+        lower_bounds : ndarray, shape (hyp_N,)
             The lower bounds.
-        upper_bounds : ndarray, shape (hyp_n,)
+        upper_bounds : ndarray, shape (hyp_N,)
             The upper bounds.
 
         Returns
@@ -355,17 +356,17 @@ class GP:
         priors : dict, optional
             A dictionary of GP hyperparameter names and tuples of their priors.
             All hyperparameters need to appear in the dictionary.
-            Use the value None to set no priors for a hyperparameter.
-            If `priors` is None, all hyperparameter priors are removed.
+            Use the value ``None`` to set no priors for a hyperparameter.
+            If ``priors=None``, all hyperparameter priors are removed.
 
         Raises
         ------
         ValueError
-            Raised when `priors` is given, but missing the entry of an expected
-            hyperparameter.
+            Raised when ``priors`` is given, but missing the entry of an
+            expected hyperparameter.
         ValueError
-            Raised when `priors` is given, but a specified hyperparameter is
-            unknown.
+            Raised when ``priors`` is given, but a specified
+            hyperparameter is unknown.
         """
         self.no_prior = False
         if priors is None:
@@ -446,7 +447,7 @@ class GP:
 
     def get_hyperparameters(self, as_array: bool = False):
         """
-        Return the current hyperparameters of the Gaussian Process.
+        Get the current hyperparameters of the GP.
 
         If hyperparameters have not been set yet, the result will
         be filled with ``NaN``.
@@ -455,7 +456,7 @@ class GP:
         ==========
         as_array : bool, defaults to False
             Whether to return the hyperparameters as an array of shape
-            ``(hyp_samples, hyp_n)``, or a list of dictionaries for each
+            ``(hyp_samples, hyp_N)``, or a list of dictionaries for each
             sample.
 
         Returns
@@ -492,7 +493,7 @@ class GP:
         ==========
         hyp_new : object
             The new hyperparameters. This can be an array of shape
-            ``(hyp_samples, hyp_n)`` where ``hyp_n`` is the number of
+            ``(hyp_samples, hyp_N)`` where ``hyp_N`` is the number of
             hyperparameters, and ``hyp_samples`` is the amount of
             hyperparameter samples, a single dictionary with
             hyperparameter names and values, or a list of dictionaries.
@@ -532,8 +533,8 @@ class GP:
         Parameters
         ==========
         hyp_arr : ndarray
-            An array of shape ``(hyp_samples, hyp_n)`` or shape
-            ``(hyp_n,)``, which is interpreted as shape ``(1, hyp_n)``,
+            An array of shape ``(hyp_samples, hyp_N)`` or shape
+            ``(hyp_N,)``, which is interpreted as shape ``(1, hyp_N)``,
             containing hyperparameters.
 
         Returns
@@ -579,7 +580,8 @@ class GP:
 
     def hyperparameters_from_dict(self, hyp_dict_list):
         """
-        Convert a list of hyperparameter dictionaries to a hyperparameter array.
+        Convert a list of hyperparameter dictionaries to a hyperparameter
+        array.
 
         Parameters
         ==========
@@ -590,7 +592,7 @@ class GP:
 
         Returns
         =======
-        hyp_arr : ndarray, shape (hyp_samples, hyp_n)
+        hyp_arr : ndarray, shape (hyp_samples, hyp_N)
             The hyperparameter array where ``hyp_samples`` is the length of
             the list ``hyp_dict_list``.
         """
@@ -631,16 +633,16 @@ class GP:
 
         Parameters
         ==========
-        X_new : ndarray, shape (n, d), optional
+        X_new : ndarray, shape (N, D), optional
             New training inputs that will be added to the old training
             inputs.
-        y_new : narray, shape (n, 1) optional
+        y_new : narray, shape (N, 1) optional
             New training targets that will be added to the old training
             targets.
-        s2_new : ndarray, shape (n, 1), optional
+        s2_new : ndarray, shape (N, 1), optional
             New input-dependent noise that will be added to the old training
             inputs.
-        hyp : ndarray, shape (hyp_n,), optional
+        hyp : ndarray, shape (hyp_N,), optional
             New hyperparameters that will replace the old ones.
         compute_posterior : bool, defaults to True
             Whether to compute the new posterior or not.
@@ -815,13 +817,13 @@ class GP:
 
         Parameters
         ==========
-        X : ndarray, shape (n, d), optional
+        X : ndarray, shape (N, D), optional
             Training points that will replace the current training points
             of the GP. If not given the current training points are used.
-        y : ndarray, shape (n, 1), optional
+        y : ndarray, shape (N, 1), optional
             Training targets that will replace the current training targets
             of the GP. If not given the current training targets are used.
-        s2 : ndarray, shape (n, 1), optional
+        s2 : ndarray, shape (N, 1), optional
             Noise variance at training points that will replace the
             current noise variances of the GP. If not given the current
             noise variances are used.
@@ -859,7 +861,7 @@ class GP:
 
         Returns
         =======
-        hyp : ndarray, shape (hyp_samples, hyp_n)
+        hyp : ndarray, shape (hyp_samples, hyp_N)
             The fitted hyperparameters.
         optimize_result : OptimizeResult
             The optimization result represented as a ``OptimizeResult``
@@ -1331,7 +1333,7 @@ class GP:
         return lp
 
     def log_likelihood(self, hyp: object, compute_grad: bool = False):
-        """Computes (positive) log marginal likelihood of the GP for given
+        """Compute the (positive) log marginal likelihood of the GP for given
         hyperparameters.
 
         Parameters
@@ -1345,7 +1347,7 @@ class GP:
         =======
         lZ : float
             The positive log marginal likelihood.
-        dlZ : ndarray, shape (hyp_n,), optional
+        dlZ : ndarray, shape (hyp_N,), optional
             The gradient with respect to hyperparameters.
         """
         if isinstance(hyp, dict):
@@ -1353,7 +1355,7 @@ class GP:
         return -self.__compute_nlZ(hyp, compute_grad, False)
 
     def log_posterior(self, hyp: object, compute_grad: bool = False):
-        """Computes (positive) log marginal likelihood of the GP with added
+        """Compute the (positive) log marginal likelihood of the GP with added
         log prior for given hyperparameters (that is, the unnormalized log
         posterior).
 
@@ -1368,7 +1370,7 @@ class GP:
         =======
         lZ_plus_posterior : float
             The positive log marginal likelihood with added log prior.
-        dlZ_plus_d_posterior : ndarray, shape (hyp_n,), optional
+        dlZ_plus_d_posterior : ndarray, shape (hyp_N,), optional
             The gradient with respect to hyperparameters.
         """
         if isinstance(hyp, dict):
@@ -1430,21 +1432,21 @@ class GP:
 
         Parameters
         ==========
-        x_star : ndarray, shape (n, d)
+        x_star : ndarray, shape (M, D)
             The points we want to predict the values at.
-        y_star : ndarray, shape (n, 1), optional
+        y_star : ndarray, shape (M, 1), optional
             True values at the points.
-        s2_star : ndarray, shape (n, 1), optional
+        s2_star : ndarray, shape (M, 1), optional
             Noise variance at the points.
         add_noise : bool, defaults to True
             Whether to add noise to the prediction results.
 
         Returns
         =======
-        mu : ndarray, shape (n, sample_n)
+        mu : ndarray, shape (M, sample_N)
             Posterior mean at the requested points for each hyperparameter
             sample.
-        cov : ndarray, shape (n, n, sample_n)
+        cov : ndarray, shape (M, M, sample_N)
             Covariance matrix for each hyperparameter sample.
         """
 
@@ -1532,11 +1534,11 @@ class GP:
 
         Parameters
         ==========
-        x_star : ndarray, shape (n, d)
+        x_star : ndarray, shape (M, D)
             The points we want to predict the values at.
-        y_star : ndarray, shape (n, 1), optional
+        y_star : ndarray, shape (M, 1), optional
             True values at the points.
-        s2_star : ndarray, shape (n, 1), optional
+        s2_star : ndarray, shape (M, 1), optional
             Noise variance at the points.
         add_noise : bool, defaults to True
             Whether to add noise to the prediction results.
@@ -1548,13 +1550,13 @@ class GP:
         =======
         mu : ndarray
             Posterior mean at the requested points. If we requested
-            separate samples the shape is ``(n, sample_n)`` while
-            otherwise it is  ``(n,)``.
+            separate samples the shape is ``(M, sample_N)`` while
+            otherwise it is  ``(M,)``.
             sample.
         s2 : ndarray
             Noise variance at each point. If we requested
-            separate samples the shape is ``(n, sample_n)`` while
-            otherwise it is ``(n,)``.
+            separate samples the shape is ``(M, sample_N)`` while
+            otherwise it is ``(M,)``.
         """
 
         s_N = self.posteriors.size
@@ -1641,19 +1643,19 @@ class GP:
         """
         Bayesian quadrature for a Gaussian Process.
 
-        Computes the integral of a function represented by a Gaussian
+        Compute the integral of a function represented by a Gaussian
         Process with respect to a given Gaussian measure.
 
         Parameters
         ==========
         mu : array_like
-            Either a array of shape ``(n, d)`` with each row containing the
+            Either a array of shape ``(N, D)`` with each row containing the
             mean of a single Gaussian measure, or a single floating point
-            number which is interpreted as an array of shape ``(1, d)``.
+            number which is interpreted as an array of shape ``(1, D)``.
         sigma : array_like
-            Either a array of shape ``(n, d)`` with each row containing the
+            Either a array of shape ``(N, D)`` with each row containing the
             variance of a single Gaussian measure, or a single floating point
-            number which is interpreted as an array of shape ``(1, d)``.
+            number which is interpreted as an array of shape ``(1, D)``.
         compute_var : bool, defaults to False
             Whether to compute variance for each integral.
         separate_samples : bool, defaults to False
@@ -1663,19 +1665,19 @@ class GP:
         Returns
         =======
         F : ndarray
-            The conputed integrals in an array with shape ``(n, 1)`` if
-            samples are averaged and shape ``(n, hyp_samples)`` if
+            The conputed integrals in an array with shape ``(N, 1)`` if
+            samples are averaged and shape ``(N, hyp_samples)`` if
             requested separately.
         F_var : ndarray, optional
             The computed variances of the integrals in an array with
-            shape ``(n, 1)`` if samples are averaged and shape
-            ``(n, hyp_samples)`` if requested separately.
+            shape ``(N, 1)`` if samples are averaged and shape
+            ``(N, hyp_samples)`` if requested separately.
 
         Raises
         ------
         ValueError
-            Raised when the method is called and the covariance of the GP is not
-            squared exponential.
+            Raised when the method is called and the covariance of the GP is
+            not squared exponential.
         """
 
         if not isinstance(
@@ -1818,11 +1820,11 @@ class GP:
 
         Parameters
         ==========
-        x0 : ndarray, shape (d,), optional
+        x0 : ndarray, shape (D,), optional
             The reference point.
-        lb : ndarray, shape (d,), optional
+        lb : ndarray, shape (D,), optional
             Lower bounds for the plotting.
-        ub : ndarray, shape (d,), optional
+        ub : ndarray, shape (D,), optional
             Upper bounds for the plotting.
         delta_y : float, optional
             Range of the plot such that the plotted predictive GP mean
@@ -2060,14 +2062,14 @@ class GP:
 
         Parameters
         ==========
-        X_star : ndarray, shape (n, d)
+        X_star : ndarray, shape (M, D)
             The points at which to evaluate the drawn function.
         add_noise : bool, defaults to False
             Whether to add noise to the values of the drawn function.
 
         Returns
         =======
-        f_star : ndarray, shape (n, 1)
+        f_star : ndarray, shape (M, 1)
             The values of the drawn function at the requested points.
         """
         N_star = X_star.shape[0]
@@ -2327,6 +2329,7 @@ class Posterior:
     """
     This object represents the posterior.
     """
+
     def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
         self.hyp = hyp
         self.alpha = alpha

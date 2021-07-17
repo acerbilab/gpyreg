@@ -67,7 +67,7 @@ class GaussianNoise:
         -------
         hyper_info : array_like
             A list of tuples of hyperparameter names and their number,
-            in the order they are used in computations.
+            in the order they are in the hyperparameter array.
         """
         hyper_info = []
         if self.parameters[0] == 1:
@@ -87,9 +87,9 @@ class GaussianNoise:
 
         Parameters
         ----------
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
-        y : ndarray, shape (n, 1)
+        y : ndarray, shape (N, 1)
             A 2D array where each row is a test target.
 
         Returns
@@ -190,14 +190,14 @@ class GaussianNoise:
 
         Parameters
         ----------
-        hyp : ndarray, shape (noise_n,)
-            A 1D array of hyperparameters, where ``noise_n`` is
+        hyp : ndarray, shape (noise_N,)
+            A 1D array of hyperparameters, where ``noise_N`` is
             the number returned by the function ``hyperparameter_count``.
-        X : ndarray, shape (n, d)
+        X : ndarray, shape (N, D)
             A 2D array where each row is a test point.
-        y : ndarray, shape (n, 1)
+        y : ndarray, shape (N, 1)
             A 2D array where each row is a test target.
-        s2 : ndarray, shape (n, 1), optional
+        s2 : ndarray, shape (N, 1), optional
             A 2D array of estimated noise variance associated
             with each test point. Only required if
             ``user_provided_add = True``.
@@ -215,7 +215,7 @@ class GaussianNoise:
         dsn2 : ndarray, optional
             The gradient with respect to hyperparameters. If there is no
             input or output dependent noise, ``dsn2`` is of shape
-            ``(1, noise_n)`` while otherwise it is of shape ``(n, noise_n)``.
+            ``(1, noise_N)`` while otherwise it is of shape ``(N, noise_N)``.
 
         Raises
         ------

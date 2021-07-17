@@ -68,14 +68,14 @@ of observation noise evaluated at the test points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>hyp</strong><span class="classifier">ndarray, shape (noise_n,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">noise_n</span></code> is
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (noise_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">noise_N</span></code> is
 the number returned by the function <code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>.</p>
 </dd>
-<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
 </dd>
-<dt><strong>y</strong><span class="classifier">ndarray, shape (n, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
 </dd>
-<dt><strong>s2</strong><span class="classifier">ndarray, shape (n, 1), optional</span></dt><dd><p>A 2D array of estimated noise variance associated
+<dt><strong>s2</strong><span class="classifier">ndarray, shape (N, 1), optional</span></dt><dd><p>A 2D array of estimated noise variance associated
 with each test point. Only required if
 <code class="docutils literal notranslate"><span class="pre">user_provided_add</span> <span class="pre">=</span> <span class="pre">True</span></code>.</p>
 </dd>
@@ -93,7 +93,7 @@ is of the same shape as <code class="docutils literal notranslate"><span class="
 </dd>
 <dt><strong>dsn2</strong><span class="classifier">ndarray, optional</span></dt><dd><p>The gradient with respect to hyperparameters. If there is no
 input or output dependent noise, <code class="docutils literal notranslate"><span class="pre">dsn2</span></code> is of shape
-<code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">noise_n)</span></code> while otherwise it is of shape <code class="docutils literal notranslate"><span class="pre">(n,</span> <span class="pre">noise_n)</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">noise_N)</span></code> while otherwise it is of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">noise_N)</span></code>.</p>
 </dd>
 </dl>
 </dd>
@@ -117,9 +117,9 @@ noise function.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>X</strong><span class="classifier">ndarray, shape (n, d)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
 </dd>
-<dt><strong>y</strong><span class="classifier">ndarray, shape (n, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
 </dd>
 </dl>
 </dd>
@@ -168,7 +168,7 @@ them in other parts of the program.</p>
 <dt class="field-odd">Returns</dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
-in the order they are used in computations.</p>
+in the order they are in the hyperparameter array.</p>
 </dd>
 </dl>
 </dd>
@@ -246,7 +246,7 @@ in the order they are used in computations.</p>
       &copy;2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.2</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.0.3</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
