@@ -793,7 +793,12 @@ class GP:
         Clean auxiliary computational structures from the Gaussian Process,
         thus reducing memory usage. These can be reconstructed with a call to
         :py:func:`update` with ``compute_posterior=True``.
+
+        Furthermore, the `temporary_data` attribute is being cleared.
         """
+
+        # dict to store temporary data e.g. for pyvbmc
+        self.temporary_data = dict()
 
         # Check if there are posteriors to clean.
         if self.posteriors is not None:
