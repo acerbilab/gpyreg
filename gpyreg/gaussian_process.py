@@ -56,6 +56,9 @@ class GP:
         self.set_bounds()
         self.set_priors()
 
+        # dict to store temporary data e.g. for pyvbmc
+        self.temporary_data = dict()
+
     def __repr__(self):
         dimension = "Dimension: " + str(self.D) + "\n"
 

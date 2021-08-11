@@ -23,6 +23,9 @@ def test_empty_gp():
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
 
+    # Test that temporary_data dict exists (required for e.g. pyvbmc)
+    assert isinstance(gp.temporary_data, dict)
+
     # Test that lower and upper bounds are set appropriately.
     bounds = gp.get_bounds()
     assert np.all(bounds["covariance_log_lengthscale"][0] == -np.inf)
