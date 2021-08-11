@@ -23,6 +23,9 @@ def test_empty_gp():
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
 
+    # Test that temporary_data dict exists (required for e.g. pyvbmc)
+    assert isinstance(gp.temporary_data, dict)
+
     # Test that lower and upper bounds are set appropriately.
     bounds = gp.get_bounds()
     assert np.all(bounds["covariance_log_lengthscale"][0] == -np.inf)
@@ -239,12 +242,17 @@ def test_cleaning():
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
 
+    gp.temporary_data["foo"] = "bar"
+    assert len(gp.temporary_data) == 1
+
     gp_train = {"n_samples": 10}
     hyps, _, _ = gp.fit(X=X, y=y, options=gp_train)
 
     posteriors = copy.deepcopy(gp.posteriors)
 
     gp.clean()
+
+    assert len(gp.temporary_data) == 0
 
     for i in range(0, 10):
         assert np.all(posteriors[i].hyp == gp.posteriors[i].hyp)
