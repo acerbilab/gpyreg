@@ -137,7 +137,8 @@ class SliceSampler:
                 self.LB = np.tile(LB, D)
             else:
                 self.LB = LB.copy()
-        self.LB_out = self.LB + np.spacing(self.LB)
+        # np.spacing could return negative numbers so use nextafter
+        self.LB_out = np.nextafter(self.LB, np.inf)
 
         if UB is None:
             self.UB = np.tile(np.inf, D)
@@ -147,7 +148,8 @@ class SliceSampler:
                 self.UB = np.tile(UB, D)
             else:
                 self.UB = UB.copy()
-        self.UB_out = self.UB + np.spacing(self.UB)
+        # np.spacing could return negative numbers so use nextafter
+        self.UB_out = np.nextafter(self.UB, -np.inf)
 
         if widths is None:
             self.widths = ((self.UB - self.LB) / 2).copy()
@@ -460,8 +462,10 @@ class SliceSampler:
                     delta = self.UB[dd] - self.LB[dd]
                     if shrink > 3:
                         if np.isfinite(delta):
+                            # take absolute value to make sure we don't have
+                            # issues with np.spacing returning negative values
                             self.widths[dd] = np.maximum(
-                                self.widths[dd] / 1.1, np.spacing(delta)
+                                self.widths[dd] / 1.1, np.abs(np.spacing(delta))
                             )
                         else:
                             self.widths[dd] = np.maximum(

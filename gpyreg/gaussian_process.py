@@ -1036,8 +1036,9 @@ class GP:
         eps_UB = np.reshape(UB.copy(), (1, -1))
         LB_idx = (eps_LB != eps_UB) & np.isfinite(eps_LB)
         UB_idx = (eps_LB != eps_UB) & np.isfinite(eps_UB)
-        eps_LB[LB_idx] += np.spacing(eps_LB[LB_idx])
-        eps_UB[UB_idx] -= np.spacing(eps_UB[UB_idx])
+        # np.spacing could return negative numbers so use nextafter
+        eps_LB[LB_idx] = np.nextafter(eps_LB[LB_idx], np.inf)
+        eps_UB[UB_idx] = np.nextafter(eps_UB[UB_idx], -np.inf)
         hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
         # Perform optimization from most promising opts_N hyperparameter
@@ -2166,7 +2167,9 @@ class GP:
             U[negidx] *= -1
 
             D = np.real(D)  # symmetric so all are real
-            tol = np.spacing(np.max(D)) * D.shape[0]
+            # the abs is there to make sure we don't have issues
+            # if np.spacing returns negative values
+            tol = np.abs(np.spacing(np.max(D))) * D.shape[0]
             t = np.abs(D) > tol
             D = D[t]
             p = np.sum(D < 0)  # negative eigenvalues
