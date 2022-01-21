@@ -182,22 +182,19 @@ def f_min_fill(
 # Inverse of mixture of uniform cumulative distribution function.
 def __uuinv(p, B, w):
     x = np.zeros(p.shape)
-    L1 = B[3] - B[0]
-    L2 = B[2] - B[1]
+    L = B[3] - B[0] + B[1] - B[2]
 
     # First step
-    i1 = p <= (1 - w) * (B[1] - B[0]) / L1
-    x[i1] = B[0] + p[i1] * L1 / (1 - w)
+    i1 = p <= (1 - w) * (B[1] - B[0]) / L
+    x[i1] = B[0] + p[i1] * L / (1 - w)
 
     # Second step
-    i2 = (p <= (1 - w) * (B[2] - B[0]) / L1 + w) & ~i1
-    x[i2] = (p[i2] * L1 * L2 + B[0] * (1 - w) * L2 + w * B[1] * L1) / (
-        L1 * w + L2 * (1 - w)
-    )
+    i2 = (p <= (1 - w) * (B[2] - B[0]) / L + w) & ~i1
+    x[i2] = (p[i2] - (1 - w) * (B[1] - B[0]) / L) * (B[2] - B[1]) / w + B[1]
 
     # Third step
-    i3 = p > (1 - w) * (B[2] - B[0]) / L1 + w
-    x[i3] = (p[i3] - w + B[0] * (1 - w) / L1) * L1 / (1 - w)
+    i3 = p > (1 - w) * (B[2] - B[0]) / L + w
+    x[i3] = (p[i3] - w - (1 - w) * (B[1] - B[0]) / L) * L / (1 - w) + B[2]
 
     x[p < 0] = np.nan
     x[p > 1] = np.nan
