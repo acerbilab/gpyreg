@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.stats
-from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf
+from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, __uuinv
 from scipy.integrate import quad
 
 
@@ -87,3 +87,23 @@ def test_ppf_cdf():
         assert np.isclose(
             smoothbox_cdf(smoothbox_ppf(q, sigma, a, b), sigma, a, b), q
         )
+
+
+def test_uuinv():
+    p = np.linspace(0, 1, 1000)
+    B = [0, 10, 30, 66]
+    w = 0.6
+    x = __uuinv(p, B, w)
+
+    assert np.isclose(sum((x <= B[2]) & (B[1] <= x)) / np.size(x), w)
+    assert np.isclose(
+        sum((x < B[1]) & (B[0] <= x)) / np.size(x),
+        (1 - w) * (B[1] - B[0]) / (B[1] - B[0] + B[3] - B[2]),
+        atol=1e-3,
+    )
+    assert np.isclose(
+        sum((x <= B[3]) & (B[2] <= x)) / np.size(x),
+        (1 - w) * (B[3] - B[2]) / (B[1] - B[0] + B[3] - B[2]),
+        atol=1e-3,
+    )
+
