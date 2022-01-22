@@ -185,7 +185,7 @@ def __uuinv(p, B, w):
     distributions. The mixture is:
     .. math:: 
     w \text{Uniform}(B[1], B[2]) + 
-    \frac{w - 1}{2} (\text{Uniform}(B[0], B[1]) + \text{Uniform}(B[2], B[3]))
+    \frac{1 - w}{2} (\text{Uniform}(B[0], B[1]) + \text{Uniform}(B[2], B[3]))
 
     Parameters
     ----------
