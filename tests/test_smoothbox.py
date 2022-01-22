@@ -2,8 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.stats
-from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, __uuinv
+from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, uuinv
 from scipy.integrate import quad
+import itertools
 
 
 def pdf(x, sigma, a, b):
@@ -91,19 +92,37 @@ def test_ppf_cdf():
 
 def test_uuinv():
     p = np.linspace(0, 1, 1000)
-    B = [0, 10, 30, 66]
-    w = 0.6
-    x = __uuinv(p, B, w)
+    Bs = [
+        [0, 0, 30, 66],
+        [0, 10, 30, 66],
+        [0, 10, 66, 66],
+        [0, 10, 10, 66],
+    ]
+    ws = [0, 0.6, 1]
 
-    assert np.isclose(sum((x <= B[2]) & (B[1] <= x)) / np.size(x), w)
-    assert np.isclose(
-        sum((x < B[1]) & (B[0] <= x)) / np.size(x),
-        (1 - w) * (B[1] - B[0]) / (B[1] - B[0] + B[3] - B[2]),
-        atol=1e-3,
-    )
-    assert np.isclose(
-        sum((x <= B[3]) & (B[2] <= x)) / np.size(x),
-        (1 - w) * (B[3] - B[2]) / (B[1] - B[0] + B[3] - B[2]),
-        atol=1e-3,
-    )
+    for B, w in itertools.product(Bs, ws):
+        x = uuinv(p, B, w)
+        assert np.isclose(
+            sum((x <= B[2]) & (B[1] <= x)) / np.size(x), w, atol=1e-3
+        )
+        assert np.isclose(
+            sum((x < B[1]) & (B[0] <= x)) / np.size(x),
+            (1 - w) * (B[1] - B[0]) / (B[1] - B[0] + B[3] - B[2]),
+            atol=1e-3,
+        )
+        assert np.isclose(
+            sum((x <= B[3]) & (B[2] < x)) / np.size(x),
+            (1 - w) * (B[3] - B[2]) / (B[1] - B[0] + B[3] - B[2]),
+            atol=1e-3,
+        )
 
+    # Degenerate to mixture of delta and uniform distributions
+    Bs = [[0, 0, 66, 66]]
+    ws = [0, 0.6, 1]
+    for B, w in itertools.product(Bs, ws):
+        x = uuinv(p, B, w)
+        assert np.isclose(
+            sum((x < B[2]) & (B[1] < x)) / np.size(x), w, atol=2e-3
+        )
+        assert np.isclose(sum(x == B[0]) / np.size(x), (1 - w) / 2, atol=2e-3)
+        assert np.isclose(sum(x == B[3]) / np.size(x), (1 - w) / 2, atol=2e-3)

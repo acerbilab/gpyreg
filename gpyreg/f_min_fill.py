@@ -121,7 +121,7 @@ def f_min_fill(
                         # plausible box
                         w = 0.5 ** (1 / n_vars)
 
-                        sX[:, i] = __uuinv(
+                        sX[:, i] = uuinv(
                             S[:, i], [LB[i], PLB[i], PUB[i], UB[i]], w
                         )
                 else:
@@ -179,7 +179,7 @@ def f_min_fill(
     return X[order, :], y[order]
 
 
-def __uuinv(p, B, w):
+def uuinv(p, B, w):
     """
     Inverse of cumulative distribution function of mixture of uniform 
     distributions. The mixture is:
@@ -202,19 +202,41 @@ def __uuinv(p, B, w):
     x : ndarray
         1D array of samples corresponding to `p`.
     """
+    assert B[0] <= B[1] <= B[2] <= B[3]
+    assert 0 <= w <= 1
     x = np.zeros(p.shape)
     L = B[3] - B[0] + B[1] - B[2]
+
+    if w == 1:
+        x = p * (B[2] - B[1]) + B[1]
+        return x
+
+    if L == 0:
+        # Degenerate to mixture of delta and uniform distributions
+        i1 = p <= (1 - w) / 2
+        x[i1] = B[0]
+
+        if w != 0:
+            i2 = (p <= (1 - w) / 2 + w) & ~i1
+            x[i2] = (p[i2] - (1 - w) / 2) * (B[2] - B[1]) / w + B[1]
+
+        i3 = p > (1 - w) / 2 + w
+        x[i3] = B[3]
+        return x
 
     # First step
     i1 = p <= (1 - w) * (B[1] - B[0]) / L
     x[i1] = B[0] + p[i1] * L / (1 - w)
 
     # Second step
-    i2 = (p <= (1 - w) * (B[2] - B[0]) / L + w) & ~i1
-    x[i2] = (p[i2] - (1 - w) * (B[1] - B[0]) / L) * (B[2] - B[1]) / w + B[1]
+    i2 = (p <= (1 - w) * (B[1] - B[0]) / L + w) & ~i1
+    if w != 0:
+        x[i2] = (p[i2] - (1 - w) * (B[1] - B[0]) / L) * (B[2] - B[1]) / w + B[
+            1
+        ]
 
     # Third step
-    i3 = p > (1 - w) * (B[2] - B[0]) / L + w
+    i3 = p > (1 - w) * (B[1] - B[0]) / L + w
     x[i3] = (p[i3] - w - (1 - w) * (B[1] - B[0]) / L) * L / (1 - w) + B[2]
 
     x[p < 0] = np.nan
