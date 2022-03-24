@@ -352,7 +352,6 @@ class Matern:
         if compute_grad:
             dK = np.zeros((N, N, cov_N))
             for i in range(0, D):
-                #dK(:,:,i) = sf2*M.^(-alpha-1).*sq_dist(x(:,i)'/ell(i),z(:,i)'/ell(i));
                 Ki = squareform(
                     pdist(
                         np.reshape(
@@ -574,18 +573,17 @@ class RationalQuadraticARD:
         if compute_grad:
             dK = np.zeros((N, N, cov_N))
 
+            # Gradient respect of lenght scale.
             for i in range(0, D):
                 Ki = squareform(pdist(np.reshape(1. / ell[i] * X[:, i], (-1, 1)),
                         "sqeuclidean",))
-                # With d=1 kernel there will be issues caused by zero
-                # divisions. This is OK, the kernel is just not
-                # differentiable there.
                 with np.errstate(all="ignore"):
                     dK[:, :, i] = sf2 * M**(-alpha-1) * Ki
 
             # Gradient of cov output scale.
             dK[:, :, D] = 2 * K
 
+            # Gradient respect of alpha.
             dK[:, :, D+1] = K * (0.5 * tmp/M - alpha * np.log(M))
 
             return K, dK
