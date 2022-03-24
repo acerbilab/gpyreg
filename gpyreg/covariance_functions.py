@@ -352,6 +352,7 @@ class Matern:
         if compute_grad:
             dK = np.zeros((N, N, cov_N))
             for i in range(0, D):
+                #dK(:,:,i) = sf2*M.^(-alpha-1).*sq_dist(x(:,i)'/ell(i),z(:,i)'/ell(i));
                 Ki = squareform(
                     pdist(
                         np.reshape(
@@ -412,3 +413,181 @@ def _bounds_info_helper(cov_N, X, y):
         "x0": plausible_x0,
     }
     return bounds_info
+
+
+class RationalQuadraticARD:
+    """Rational Quadratic """
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def hyperparameter_count(D: int):
+        """
+        Return the number of hyperparameters this covariance function has.
+
+        Parameters
+        ----------
+        D : int
+            The dimensionality of the kernel.
+
+        Returns
+        -------
+        count : int
+            The number of hyperparameters.
+        """
+        return D + 2
+
+    @staticmethod
+    def hyperparameter_info(D: int):
+        """
+        Return information on the names of hyperparameters for setting
+        them in other parts of the program.
+
+        Parameters
+        ----------
+        D : int
+            The dimensionality of the kernel.
+
+        Returns
+        -------
+        hyper_info : array_like
+            A list of tuples of hyperparameter names and their number,
+            in the order they are in the hyperparameter array.
+        """
+        return [
+            ("covariance_log_lengthscale", D),
+            ("covariance_log_outputscale", 1),
+            ("covariance_log_shape", 1)
+        ]
+
+    def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
+        """
+        Return information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        covariance function.
+
+        Parameters
+        ----------
+        X : ndarray, shape (N, D)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (N, 1)
+            A 2D array where each row is a test target.
+
+        Returns
+        -------
+        cov_bound_info: dict
+            A dictionary containing the bound info with the following elements:
+
+            **LB** : np.ndarray, shape (cov_N, 1)
+                    The lower bounds of the hyperparameters.
+            **UB** : np.ndarray, shape (cov_N, 1)
+                    The upper bounds of the hyperparameters.
+            **PLB** : np.ndarray, shape (cov_N, 1)
+                    The plausible lower bounds of the hyperparameters.
+            **PUB** : np.ndarray, shape (cov_N, 1)
+                    The plausible upper bounds of the hyperparameters.
+            **x0** : np.ndarray, shape (cov_N, 1)
+                    The plausible starting point.
+
+            where ``cov_N`` is the number of hyperparameters.
+        """
+        cov_N = self.hyperparameter_count(X.shape[1])
+        return _bounds_info_helper(cov_N, X, y)
+
+    def compute(
+        self,
+        hyp: np.ndarray,
+        X: np.ndarray,
+        X_star: np.ndarray = None,
+        compute_diag: bool = False,
+        compute_grad: bool = False,
+    ):
+        """
+        Compute the covariance matrix for given training points
+        and test points.
+
+        Parameters
+        ----------
+        hyp : ndarray, shape (cov_N,)
+            A 1D array of hyperparameters, where ``cov_N`` is
+            the number of hyperparameters.
+        X : ndarray, shape (N, D)
+            A 2D array where each row is a training point.
+        X_star : ndarray, shape (M, D), optional
+            A 2D array where each row is a test point. If this is not
+            given, the self-covariance matrix is being computed.
+        compute_diag : bool, defaults to False
+            Whether to only compute the diagonal of the self-covariance
+            matrix.
+        compute_grad : bool, defaults to False
+            Whether to compute the gradient with respect to the
+            hyperparameters.
+
+        Returns
+        -------
+        K : ndarray
+            The covariance matrix which is by default of shape ``(N, N)``. If
+            ``compute_diag = True`` the shape is ``(N,)``.
+        dK : ndarray, shape (N, N, cov_N), optional
+            The gradient of the covariance matrix with respect to the
+            hyperparameters.
+
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
+        """
+        N, D = X.shape
+        cov_N = self.hyperparameter_count(D)
+
+        if hyp.size != cov_N:
+            raise ValueError(
+                "Expected %d covariance function hyperparameters, %d "
+                "passed instead." % (cov_N, hyp.size)
+            )
+        if hyp.ndim != 1:
+            raise ValueError(
+                "Covariance function output is available only for "
+                "one-sample hyperparameter inputs."
+            )
+
+        ell = np.exp(hyp[0:D])
+        sf2 = np.exp(2 * hyp[D])
+        alpha = np.exp(hyp[D+1])
+
+        if X_star is None:
+            if compute_diag:
+                tmp = np.zeros((N, 1))
+            else:
+                tmp = squareform(pdist(X @ np.diag(1. / ell), "sqeuclidean"))
+        else:
+            a = X @ np.diag(1. / ell)
+            b = X_star @ np.diag(1. / ell)
+            tmp = cdist(a, b, "sqeuclidean")
+
+        M = (1 + 0.5 * tmp/alpha) 
+        K = sf2 * M **(-alpha)
+
+        if compute_grad:
+            dK = np.zeros((N, N, cov_N))
+
+            for i in range(0, D):
+                Ki = squareform(pdist(np.reshape(1. / ell[i] * X[:, i], (-1, 1)),
+                        "sqeuclidean",))
+                # With d=1 kernel there will be issues caused by zero
+                # divisions. This is OK, the kernel is just not
+                # differentiable there.
+                with np.errstate(all="ignore"):
+                    dK[:, :, i] = sf2 * M**(-alpha-1) * Ki
+
+            # Gradient of cov output scale.
+            dK[:, :, D] = 2 * K
+
+            dK[:, :, D+1] = K * (0.5 * tmp/M - alpha * np.log(M))
+
+            return K, dK
+
+        return K
