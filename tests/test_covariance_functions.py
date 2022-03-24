@@ -88,4 +88,5 @@ def test_simple_rational_quad_ard():
     assert (np.all(res == res[0, 0]) and np.abs(res[0, 0] - 7.389) < eps)
 
 
-
+def test_kernel_gradient(kernel_fun=None, x0=None):
+    pass
