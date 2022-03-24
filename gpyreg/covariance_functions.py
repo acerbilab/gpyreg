@@ -416,7 +416,7 @@ def _bounds_info_helper(cov_N, X, y):
 
 
 class RationalQuadraticARD:
-    """Rational Quadratic """
+    """Rational Quadratic ARD kernel"""
 
     def __init__(self):
         pass

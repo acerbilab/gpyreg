@@ -84,7 +84,7 @@ def test_simple_rational_quad_ard():
     hyp = np.ones(D + 2)
     print(hyp.size)
     res = rq_ard.compute(hyp, X)
-    eps = 0.01
+    eps = 0.001
     assert (np.all(res == res[0, 0]) and np.abs(res[0, 0] - 7.389) < eps)
 
 
