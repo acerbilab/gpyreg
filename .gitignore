@@ -52,3 +52,6 @@ docsrc/_build/
 
 # vscode
 .vscode
+
+# intellij
+.idea
