@@ -29,7 +29,7 @@ def test_sqr_exp_kernel_gradient():
     N = 20
     X = np.ones((N, D))
     hyp = np.ones(D + 1)
-    _test_kernel_gradient_(sqr_exp, X, hyp)
+    _test_kernel_gradient_(sqr_exp, hyp, X)
 
 def test_matern_compute_sanity_checks():
     matern = Matern(3)
@@ -68,7 +68,7 @@ def test_matern_kernel_gradient():
     X = np.ones((N, D))
     hyp = np.ones(D + 1)
 
-    _test_kernel_gradient_(matern_fun, X, hyp)
+    _test_kernel_gradient_(matern_fun, hyp, X)
 
 def test_rational_quad_ard_checks():
     rq_ard = RationalQuadraticARD()
@@ -108,29 +108,47 @@ def test_rqard_kernel_gradient():
     N = 20
     X = np.ones((N, D))
     hyp = np.ones(D + 2)
-    _test_kernel_gradient_(rq_ard, X, hyp)
+    _test_kernel_gradient_(rq_ard, hyp, X)
 
-def _test_kernel_gradient_(kernel_fun: AbstractKernel, X0:np.ndarray, hyp, h=1e-3, eps=1e-3):
-    K, dK = kernel_fun.compute(hyp, X0, compute_grad=True)
+def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star:np.ndarray=None, h=1e-3, eps=1e-3):
+    """
+    Test the gradient of the kernel function via the Five-point stencil difference method. 
+
+    Parameters
+    ----------
+    kernel_fun : AbstractKernel
+    
+    X : ndarray, shape (N, D)
+
+    hyp : ndarray, shape (cov_N,)
+        A 1D array of hyperparameters, where ``cov_N`` is
+        the number of hyperparameters.
+    h: float 
+        Grid spacing.
+    eps: float
+        Error tolerance.
+    """
+
+    K, dK = kernel_fun.compute(hyp, X, X_star,compute_grad=True)
 
     hyp_new = hyp.copy()
     finite_diff = np.zeros((K.shape[0], K.shape[1], len(hyp)))
 
     for idx, h_p in enumerate(hyp.squeeze()):
         hyp_new[idx] = h_p + 2.0 * h
-        f_2h = kernel_fun.compute(hyp_new, X0)
+        f_2h = kernel_fun.compute(hyp_new, X, X_star)
         hyp_new[idx] = h_p
         
         hyp_new[idx] = h_p + h
-        f_h = kernel_fun.compute(hyp_new, X0)
+        f_h = kernel_fun.compute(hyp_new, X, X_star)
         hyp_new[idx] = h_p
         
         hyp_new[idx] = h_p - h
-        f_neg_h = kernel_fun.compute(hyp_new, X0)
+        f_neg_h = kernel_fun.compute(hyp_new, X, X_star)
         hyp_new[idx] = h_p
 
         hyp_new[idx] = h_p - 2*h
-        f_neg_2h = kernel_fun.compute(hyp_new, X0)
+        f_neg_2h = kernel_fun.compute(hyp_new, X, X_star)
 
         finite_diff[:, :, idx] = -f_2h + 8.0 * f_h - 8.0 * f_neg_h + f_neg_2h
         finite_diff[:, :, idx] = finite_diff[:, :, idx] / (12 * h)

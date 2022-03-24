@@ -8,7 +8,7 @@ from abc import ABC, abstractclassmethod
 class AbstractKernel(ABC):
 
     @abstractclassmethod
-    def compute(self, hyp: np.ndarray, X: np.ndarray,X_star: np.ndarray = None,
+    def compute(self, hyp: np.ndarray, X: np.ndarray, X_star: np.ndarray = None,
         compute_diag: bool = False,
         compute_grad: bool = False,
     ):
