@@ -27,8 +27,11 @@ def test_sqr_exp_kernel_gradient():
     sqr_exp = SquaredExponential()
     D = 3
     N = 20
-    X = np.ones((N, D))
-    hyp = np.ones(D + 1)
+    diag_cov = np.eye(N)*(0.2)
+    X = (np.random.multivariate_normal(np.zeros(N), diag_cov, D)).T
+    hyp_D = D+1
+    diag_cov = np.eye(hyp_D)*(0.2)
+    hyp = (np.random.multivariate_normal(np.zeros(hyp_D), diag_cov))
     _test_kernel_gradient_(sqr_exp, hyp, X)
 
 def test_matern_compute_sanity_checks():
@@ -65,8 +68,11 @@ def test_matern_kernel_gradient():
     matern_fun = Matern(3)
     D = 3
     N = 20
-    X = np.ones((N, D))
-    hyp = np.ones(D + 1)
+    diag_cov = np.eye(N)*(0.2)
+    X = (np.random.multivariate_normal(np.zeros(N), diag_cov, D)).T
+    hyp_D = D+1
+    diag_cov = np.eye(hyp_D)*(0.2)
+    hyp = (np.random.multivariate_normal(np.zeros(hyp_D), diag_cov))
 
     _test_kernel_gradient_(matern_fun, hyp, X)
 
@@ -91,28 +97,38 @@ def test_rational_quad_ard_checks():
         in execinfo.value.args[0]
     )
 
+def test_cov_rational_quad_ard():
+    rq_ard = RationalQuadraticARD()
+    X = np.array([[0.343, 0.967, 0.724]]).T
+    hyp = np.array([0.5, 0.6, 0.4])
+    res = rq_ard.compute(hyp, X)
+    assert np.all(np.array([res[1, 0] - 3.3201, res[1, 0] - 3.0958, res[2, 0] - 3.2334]) < 1e-5) \
+        and np.allclose(res, res.T)
+
 def test_simple_rational_quad_ard():
     rq_ard = RationalQuadraticARD()
     D = 3
     N = 20
     X = np.ones((N, D))
     hyp = np.ones(D + 2)
-    print(hyp.size)
     res = rq_ard.compute(hyp, X)
-    eps = 0.001
-    assert (np.all(res == res[0, 0]) and np.abs(res[0, 0] - 7.389) < eps)
+    assert np.allclose(res[0, 0], np.array([7.389])) and np.allclose(res, res.T)
 
 def test_rqard_kernel_gradient():
-    rq_ard = RationalQuadraticARD()
     D = 3
     N = 20
-    X = np.ones((N, D))
-    hyp = np.ones(D + 2)
+    diag_cov = np.eye(N)*(0.2)
+    X = (np.random.multivariate_normal(np.zeros(N), diag_cov, D)).T
+    hyp_D = D+2
+    diag_cov = np.eye(hyp_D)*(0.2)
+    hyp = (np.random.multivariate_normal(np.zeros(hyp_D), diag_cov))
+
+    rq_ard = RationalQuadraticARD()
     _test_kernel_gradient_(rq_ard, hyp, X)
 
-def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star:np.ndarray=None, h=1e-3, eps=1e-3):
+def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star:np.ndarray=None, h=1e-5, eps=1e-4):
     """
-    Test the gradient of the kernel function via the Five-point stencil difference method. 
+    Test the gradient of the kernel function via the Five-point stencil difference method (https://en.wikipedia.org/wiki/Five-point_stencil). 
 
     Parameters
     ----------
@@ -154,3 +170,5 @@ def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star
         finite_diff[:, :, idx] = finite_diff[:, :, idx] / (12 * h)
     
     assert np.all(np.abs(finite_diff - dK) <= eps)
+
+test_simple_rational_quad_ard()
