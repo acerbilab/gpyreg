@@ -2,6 +2,7 @@
 
 import math
 import time
+import warnings
 
 import numpy as np
 import scipy as sp
@@ -706,14 +707,19 @@ class GP:
                     new_L_column = sp.linalg.solve_triangular(
                         L, Ks, trans=1, check_finite=False
                     )
-                    # If rank-1-update is not numerically stable, perform a
+                    # If rank-1 update is not numerically stable, perform a
                     # full update for this posterior instead:
                     sqrt_arg = sn2_eff**2 + K * sn2_eff\
                         - np.dot(new_L_column.T, new_L_column)
                     if sqrt_arg <= 0.0:
                         full_update_s = True #  Mark this posterior for full update
                         full_updates.append(s)
-                    else:  # Otherwise continue with rank-1-update:
+                        warnings.warn(
+                            "Rank-one update of Cholesky factor" +\
+                            f"failed for posterior {s}. Reverting to full update.",
+                            stacklevel=2
+                        )
+                    else:  # Otherwise continue with rank-1 update:
                         full_update_s = False
                         alpha_update = (
                             sp.linalg.solve_triangular(
@@ -744,7 +750,7 @@ class GP:
                         ]
                     )
 
-                # Finish rank-1-update if computation was stable for posterior s
+                # Finish rank-1 update if computation was stable for posterior s
                 if not full_update_s:
                     self.posteriors[s].sW = np.concatenate(
                         (self.posteriors[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
