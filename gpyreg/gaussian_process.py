@@ -711,8 +711,10 @@ class GP:
                     sqrt_arg = sn2_eff**2 + K * sn2_eff\
                         - np.dot(new_L_column.T, new_L_column)
                     if sqrt_arg <= 0.0:
-                        full_updates.append(s) #  Mark this posterior for full update
+                        full_update_s = True #  Mark this posterior for full update
+                        full_updates.append(s)
                     else:  # Otherwise continue with rank-1-update:
+                        full_update_s = False
                         alpha_update = (
                             sp.linalg.solve_triangular(
                                 L,
@@ -743,7 +745,7 @@ class GP:
                     )
 
                 # Finish rank-1-update if computation was stable for posterior s
-                if (full_updates == []) or (full_updates[-1] != s):
+                if not full_update_s:
                     self.posteriors[s].sW = np.concatenate(
                         (self.posteriors[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
                     )
