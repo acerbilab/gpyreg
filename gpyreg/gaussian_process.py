@@ -715,8 +715,8 @@ class GP:
                         full_update_s = True #  Mark this posterior for full update
                         full_updates.append(s)
                         warnings.warn(
-                            "Rank-one update of Cholesky factor" +\
-                            f"failed for posterior {s}. Reverting to full update.",
+                            "Rank-one update of Cholesky factor " +\
+                            f"unstable for posterior {s}. Reverting to full update.",
                             stacklevel=2
                         )
                     else:  # Otherwise continue with rank-1 update:
