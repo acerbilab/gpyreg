@@ -673,6 +673,7 @@ class GP:
                 and s2_new is None
             ):
                 rank_one_update = True
+        full_updates = []  # Keep track of unstable rank-1 updates
 
         if rank_one_update:
             cov_N = self.covariance.hyperparameter_count(self.D)
@@ -702,36 +703,35 @@ class GP:
                 L_chol = self.posteriors[s].L_chol
 
                 if L_chol:  # High-noise parametrization
-                    alpha_update = (
-                        sp.linalg.solve_triangular(
-                            L,
+                    new_L_column = sp.linalg.solve_triangular(
+                        L, Ks, trans=1, check_finite=False
+                    )
+                    # If rank-1-update is not numerically stable, perform a
+                    # full update for this posterior instead:
+                    sqrt_arg = sn2_eff**2 + K * sn2_eff\
+                        - np.dot(new_L_column.T, new_L_column)
+                    if sqrt_arg <= 0.0:
+                        full_updates.append(s) #  Mark this posterior for full update
+                    else:  # Otherwise continue with rank-1-update:
+                        alpha_update = (
                             sp.linalg.solve_triangular(
-                                L, Ks, trans=1, check_finite=False
-                            ),
-                            trans=0,
-                            check_finite=False,
+                                L,
+                                new_L_column,
+                                trans=0,
+                                check_finite=False,
+                            )
+                            / sn2_eff
                         )
-                        / sn2_eff
-                    )
-                    new_L_column = (
-                        sp.linalg.solve_triangular(
-                            L, Ks, trans=1, check_finite=False
-                        )
-                        / sn2_eff
-                    )
-                    self.posteriors[s].L = np.block(
-                        [
-                            [L, new_L_column],
+                        self.posteriors[s].L = np.block(
                             [
-                                np.zeros((1, L.shape[0])),
-                                np.sqrt(
-                                    1
-                                    + K / sn2_eff
-                                    - np.dot(new_L_column.T, new_L_column)
-                                ),
-                            ],
-                        ]
-                    )
+                                [L, new_L_column / sn2_eff],
+                                [
+                                    np.zeros((1, L.shape[0])),
+                                    np.sqrt(sqrt_arg) / sn2_eff,
+                                ],
+                            ]
+                        )
+
                 else:  # Low-noise parametrization
                     alpha_update = np.dot(-L, Ks)
                     v = -alpha_update / v_star[:, s]
@@ -742,16 +742,18 @@ class GP:
                         ]
                     )
 
-                self.posteriors[s].sW = np.concatenate(
-                    (self.posteriors[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
-                )
+                # Finish rank-1-update if computation was stable for posterior s
+                if (full_updates == []) or (full_updates[-1] != s):
+                    self.posteriors[s].sW = np.concatenate(
+                        (self.posteriors[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
+                    )
 
-                # alpha_update now contains (K + \sigma^2 I) \ k*
-                self.posteriors[s].alpha = np.concatenate(
-                    (self.posteriors[s].alpha, np.array([[0]]))
-                ) + (m_star[:, s] - y_new) / v_star[:, s] * np.concatenate(
-                    (alpha_update, np.array([[-1]]))
-                )
+                    # alpha_update now contains (K + \sigma^2 I) \ k*
+                    self.posteriors[s].alpha = np.concatenate(
+                        (self.posteriors[s].alpha, np.array([[0]]))
+                    ) + (m_star[:, s] - y_new) / v_star[:, s] * np.concatenate(
+                        (alpha_update, np.array([[-1]]))
+                    )
 
         if X_new is not None:
             if self.X is None:
@@ -771,7 +773,14 @@ class GP:
             else:
                 self.s2 = np.concatenate((self.s2, s2_new))
 
-        if not rank_one_update:
+        if rank_one_update:
+            for s in full_updates:  # Compute full update where rank-1 failed
+                hyp_s = self.posteriors[s].hyp
+                self.posteriors[s] = self.__core_computation(
+                    hyp_s, 0, 0
+                )
+
+        else:
             if hyp is None:
                 hyp = self.get_hyperparameters(as_array=True)
             s_N, _ = hyp.shape
@@ -787,6 +796,7 @@ class GP:
                     self.posteriors[i] = Posterior(
                         hyp[i, :], None, None, None, None, None
                     )
+
 
     def clean(self):
         """
