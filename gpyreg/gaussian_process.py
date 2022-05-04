@@ -650,6 +650,11 @@ class GP:
             New hyperparameters that will replace the old ones.
         compute_posterior : bool, defaults to True
             Whether to compute the new posterior or not.
+
+        Raises
+        =======
+        LinAlgError
+            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability.
         """
 
         # Create local copies so we won't get trouble
@@ -1399,6 +1404,11 @@ class GP:
             The positive log marginal likelihood with added log prior.
         dlZ_plus_d_posterior : ndarray, shape (hyp_N,), optional
             The gradient with respect to hyperparameters.
+        
+        Raises
+        =======
+        LinAlgError
+            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability.
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
@@ -2200,6 +2210,13 @@ class GP:
         return T
 
     def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
+        """ Compute the Posterior.
+
+            Raises
+            ------
+        LinAlgError
+            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability.
+        """
         N, d = self.X.shape
         cov_N = self.covariance.hyperparameter_count(d)
         mean_N = self.mean.hyperparameter_count(d)
@@ -2239,6 +2256,7 @@ class GP:
         sn2_mult = 1  # Effective noise variance multiplier
 
         L_chol = np.min(sn2) >= 1e-6
+        L = None
         if L_chol:
             if np.isscalar(sn2):
                 sn2_div = sn2
@@ -2282,6 +2300,9 @@ class GP:
                     trans=0,
                     check_finite=False,
                 )
+        
+        if L is None:
+            raise sp.linalg.LinAlgError('Singular matrix for L Cholesky decomposition')
 
         alpha = (
             sp.linalg.solve_triangular(
