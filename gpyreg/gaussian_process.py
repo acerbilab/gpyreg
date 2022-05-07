@@ -654,7 +654,7 @@ class GP:
         Raises
         =======
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability.
+            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability values to the matrix.
         """
 
         # Create local copies so we won't get trouble
@@ -1408,7 +1408,7 @@ class GP:
         Raises
         =======
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability.
+            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability values to the matrix.
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
@@ -2215,7 +2215,7 @@ class GP:
             Raises
             ------
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability.
+            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability values to the matrix.
         """
         N, d = self.X.shape
         cov_N = self.covariance.hyperparameter_count(d)
