@@ -1565,6 +1565,7 @@ class GP:
         s2_star: np.ndarray = 0,
         add_noise: bool = False,
         separate_samples: bool = False,
+        log_pred_dens: bool = False
     ):
         """
         Compute the GP posterior mean and noise variance at given points.
@@ -1577,11 +1578,13 @@ class GP:
             True values at the points.
         s2_star : ndarray, shape (M, 1), optional
             Noise variance at the points.
-        add_noise : bool, defaults to True
+        add_noise : bool, defaults to ``True``
             Whether to add noise to the prediction results.
-        separate_samples : bool, defaults to False
+        separate_samples : bool, defaults to ``False``
             Whether to return the results separately for each hyperparameter
             sample or averaged.
+        log_pred_dens : bool, defaults to ``False``
+            Whether to return the log predictive density at the input points.
 
         Returns
         =======
@@ -1602,6 +1605,10 @@ class GP:
         # Preallocate space
         mu = np.zeros((N_star, s_N))
         s2 = np.zeros((N_star, s_N))
+        if log_pred_dens:
+            if y_star is None:
+                raise ValueError("Cannot calculate log predictive density without y_star.")
+            log_dens = np.zeros((N_star, s_N))
 
         cov_N = self.covariance.hyperparameter_count(D)
         mean_N = self.mean.hyperparameter_count(D)
@@ -1660,6 +1667,10 @@ class GP:
                 )
                 s2[:, s : s + 1] += sn2_star * sn2_mult
 
+            # Compute log probability of test points
+            if log_pred_dens:
+                log_dens[:, s] = -0.5 * (y_star - mu[:, s])**2 / s2[:, s] - 0.5 * np.log(2 * np.pi * s2[:, s])
+
         # Unless predictions for samples are requested separately
         # average over samples.
         if s_N > 1 and not separate_samples:
@@ -1668,7 +1679,10 @@ class GP:
             s2 = np.reshape(np.sum(s2, 1) / s_N + v, (-1, 1))
             mu = mu_bar
 
-        return mu, s2
+        if log_pred_dens:
+            return mu, s2, log_dens
+        else:
+            return mu, s2
 
     def quad(
         self,
