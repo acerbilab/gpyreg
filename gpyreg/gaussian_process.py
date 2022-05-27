@@ -1691,10 +1691,13 @@ class GP:
         # Unless predictions for samples are requested separately
         # average over samples.
         if not separate_samples:
-            mu_bar = np.reshape(np.sum(mu, 1), (-1, 1)) / s_N
-            v = np.sum((mu - mu_bar) ** 2, 1) / (s_N - 1)
-            s2 = np.reshape(np.sum(s2, 1) / s_N + v, (-1, 1))
-            mu = mu_bar
+            if s_N > 1:
+                mu_bar = np.reshape(np.sum(mu, 1), (-1, 1)) / s_N
+                v = np.sum((mu - mu_bar) ** 2, 1) / (s_N - 1)
+                s2 = np.reshape(np.sum(s2, 1) / s_N + v, (-1, 1))
+                mu = mu_bar
+            else:
+                v = 0
 
             # Compute log probability of test points (for averaged samples)
             if return_lpd and add_noise:  # then s2 is already y_s2 average
