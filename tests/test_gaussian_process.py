@@ -71,6 +71,10 @@ def test_empty_gp():
     gp.predict(x_star, add_noise=True)
     gp.predict(x_star, add_noise=False)
 
+    y_star = np.zeros((400, 1))
+    gp.predict(x_star, y_star, return_lpd=True, add_noise=False)
+    gp.predict(x_star, y_star, return_lpd=True, add_noise=True)
+
     # gp.quad(0, 1, compute_var=True)
 
     gp.plot()
@@ -108,6 +112,17 @@ def test_random_function():
 
     X_new = np.random.standard_normal(size=(10, D))
     y_new = gp.random_function(X_new)
+
+    # Test return_lpd:
+    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=False, separate_samples=False)
+    assert(lpd.shape == (10, 1))
+    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=False, separate_samples=True)
+    assert(lpd.shape == (10, N_s))
+    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=True, separate_samples=False)
+    assert(lpd.shape == (10, 1))
+    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=True, separate_samples=True)
+    assert(lpd.shape == (10, N_s))
+
     gp.update(X_new=X_new, y_new=y_new)
 
     gp.plot(delta_y=5, max_min_flag=False)
