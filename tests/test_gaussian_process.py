@@ -833,7 +833,7 @@ def test_quad_not_squared_exponential():
     gp = gpr.GP(
         D=D,
         covariance=gpr.covariance_functions.Matern(d),
-        mean=gpr.mean_functions.ZeroMean(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
     with pytest.raises(ValueError) as execinfo:
@@ -842,3 +842,66 @@ def test_quad_not_squared_exponential():
         "Bayesian quadrature only supports the squared exponential"
         in execinfo.value.args[0]
     )
+
+def test_predict_lpd():
+    D = 3
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(
+            user_provided_add=True
+        )
+    )
+    hyp = np.array(
+        [
+            [
+                # Covariance
+                0.0,
+                0.0,
+                0.0,  # log ell
+                1.0,  # log sf2
+                # Noise
+                np.log(np.pi),  # log std. dev. of noise
+                # Mean
+                -(D / 2) * np.log(2 * np.pi),  # MVN mode
+                0.0,
+                0.0,
+                0.0,  # Mode location
+                0.0,
+                0.0,
+                0.0,  # log scale
+            ],
+            [
+                # Covariance
+                0.0,
+                0.0,
+                0.0,  # log ell
+                1.0,  # log sf2
+                # Noise
+                np.log(np.pi),  # log std. dev. of noise
+                # Mean
+                -(D / 2) * np.log(2 * np.pi),  # MVN mode
+                0.0,
+                0.0,
+                0.0,  # Mode location
+                0.0,
+                0.0,
+                0.0,  # log scale
+            ]
+        ]
+    )
+    gp.update(hyp=hyp)
+
+    X_star = np.arange(-9, 9).reshape((-1, 3))
+    offset = np.random.normal(size=(6,1))
+    y_star = scipy.stats.multivariate_normal.logpdf(X_star, mean=np.zeros((D,))).reshape(-1,1) + offset
+    s2_star = np.arange(-3, 3).reshape((-1, 1))
+    s2_star = np.zeros((6,1))
+    f_mu, f_s2, lpd = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True)
+    assert np.allclose(lpd, scipy.stats.norm.logpdf(y_star, loc=f_mu, scale=np.sqrt(np.pi * s2_star + f_s2)))
+    __, __, lpd2 = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True)
+    assert np.all(lpd2 == lpd)
+    __, __, lpd3 = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True, separate_samples=True)
+    assert np.all(lpd3[:, 0 : 1] == lpd)
+    assert np.all(lpd3[:, 1 : 2] == lpd)
