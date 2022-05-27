@@ -1680,15 +1680,17 @@ class GP:
 
             # Compute log probability of test points (for separate samples)
             if return_lpd and separate_samples:
-                lpd[:, s] = -0.5 * (y_star - mu[:, s]) ** 2 / y_s2[
-                    :, s
-                ] - 0.5 * np.log(2 * np.pi * y_s2[:, s])
+                lpd[:, s : s + 1] = -0.5 * (
+                    y_star - mu[:, s : s + 1]
+                ) ** 2 / y_s2[:, s : s + 1] - 0.5 * np.log(
+                    2 * np.pi * y_s2[:, s : s + 1]
+                )
 
         if add_noise:
             s2 = y_s2
         # Unless predictions for samples are requested separately
         # average over samples.
-        if s_N > 1 and not separate_samples:
+        if not separate_samples:
             mu_bar = np.reshape(np.sum(mu, 1), (-1, 1)) / s_N
             v = np.sum((mu - mu_bar) ** 2, 1) / (s_N - 1)
             s2 = np.reshape(np.sum(s2, 1) / s_N + v, (-1, 1))
