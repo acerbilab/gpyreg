@@ -1589,7 +1589,9 @@ class GP:
             Whether to return the results separately for each hyperparameter
             sample or averaged.
         return_lpd : bool, defaults to ``False``
-            Whether to return the log predictive density at the input points.
+            Whether to return the log predictive density at the input points. If
+            separate_samples is ``False``, returns the lpd of the corresponding
+            mean approximation.
 
         Returns
         =======
