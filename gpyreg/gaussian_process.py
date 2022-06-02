@@ -714,15 +714,20 @@ class GP:
                     )
                     # If rank-1 update is not numerically stable, perform a
                     # full update for this posterior instead:
-                    sqrt_arg = sn2_eff**2 + K * sn2_eff\
+                    sqrt_arg = (
+                        sn2_eff ** 2
+                        + K * sn2_eff
                         - np.dot(new_L_column.T, new_L_column)
+                    )
                     if sqrt_arg <= 0.0:
-                        full_update_s = True #  Mark this posterior for full update
+                        full_update_s = (
+                            True  #  Mark this posterior for full update
+                        )
                         full_updates.append(s)
                         warnings.warn(
-                            "Rank-one update of Cholesky factor " +\
-                            f"unstable for posterior {s}. Reverting to full update.",
-                            stacklevel=2
+                            "Rank-one update of Cholesky factor "
+                            + f"unstable for posterior {s}. Reverting to full update.",
+                            stacklevel=2,
                         )
                     else:  # Otherwise continue with rank-1 update:
                         full_update_s = False
@@ -758,7 +763,10 @@ class GP:
                 # Finish rank-1 update if computation was stable for posterior s
                 if not full_update_s:
                     self.posteriors[s].sW = np.concatenate(
-                        (self.posteriors[s].sW, np.array([[1 / np.sqrt(sn2_eff)]]))
+                        (
+                            self.posteriors[s].sW,
+                            np.array([[1 / np.sqrt(sn2_eff)]]),
+                        )
                     )
 
                     # alpha_update now contains (K + \sigma^2 I) \ k*
@@ -789,9 +797,7 @@ class GP:
         if rank_one_update:
             for s in full_updates:  # Compute full update where rank-1 failed
                 hyp_s = self.posteriors[s].hyp
-                self.posteriors[s] = self.__core_computation(
-                    hyp_s, 0, 0
-                )
+                self.posteriors[s] = self.__core_computation(hyp_s, 0, 0)
 
         else:
             if hyp is None:
@@ -809,7 +815,6 @@ class GP:
                     self.posteriors[i] = Posterior(
                         hyp[i, :], None, None, None, None, None
                     )
-
 
     def clean(self):
         """
@@ -1404,7 +1409,7 @@ class GP:
             The positive log marginal likelihood with added log prior.
         dlZ_plus_d_posterior : ndarray, shape (hyp_N,), optional
             The gradient with respect to hyperparameters.
-        
+
         Raises
         =======
         LinAlgError
@@ -1565,6 +1570,7 @@ class GP:
         s2_star: np.ndarray = 0,
         add_noise: bool = False,
         separate_samples: bool = False,
+        return_lpd: bool = False,
     ):
         """
         Compute the GP posterior mean and noise variance at given points.
@@ -1577,11 +1583,15 @@ class GP:
             True values at the points.
         s2_star : ndarray, shape (M, 1), optional
             Noise variance at the points.
-        add_noise : bool, defaults to True
+        add_noise : bool, defaults to ``True``
             Whether to add noise to the prediction results.
-        separate_samples : bool, defaults to False
+        separate_samples : bool, defaults to ``False``
             Whether to return the results separately for each hyperparameter
             sample or averaged.
+        return_lpd : bool, defaults to ``False``
+            Whether to return the log predictive density at the input points. If
+            separate_samples is ``False``, returns the lpd of the corresponding
+            mean approximation.
 
         Returns
         =======
@@ -1602,6 +1612,15 @@ class GP:
         # Preallocate space
         mu = np.zeros((N_star, s_N))
         s2 = np.zeros((N_star, s_N))
+        if return_lpd:
+            if y_star is None:
+                raise ValueError(
+                    "Cannot calculate log predictive density without y_star."
+                )
+            if separate_samples:
+                lpd = np.zeros((N_star, s_N))
+        if return_lpd or add_noise:
+            y_s2 = np.zeros((N_star, s_N))
 
         cov_N = self.covariance.hyperparameter_count(D)
         mean_N = self.mean.hyperparameter_count(D)
@@ -1651,24 +1670,52 @@ class GP:
 
             # remove numerical noise, i.e. negative variances
             s2[:, s] = np.maximum(s2[:, s], 0)
-            if add_noise:
+            if return_lpd or add_noise:  # Both require predictive variance
                 sn2_mult = self.posteriors[s].sn2_mult
                 if sn2_mult is None:
                     sn2_mult = 1
                 sn2_star = self.noise.compute(
                     hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
                 )
-                s2[:, s : s + 1] += sn2_star * sn2_mult
+                # Predictive variance:
+                y_s2[:, s : s + 1] = s2[:, s : s + 1] + sn2_star * sn2_mult
 
+            # Compute log probability of test points (for separate samples)
+            if return_lpd and separate_samples:
+                lpd[:, s : s + 1] = -0.5 * (
+                    y_star - mu[:, s : s + 1]
+                ) ** 2 / y_s2[:, s : s + 1] - 0.5 * np.log(
+                    2 * np.pi * y_s2[:, s : s + 1]
+                )
+
+        if add_noise:
+            s2 = y_s2
         # Unless predictions for samples are requested separately
         # average over samples.
-        if s_N > 1 and not separate_samples:
-            mu_bar = np.reshape(np.sum(mu, 1), (-1, 1)) / s_N
-            v = np.sum((mu - mu_bar) ** 2, 1) / (s_N - 1)
-            s2 = np.reshape(np.sum(s2, 1) / s_N + v, (-1, 1))
-            mu = mu_bar
+        if not separate_samples:
+            if s_N > 1:
+                mu_bar = np.reshape(np.sum(mu, 1), (-1, 1)) / s_N
+                v = np.sum((mu - mu_bar) ** 2, 1) / (s_N - 1)
+                s2 = np.reshape(np.sum(s2, 1) / s_N + v, (-1, 1))
+                mu = mu_bar
+            else:
+                v = 0
 
-        return mu, s2
+            # Compute log probability of test points (for averaged samples)
+            if return_lpd and add_noise:  # then s2 is already y_s2 average
+                lpd = -0.5 * (y_star - mu) ** 2 / s2 - 0.5 * np.log(
+                    2 * np.pi * s2
+                )
+            elif return_lpd:  # then we need to average y_s2
+                y_s2 = np.reshape(np.sum(y_s2, 1) / s_N + v, (-1, 1))
+                lpd = -0.5 * (y_star - mu) ** 2 / y_s2 - 0.5 * np.log(
+                    2 * np.pi * y_s2
+                )
+
+        if return_lpd:
+            return mu, s2, lpd
+        else:
+            return mu, s2
 
     def quad(
         self,
@@ -2210,7 +2257,7 @@ class GP:
         return T
 
     def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
-        """ Compute the Posterior.
+        """Compute the Posterior.
 
             Raises
             ------
@@ -2300,9 +2347,11 @@ class GP:
                     trans=0,
                     check_finite=False,
                 )
-        
+
         if L is None:
-            raise sp.linalg.LinAlgError('Singular matrix for L Cholesky decomposition')
+            raise sp.linalg.LinAlgError(
+                "Singular matrix for L Cholesky decomposition"
+            )
 
         alpha = (
             sp.linalg.solve_triangular(
