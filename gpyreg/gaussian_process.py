@@ -2426,7 +2426,7 @@ class Posterior:
 
     def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
         self.hyp = hyp
-        # alpha = inv(K + diag(sn2)) * (y - m) / sl
+        # alpha = inv(K + sn2_mult * sn2) * (y - m) / sl
         self.alpha = alpha
         # Sqrt of noise precision vector, sW = 1 / sqrt(min(sn2) * sn2_mult)
         self.sW = sW
