@@ -4,14 +4,13 @@ import math
 import time
 import warnings
 
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 import scipy.stats
-import matplotlib.pyplot as plt
 
 import gpyreg.covariance_functions
 import gpyreg.mean_functions
-
 from gpyreg.f_min_fill import (
     f_min_fill,
     smoothbox_cdf,
@@ -715,7 +714,7 @@ class GP:
                     # If rank-1 update is not numerically stable, perform a
                     # full update for this posterior instead:
                     sqrt_arg = (
-                        sn2_eff ** 2
+                        sn2_eff**2
                         + K * sn2_eff
                         - np.dot(new_L_column.T, new_L_column)
                     )
@@ -915,7 +914,7 @@ class GP:
         if options is None:
             options = {}
         opts_N = options.get("opts_N", 3)
-        init_N = options.get("init_N", 2 ** 10)
+        init_N = options.get("init_N", 2**10)
         init_method = options.get("init_method", "sobol")
         thin = options.get("thin", 5)
         df_base = options.get("df_base", 7)
@@ -1250,7 +1249,7 @@ class GP:
             if np.any(sb_idx_b | sb_idx_a):
                 lp -= 0.5 * np.sum(
                     np.log(
-                        C ** 2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
+                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
                     )
                     + z2_tmp[sb_idx_b | sb_idx_a]
                 )
@@ -1824,7 +1823,7 @@ class GP:
             sn2_eff = sn2 * self.posteriors[s].sn2_mult
 
             # Compute posterior mean of the integral
-            tau = np.sqrt(sigma ** 2 + ell ** 2)
+            tau = np.sqrt(sigma**2 + ell**2)
             lnnf = (
                 ln_sf2 + sum_lnell - np.sum(np.log(tau), 1)
             )  # Covariance normalization factor
@@ -1841,15 +1840,15 @@ class GP:
             if quadratic_mean_fun:
                 nu_k = -0.5 * np.sum(
                     1
-                    / omega ** 2
-                    * (mu ** 2 + sigma ** 2 - 2 * mu * xm + xm ** 2),
+                    / omega**2
+                    * (mu**2 + sigma**2 - 2 * mu * xm + xm**2),
                     1,
                 )
                 F[:, s] += nu_k
 
             # Compute posterior variance of the integral
             if compute_var:
-                tau_kk = np.sqrt(2 * sigma ** 2 + ell ** 2)
+                tau_kk = np.sqrt(2 * sigma**2 + ell**2)
                 nf_kk = np.exp(ln_sf2 + sum_lnell - np.sum(np.log(tau_kk), 1))
                 if L_chol:
                     tmp_result = sp.linalg.solve_triangular(
@@ -1932,7 +1931,7 @@ class GP:
             ell[:, s] = np.exp(
                 self.posteriors[s].hyp[0 : self.D]
             )  # Extract length scale from HYP
-        ellbar = np.sqrt(np.mean(ell ** 2, 1)).T
+        ellbar = np.sqrt(np.mean(ell**2, 1)).T
 
         if lb is None:
             if self.X is not None:
@@ -1966,7 +1965,7 @@ class GP:
             )
 
             xx_vec = np.reshape(
-                np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
+                np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)),
                 (-1, 1),
             )
             if self.D > 1:
@@ -1999,7 +1998,7 @@ class GP:
                     ub[i] = x0[i] + 0.5 * dx
 
                 xx_vec = np.reshape(
-                    np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
+                    np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)),
                     (-1, 1),
                 )
                 if self.D > 1:
@@ -2055,9 +2054,9 @@ class GP:
                 )
 
                 if x0 is not None:
-                    xx = np.tile(x0, (x_N ** 2, 1))
+                    xx = np.tile(x0, (x_N**2, 1))
                 else:
-                    xx = np.tile(np.full((self.D,), 0.0), (x_N ** 2, 1))
+                    xx = np.tile(np.full((self.D,), 0.0), (x_N**2, 1))
                 xx[:, i] = xx_vec[:, 0]
                 xx[:, j] = xx_vec[:, 1]
 
@@ -2312,7 +2311,7 @@ class GP:
                 sn2_div = np.min(sn2)
                 sn2_mat = np.diag(sn2.ravel() / sn2_div)
             for i in range(0, 10):
-                try:
+                try:  # Cholesky decomposition until it works
                     L = sp.linalg.cholesky(
                         K / (sn2_div * sn2_mult) + sn2_mat, check_finite=False
                     )
@@ -2375,18 +2374,14 @@ class GP:
 
             if compute_nlZ_grad:
                 dnlZ = np.zeros(hyp.shape)
-                Q = (
+                Q = sp.linalg.solve_triangular(
+                    L,
                     sp.linalg.solve_triangular(
-                        L,
-                        sp.linalg.solve_triangular(
-                            L, np.eye(N), trans=1, check_finite=False
-                        ),
-                        trans=0,
-                        check_finite=False,
-                    )
-                    / sl
-                    - np.dot(alpha, alpha.T)
-                )
+                        L, np.eye(N), trans=1, check_finite=False
+                    ),
+                    trans=0,
+                    check_finite=False,
+                ) / sl - np.dot(alpha, alpha.T)
 
                 # Gradient of covariance hyperparameters.
                 for i in range(0, cov_N):
@@ -2431,8 +2426,15 @@ class Posterior:
 
     def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
         self.hyp = hyp
+        # alpha = inv(K + diag(sn2)) * (y - m) / sl
         self.alpha = alpha
+        # Sqrt of noise precision vector, sW = 1 / sqrt(min(sn2) * sn2_mult)
         self.sW = sW
+        # If L_chol is True, L = chol((K + sn2_mult * sn2) / sl), sl =
+        # sn2_multi * sn2_div, sn2_div = min(sn2)
+        # If L_chol is False, L = -inv((K + sn2_mult * sn2) / sl), sl = 1
         self.L = L
+        # A multiplier factor for making cholesky decomposition work
         self.sn2_mult = sn2_mult
+        # L_chol is True if np.min(sn2) >= 1e-6
         self.L_chol = Lchol
