@@ -544,7 +544,7 @@ def test_quadrature_without_noise():
 
     pdf_tmp = np.reshape(scipy.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
     tmp = np.dot(pdf_tmp, pdf_tmp.T)
-    F_var_predict = np.sum(np.sum(f_cov[:, :, 0] * tmp)) * (20 / mu_N) ** 2
+    F_var_predict = np.sum(np.sum(f_cov[0, :, :] * tmp)) * (20 / mu_N) ** 2
 
     F_bayes, F_var_bayes = gp.quad(0, 0.1, compute_var=True)
 
@@ -608,7 +608,7 @@ def test_quadrature_with_noise():
 
     pdf_tmp = np.reshape(scipy.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
     tmp = np.dot(pdf_tmp, pdf_tmp.T)
-    F_predict_var = np.sum(np.sum(f_cov[:, :, 0] * tmp)) * (30 / mu_N) ** 2
+    F_predict_var = np.sum(np.sum(f_cov[0, :, :] * tmp)) * (30 / mu_N) ** 2
 
     F_bayes, F_bayes_var = gp.quad(0, 0.1, compute_var=True)
 

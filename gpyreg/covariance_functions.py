@@ -38,7 +38,7 @@ class AbstractKernel(ABC):
             K : ndarray
                 The covariance matrix which is by default of shape ``(N, N)``. If
                 ``compute_diag = True`` the shape is ``(N,)``.
-            dK : ndarray, shape (N, N, cov_N), optional
+            dK : ndarray, shape (cov_N, N, N), optional
                 The gradient of the covariance matrix with respect to the
                 hyperparameters.
 
@@ -163,14 +163,14 @@ class SquaredExponential(AbstractKernel):
         K = sf2 * np.exp(-tmp / 2)
 
         if compute_grad:
-            dK = np.zeros((N, N, cov_N))
+            dK = np.zeros((cov_N, N, N))
             for i in range(0, D):
                 # Gradient of cov length scales
-                dK[:, :, i] = K * squareform(
+                dK[i, :, :] = K * squareform(
                     pdist(np.reshape(X[:, i] / ell[i], (-1, 1)), "sqeuclidean")
                 )
             # Gradient of cov output scale.
-            dK[:, :, D] = 2 * K
+            dK[D, :, :] = 2 * K
             return K, dK
 
         return K
@@ -248,7 +248,7 @@ class Matern(AbstractKernel):
         K = sf2 * self.f(tmp) * np.exp(-tmp)
 
         if compute_grad:
-            dK = np.zeros((N, N, cov_N))
+            dK = np.zeros((cov_N, N, N))
             for i in range(0, D):
                 Ki = squareform(
                     pdist(
@@ -262,9 +262,9 @@ class Matern(AbstractKernel):
                 # divisions. This is OK, the kernel is just not
                 # differentiable there.
                 with np.errstate(all="ignore"):
-                    dK[:, :, i] = sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki
+                    dK[i, :, :] = sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki
             # Gradient of cov output scale
-            dK[:, :, D] = 2 * K
+            dK[D, :, :] = 2 * K
             return K, dK
 
         return K
@@ -323,20 +323,20 @@ class RationalQuadraticARD(AbstractKernel):
         K = sf2 * M **(-alpha)
 
         if compute_grad:
-            dK = np.zeros((N, N, cov_N))
+            dK = np.zeros((cov_N, N, N))
 
             # Gradient respect of lenght scale.
             for i in range(0, D):
                 Ki = squareform(pdist(np.reshape(1. / ell[i] * X[:, i], (-1, 1)),
                         "sqeuclidean",))
                 with np.errstate(all="ignore"):
-                    dK[:, :, i] = sf2 * M**(-alpha-1) * Ki
+                    dK[i, :, :] = sf2 * M**(-alpha-1) * Ki
 
             # Gradient of cov output scale.
-            dK[:, :, D] = 2 * K
+            dK[D, :, :] = 2 * K
 
             # Gradient respect of alpha.
-            dK[:, :, D+1] = K * (0.5 * tmp/M - alpha * np.log(M))
+            dK[D+1, :, :] = K * (0.5 * tmp/M - alpha * np.log(M))
 
             return K, dK
 

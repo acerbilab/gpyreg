@@ -1488,7 +1488,7 @@ class GP:
         mu : ndarray, shape (M, sample_N)
             Posterior mean at the requested points for each hyperparameter
             sample.
-        cov : ndarray, shape (M, M, sample_N)
+        cov : ndarray, shape (sample_N, M, M)
             Covariance matrix for each hyperparameter sample.
         """
 
@@ -1501,7 +1501,7 @@ class GP:
 
         # Preallocate space
         mu = np.zeros((N_star, s_N))
-        cov = np.zeros((N_star, N_star, s_N))
+        cov = np.zeros((s_N, N_star, N_star))
 
         for s in range(0, s_N):
             hyp = self.posteriors[s].hyp
@@ -1550,7 +1550,7 @@ class GP:
             C = (C + C.T) / 2
 
             mu[:, s : s + 1] = tmp_mu
-            cov[:, :, s] = C
+            cov[s, :, :] = C
             if add_noise:
                 sn2_mult = self.posteriors[s].sn2_mult
                 if sn2_mult is None:
@@ -1559,7 +1559,7 @@ class GP:
                 sn2_star = self.noise.compute(
                     hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
                 )
-                cov[:, :, s] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
+                cov[s, :, :] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
 
         return mu, cov
 
@@ -2390,7 +2390,7 @@ class GP:
 
                 # Gradient of covariance hyperparameters.
                 for i in range(0, cov_N):
-                    dnlZ[i] = np.sum(np.sum(Q * dK[:, :, i])) / 2
+                    dnlZ[i] = np.sum(np.sum(Q * dK[i, :, :])) / 2
 
                 # Gradient of GP likelihood
                 if np.isscalar(sn2):
