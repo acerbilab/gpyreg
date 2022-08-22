@@ -1488,7 +1488,7 @@ class GP:
         mu : ndarray, shape (M, sample_N)
             Posterior mean at the requested points for each hyperparameter
             sample.
-        cov : ndarray, shape (sample_N, M, M)
+        cov : ndarray, shape (M, M, sample_N)
             Covariance matrix for each hyperparameter sample.
         """
 
@@ -1561,7 +1561,7 @@ class GP:
                 )
                 cov[s, :, :] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
 
-        return mu, cov
+        return mu, cov.transpose(1, 2, 0)
 
     def predict(
         self,
@@ -2390,7 +2390,7 @@ class GP:
 
                 # Gradient of covariance hyperparameters.
                 for i in range(0, cov_N):
-                    dnlZ[i] = np.sum(np.sum(Q * dK[i, :, :])) / 2
+                    dnlZ[i] = np.sum(np.sum(Q * dK[:, :, i])) / 2
 
                 # Gradient of GP likelihood
                 if np.isscalar(sn2):

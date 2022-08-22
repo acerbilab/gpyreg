@@ -148,7 +148,7 @@ def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star
     K, dK = kernel_fun.compute(hyp, X, X_star, compute_grad=True)
 
     hyp_new = hyp.copy()
-    finite_diff = np.zeros((len(hyp), K.shape[0], K.shape[1]))
+    finite_diff = np.zeros((K.shape[0], K.shape[1], len(hyp)))
 
     for idx, h_p in enumerate(hyp.squeeze()):
         hyp_new[idx] = h_p + 2.0 * h
@@ -166,8 +166,8 @@ def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star
         hyp_new[idx] = h_p - 2*h
         f_neg_2h = kernel_fun.compute(hyp_new, X, X_star)
 
-        finite_diff[idx, :, :] = -f_2h + 8.0 * f_h - 8.0 * f_neg_h + f_neg_2h
-        finite_diff[idx, :, :] = finite_diff[idx, :, :] / (12 * h)
+        finite_diff[:, :, idx] = -f_2h + 8.0 * f_h - 8.0 * f_neg_h + f_neg_2h
+        finite_diff[:, :, idx] = finite_diff[:, :, idx] / (12 * h)
     
     assert np.all(np.abs(finite_diff - dK) <= eps)
 

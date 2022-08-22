@@ -38,7 +38,7 @@ class AbstractKernel(ABC):
             K : ndarray
                 The covariance matrix which is by default of shape ``(N, N)``. If
                 ``compute_diag = True`` the shape is ``(N,)``.
-            dK : ndarray, shape (cov_N, N, N), optional
+            dK : ndarray, shape (N, N, cov_N), optional
                 The gradient of the covariance matrix with respect to the
                 hyperparameters.
 
@@ -171,7 +171,7 @@ class SquaredExponential(AbstractKernel):
                 )
             # Gradient of cov output scale.
             dK[D, :, :] = 2 * K
-            return K, dK
+            return K, dK.transpose(1, 2, 0)
 
         return K
 
@@ -265,7 +265,7 @@ class Matern(AbstractKernel):
                     dK[i, :, :] = sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki
             # Gradient of cov output scale
             dK[D, :, :] = 2 * K
-            return K, dK
+            return K, dK.transpose(1, 2, 0)
 
         return K
 
@@ -338,7 +338,7 @@ class RationalQuadraticARD(AbstractKernel):
             # Gradient respect of alpha.
             dK[D+1, :, :] = K * (0.5 * tmp/M - alpha * np.log(M))
 
-            return K, dK
+            return K, dK.transpose(1, 2, 0)
 
         return K
 
