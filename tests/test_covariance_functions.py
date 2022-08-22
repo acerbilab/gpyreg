@@ -145,7 +145,7 @@ def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star
         Error tolerance.
     """
 
-    K, dK = kernel_fun.compute(hyp, X, X_star,compute_grad=True)
+    K, dK = kernel_fun.compute(hyp, X, X_star, compute_grad=True)
 
     hyp_new = hyp.copy()
     finite_diff = np.zeros((K.shape[0], K.shape[1], len(hyp)))
@@ -172,3 +172,4 @@ def _test_kernel_gradient_(kernel_fun: AbstractKernel, hyp, X:np.ndarray, X_star
     assert np.all(np.abs(finite_diff - dK) <= eps)
 
 test_simple_rational_quad_ard()
+ 
