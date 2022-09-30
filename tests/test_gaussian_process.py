@@ -28,18 +28,18 @@ def test_empty_gp():
 
     # Test that lower and upper bounds are set appropriately.
     bounds = gp.get_bounds()
-    assert np.all(bounds["covariance_log_lengthscale"][0] == -np.inf)
-    assert np.all(bounds["covariance_log_lengthscale"][1] == np.inf)
-    assert np.all(bounds["covariance_log_outputscale"][0] == -np.inf)
-    assert np.all(bounds["covariance_log_outputscale"][1] == np.inf)
-    assert np.all(bounds["noise_log_scale"][0] == -np.inf)
-    assert np.all(bounds["noise_log_scale"][1] == np.inf)
-    assert np.all(bounds["mean_const"][0] == -np.inf)
-    assert np.all(bounds["mean_const"][1] == np.inf)
-    assert np.all(bounds["mean_location"][0] == -np.inf)
-    assert np.all(bounds["mean_location"][1] == np.inf)
-    assert np.all(bounds["mean_log_scale"][0] == -np.inf)
-    assert np.all(bounds["mean_log_scale"][1] == np.inf)
+    assert np.all(np.isnan(bounds["covariance_log_lengthscale"]))
+    assert np.all(np.isnan(bounds["covariance_log_lengthscale"]))
+    assert np.all(np.isnan(bounds["covariance_log_outputscale"]))
+    assert np.all(np.isnan(bounds["covariance_log_outputscale"]))
+    assert np.all(np.isnan(bounds["noise_log_scale"]))
+    assert np.all(np.isnan(bounds["noise_log_scale"]))
+    assert np.all(np.isnan(bounds["mean_const"]))
+    assert np.all(np.isnan(bounds["mean_const"]))
+    assert np.all(np.isnan(bounds["mean_location"]))
+    assert np.all(np.isnan(bounds["mean_location"]))
+    assert np.all(np.isnan(bounds["mean_log_scale"]))
+    assert np.all(np.isnan(bounds["mean_log_scale"]))
 
     # Test that hyperparameter priors are set appropriately.
     prior = gp.get_priors()
@@ -694,6 +694,8 @@ def test_fitting_options():
     gp_train_7 = {"opts_N": 0, "n_samples": 0, "init_N": 0}
     gp_train_8 = {"init_N": 1}
 
+    print(gp.lower_bounds)
+    print(gp.upper_bounds)
     # Test that all these at least can be run in a row.
     gp.fit(X=X, y=y, options=gp_train_1)
     gp.fit(X=X, y=y, options=gp_train_2)
