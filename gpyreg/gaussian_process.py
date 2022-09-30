@@ -727,6 +727,7 @@ class GP:
                 L = self.posteriors[s].L
                 L_chol = self.posteriors[s].L_chol
 
+                full_update_s = False
                 if L_chol:  # High-noise parametrization
                     new_L_column = sp.linalg.solve_triangular(
                         L, Ks, trans=1, check_finite=False
@@ -749,7 +750,6 @@ class GP:
                             stacklevel=2,
                         )
                     else:  # Otherwise continue with rank-1 update:
-                        full_update_s = False
                         alpha_update = (
                             sp.linalg.solve_triangular(
                                 L,
@@ -965,9 +965,6 @@ class GP:
         if s2 is not None:
             self.s2 = s2
 
-        if np.any(np.isnan(self.lower_bounds)) or np.any(np.isnan(self.upper_bounds)):
-            self.set_bounds(self.get_recommended_bounds())
-
         cov_N = self.covariance.hyperparameter_count(self.D)
         # mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
@@ -979,9 +976,16 @@ class GP:
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
-        # Update bounds, if necessary:
-        if lower_bounds != "current" or upper_bounds != "current":
+
+        # Set any unset bounds:
+        if lower_bounds == upper_bounds == "current" and (
+            np.any(np.isnan(self.lower_bounds))
+            or np.any(np.isnan(self.upper_bounds))
+        ):  # If we're using the existing bounds, fill any nan's:
+            self.set_bounds(self.get_recommended_bounds(self.lower_bounds, self.upper_bounds))
+        else:  # Otherwise set the bounds according to the provided options:
             self.set_bounds(self.get_recommended_bounds(lower_bounds, upper_bounds))
+
         LB = self.lower_bounds
         UB = self.upper_bounds
 
