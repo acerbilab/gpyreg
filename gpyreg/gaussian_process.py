@@ -156,8 +156,8 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
-        lower_bounds = np.full((hyp_N,), -np.inf)
-        upper_bounds = np.full((hyp_N,), np.inf)
+        lower_bounds = np.full((hyp_N,), np.nan)
+        upper_bounds = np.full((hyp_N,), np.nan)
 
         lower = 0
 
@@ -239,12 +239,23 @@ class GP:
 
         return bounds_dict
 
-    def get_recommended_bounds(self):
+    def get_recommended_bounds(self, lower_bounds=None, upper_bounds=None):
         """
         Return the recommended hyperparameter lower and upper bounds as a dict.
 
+        Parameters
+        ----------
+        lower_bounds : ndarray, optional
+            If present, override the recommended lower bounds with these
+            values. Any `nan` values will be replaced by the corresponding
+            recommended bounds. Defaults to all `nan` values.
+        upper_bounds : ndarray, optional
+            If present, override the recommended upper bounds with these
+            values. Any `nan` values will be replaced by the corresponding
+            recommended bounds. Defaults to all `nan` values.
+
         Returns
-        =======
+        -------
         bounds_dict : dict
             A dictionary of the hyperparameter names and tuples of lower
             upper bounds.
@@ -256,6 +267,14 @@ class GP:
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
+        if lower_bounds == "current":
+            lower_bounds = self.lower_bounds.copy()
+        elif lower_bounds is None or lower_bounds == "recommended":
+            lower_bounds = np.full_like(self.lower_bounds, np.nan)
+        if upper_bounds == "current":
+            upper_bounds = self.upper_bounds.copy()
+        elif upper_bounds is None or upper_bounds == "recommended":
+            upper_bounds = np.full_like(self.upper_bounds, np.nan)
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
@@ -265,28 +284,28 @@ class GP:
         mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
-        lb = self.lower_bounds.copy()
-        ub = self.upper_bounds.copy()
+        lb = lower_bounds
+        ub = upper_bounds
 
         lb_cov = lb[0:cov_N]
         lb_noise = lb[cov_N : cov_N + noise_N]
         lb_mean = lb[cov_N + noise_N : cov_N + noise_N + mean_N]
 
-        lb_cov[np.isinf(lb_cov)] = cov_bounds_info["LB"][np.isinf(lb_cov)]
-        lb_noise[np.isinf(lb_noise)] = noise_bounds_info["LB"][
-            np.isinf(lb_noise)
+        lb_cov[np.isnan(lb_cov)] = cov_bounds_info["LB"][np.isnan(lb_cov)]
+        lb_noise[np.isnan(lb_noise)] = noise_bounds_info["LB"][
+            np.isnan(lb_noise)
         ]
-        lb_mean[np.isinf(lb_mean)] = mean_bounds_info["LB"][np.isinf(lb_mean)]
+        lb_mean[np.isnan(lb_mean)] = mean_bounds_info["LB"][np.isnan(lb_mean)]
 
         ub_cov = ub[0:cov_N]
         ub_noise = ub[cov_N : cov_N + noise_N]
         ub_mean = ub[cov_N + noise_N : cov_N + noise_N + mean_N]
 
-        ub_cov[np.isinf(ub_cov)] = cov_bounds_info["UB"][np.isinf(ub_cov)]
-        ub_noise[np.isinf(ub_noise)] = noise_bounds_info["UB"][
-            np.isinf(ub_noise)
+        ub_cov[np.isnan(ub_cov)] = cov_bounds_info["UB"][np.isnan(ub_cov)]
+        ub_noise[np.isnan(ub_noise)] = noise_bounds_info["UB"][
+            np.isnan(ub_noise)
         ]
-        ub_mean[np.isinf(ub_mean)] = mean_bounds_info["UB"][np.isinf(ub_mean)]
+        ub_mean[np.isnan(ub_mean)] = mean_bounds_info["UB"][np.isnan(ub_mean)]
 
         lb = np.concatenate([lb_cov, lb_noise, lb_mean])
         ub = np.concatenate([ub_cov, ub_noise, ub_mean])
@@ -878,9 +897,14 @@ class GP:
                     Thinning parameter for slice sampling.
                 **burn** : int, defaults to ``thin * n_samples``
                     Burn parameter for slice sampling.
-                **use_recommended_bounds** : bool, defaults to True
-                    Whether to only use user provided lower and upper bounds
-                    or to try to choose them intelligently.
+                **lower_bounds** : str or ndarray, defaults to "current"
+                    User-provided lower bounds. Any values which are `nan` will
+                    be filled with the recommended bounds. "recommended" means use
+                    all recommended bounds. "current" means use current bounds.
+                **upper_bounds** : str or ndarray, defaults to "current"
+                    User-provided upper bounds. Any values which are `nan` will
+                    be filled with the recommended bounds. "recommended" means use
+                    all recommended bounds. "current" means use current bounds.
                 **init_method** : {'sobol', 'rand'}, defaults to 'sobol'
                     Specify whether to use Sobol or random sequences for
                     the initial space-filling design.
@@ -928,7 +952,8 @@ class GP:
         sampler_name = options.get("sampler", "slicesample")
         s_N = options.get("n_samples", 10)
         burn_in = options.get("burn", thin * s_N)
-        use_recommended_bounds = options.get("use_recommended_bounds", True)
+        lower_bounds = options.get("lower_bounds", "current")
+        upper_bounds = options.get("upper_bounds", "current")
 
         # Initialize GP if requested.
         if X is not None:
@@ -939,6 +964,9 @@ class GP:
 
         if s2 is not None:
             self.s2 = s2
+
+        if np.any(np.isnan(self.lower_bounds)) or np.any(np.isnan(self.upper_bounds)):
+            self.set_bounds(self.get_recommended_bounds())
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         # mean_N = self.mean.hyperparameter_count(self.D)
@@ -951,8 +979,9 @@ class GP:
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
-        if use_recommended_bounds:
-            self.set_bounds(self.get_recommended_bounds())
+        # Update bounds, if necessary:
+        if lower_bounds != "current" or upper_bounds != "current":
+            self.set_bounds(self.get_recommended_bounds(lower_bounds, upper_bounds))
         LB = self.lower_bounds
         UB = self.upper_bounds
 
