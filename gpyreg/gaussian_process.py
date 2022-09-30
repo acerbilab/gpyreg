@@ -268,13 +268,19 @@ class GP:
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
         if lower_bounds == "current":
+            # Use existing bounds; fill any nan values with recommended bounds
             lower_bounds = self.lower_bounds.copy()
         elif lower_bounds is None or lower_bounds == "recommended":
+            # Use all recommended bounds
             lower_bounds = np.full_like(self.lower_bounds, np.nan)
         if upper_bounds == "current":
+            # Use existing bounds; fill any nan values with recommended bounds
             upper_bounds = self.upper_bounds.copy()
         elif upper_bounds is None or upper_bounds == "recommended":
+            # Use all recommended bounds
             upper_bounds = np.full_like(self.upper_bounds, np.nan)
+        # Otherwise, use provided arrays as bounds, replacing nan values with
+        # recommended bounds.
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
