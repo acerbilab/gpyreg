@@ -133,12 +133,9 @@ class GP:
         bounds : dict, optional
             A dictionary of GP hyperparameter names and tuples of their lower
             and upper bounds. All hyperparameters need to appear in the
-            dictionary. Use the value ``None`` to set no bounds for a
-            hyperparameter (equivalent to setting the lower bound to ``-Inf``
-            and upper bound to ``+Inf``). If ``bounds=None``, all
-            hyperparameter bounds are removed, that is for all
-            hyperparameters the lower bounds will be set to ``-Inf`` and
-            upper bounds to ``+Inf``.
+            dictionary. Use the value ``None`` to set the bounds of a
+            hyperparameter to the recommended values. If ``bounds=None``, all
+            hyperparameter bounds will be set to their recommended values.
 
         Raises
         ------
@@ -263,22 +260,31 @@ class GP:
         Raises
         ------
         ValueError
-            Raise when GP does not have `X` or `y` set yet.
+            Raise when GP does not have `X` or `y` set yet, or when provided
+            bounds are not one of `"recommended"`/`None`, `"current"`, or
+            array_like.
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
-        if lower_bounds == "current":
-            # Use existing bounds; fill any nan values with recommended bounds
-            lower_bounds = self.lower_bounds.copy()
-        elif lower_bounds is None or lower_bounds == "recommended":
-            # Use all recommended bounds
-            lower_bounds = np.full_like(self.lower_bounds, np.nan)
-        if upper_bounds == "current":
-            # Use existing bounds; fill any nan values with recommended bounds
-            upper_bounds = self.upper_bounds.copy()
-        elif upper_bounds is None or upper_bounds == "recommended":
-            # Use all recommended bounds
-            upper_bounds = np.full_like(self.upper_bounds, np.nan)
+
+        if not isinstance(lower_bounds, (list, tuple, np.ndarray)):
+            if lower_bounds == "current":
+                # Use existing bounds; fill any nan values with recommended bounds
+                lower_bounds = self.lower_bounds.copy()
+            elif lower_bounds is None or lower_bounds == "recommended":
+                # Use all recommended bounds
+                lower_bounds = np.full_like(self.lower_bounds, np.nan)
+            else:
+                raise ValueError("`lower_bounds` should be 'recommended'/`None`, 'current', or an array.")
+        if not isinstance(upper_bounds, (list, tuple, np.ndarray)):
+            if upper_bounds == "current":
+                # Use existing bounds; fill any nan values with recommended bounds
+                upper_bounds = self.upper_bounds.copy()
+            elif upper_bounds is None or upper_bounds == "recommended":
+                # Use all recommended bounds
+                upper_bounds = np.full_like(self.upper_bounds, np.nan)
+            else:
+                raise ValueError("`lower_bounds` should be 'recommended'/`None`, 'current', or an array.")
         # Otherwise, use provided arrays as bounds, replacing nan values with
         # recommended bounds.
 
@@ -984,7 +990,11 @@ class GP:
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
 
         # Set any unset bounds:
-        if lower_bounds == upper_bounds == "current" and (
+        use_current_bounds = (
+            type(lower_bounds) == str and lower_bounds == "current"
+            and type(upper_bounds) == str and upper_bounds == "current"
+        )
+        if use_current_bounds and (
             np.any(np.isnan(self.lower_bounds))
             or np.any(np.isnan(self.upper_bounds))
         ):  # If we're using the existing bounds, fill any nan's:
