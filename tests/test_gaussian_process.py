@@ -905,3 +905,79 @@ def test_predict_lpd():
     __, __, lpd3 = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True, separate_samples=True)
     assert np.all(lpd3[:, 0 : 1] == lpd)
     assert np.all(lpd3[:, 1 : 2] == lpd)
+
+
+def test__str__and__repr__():
+    # 1-D:
+    N = 20
+    D = 1
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(3),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp_bounds = {
+        "covariance_log_outputscale": (-np.inf, np.inf),
+        "covariance_log_lengthscale": (-np.inf, np.inf),
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": (0.5, 0.5),
+    }
+
+    gp_priors = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": None,
+    }
+
+    gp.set_priors(gp_priors)
+    gp.set_bounds(gp_bounds)
+    hyp, _, _ = gp.fit(X=X, y=y)
+
+    str_ = gp.__str__()
+    assert "Covariance function: Matern" in str_
+    repr_ = gp.__repr__()
+    assert "self.covariance = <gpyreg.covariance_functions.Matern object at " in repr_
+    assert "self.lower_bounds = [-10.8" in repr_
+
+    # 2-D:
+    N = 20
+    D = 2
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(3),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp_bounds = {
+        "covariance_log_outputscale": (-np.inf, np.inf),
+        "covariance_log_lengthscale": (-np.inf, np.inf),
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": (0.5, 0.5),
+    }
+
+    gp_priors = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": None,
+    }
+
+    gp.set_priors(gp_priors)
+    gp.set_bounds(gp_bounds)
+    hyp, _, _ = gp.fit(X=X, y=y)
+
+    str_ = gp.__str__()
+    assert "Covariance function: Matern" in str_
+    repr_ = gp.__repr__()
+    assert "self.covariance = <gpyreg.covariance_functions.Matern object at " in repr_
+    assert "self.lower_bounds = [-10.8" in repr_
