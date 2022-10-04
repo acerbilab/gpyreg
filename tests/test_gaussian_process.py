@@ -1035,9 +1035,9 @@ def test__str__and__repr__():
     )
 
     gp_bounds = {
-        "covariance_log_outputscale": (-np.inf, np.inf),
-        "covariance_log_lengthscale": (-np.inf, np.inf),
-        "noise_log_scale": (-np.inf, np.inf),
+        "covariance_log_outputscale": (np.nan, np.nan),
+        "covariance_log_lengthscale": (np.nan, np.nan),
+        "noise_log_scale": (np.nan, np.nan),
         "mean_const": (0.5, 0.5),
     }
 
@@ -1072,9 +1072,9 @@ def test__str__and__repr__():
     )
 
     gp_bounds = {
-        "covariance_log_outputscale": (-np.inf, np.inf),
-        "covariance_log_lengthscale": (-np.inf, np.inf),
-        "noise_log_scale": (-np.inf, np.inf),
+        "covariance_log_outputscale": (np.nan, np.nan),
+        "covariance_log_lengthscale": (np.nan, np.nan),
+        "noise_log_scale": (np.nan, np.nan),
         "mean_const": (0.5, 0.5),
     }
 
