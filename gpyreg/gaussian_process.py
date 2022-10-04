@@ -287,7 +287,11 @@ class GP:
             else:
                 raise ValueError("`lower_bounds` should be 'recommended'/`None`, 'current', or an array.")
         # Otherwise, use provided arrays as bounds, replacing nan values with
-        # recommended bounds.
+        # recommended bounds, and avoiding mutation:
+        if isinstance(lower_bounds, (list, tuple, np.ndarray)):
+            lower_bounds = lower_bounds.copy()
+        if isinstance(upper_bounds, (list, tuple, np.ndarray)):
+            upper_bounds = upper_bounds.copy()
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)

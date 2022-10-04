@@ -672,6 +672,119 @@ def test_fitting_with_fixed_bounds():
     gp.plot()
 
 
+def test_setting_bounds():
+    N = 20
+    D = 2
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(3),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp_bounds = {
+        "covariance_log_outputscale": (-np.inf, 1.0),
+        "covariance_log_lengthscale": (-2.0, np.inf),
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": (-4.0, 4.0),
+    }
+
+    gp_priors = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": None,
+    }
+
+    # Test setting all bounds manually:
+    lower_bounds = np.array([-2.0, -2.0, -np.inf, -np.inf, -4.0])
+    upper_bounds = np.array([np.inf, np.inf, 1.0, np.inf, 4.0])
+    gp.set_priors(gp_priors)
+    gp.set_bounds(gp_bounds)
+    hyp, _, _ = gp.fit(X=X, y=y)
+    assert np.all(gp.lower_bounds == lower_bounds)
+    # Make sure fitting doesn't undo the set bounds:
+    hyp, _, _ = gp.fit(X=X, y=y)
+    assert np.all(gp.lower_bounds == lower_bounds)
+    assert np.all(gp.upper_bounds == upper_bounds)
+
+    # Test setting all bounds automatically (by default)
+    gp.set_bounds(None)
+    assert np.all(np.isnan(gp.lower_bounds))
+    assert np.all(np.isnan(gp.upper_bounds))
+    hyp, _, _ = gp.fit(X=X, y=y)
+    default_lower_bounds = np.concatenate([
+        gp.covariance.get_bounds_info(gp.X, gp.y)["LB"],
+        gp.noise.get_bounds_info(gp.X, gp.y)["LB"],
+        gp.mean.get_bounds_info(gp.X, gp.y)["LB"],
+    ])
+    default_upper_bounds = np.concatenate([
+        gp.covariance.get_bounds_info(gp.X, gp.y)["UB"],
+        gp.noise.get_bounds_info(gp.X, gp.y)["UB"],
+        gp.mean.get_bounds_info(gp.X, gp.y)["UB"],
+    ])
+    assert np.all(gp.lower_bounds == default_lower_bounds)
+    assert np.all(gp.upper_bounds == default_upper_bounds)
+
+    # Test setting some bounds to defaults, via set_bounds.
+    # Bounds with value ``None`` should map to default values. Other bounds
+    # should stay the same.
+    gp_bounds = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": (-2.0, np.inf),
+        "noise_log_scale": None,
+        "mean_const": (-4.0, 4.0),
+    }
+    gp.set_bounds(gp_bounds)
+    mask = np.array([False, False, True, True, False])
+    assert np.all(np.isnan(gp.lower_bounds[mask]))
+    assert np.all(np.isnan(gp.upper_bounds[mask]))
+    assert np.all(gp.lower_bounds[~mask] == lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[~mask] == upper_bounds[~mask])
+    gp.fit(X, y)
+    assert np.all(gp.lower_bounds[mask] == default_lower_bounds[mask])
+    assert np.all(gp.upper_bounds[mask] == default_upper_bounds[mask])
+    assert np.all(gp.lower_bounds[~mask] == lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[~mask] == upper_bounds[~mask])
+
+    gp_bounds = {
+        "covariance_log_outputscale": (-np.inf, 1.0),
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": None,
+    }
+    gp.set_bounds(gp_bounds)
+    mask = np.array([False, False, True, True, False])
+    assert np.all(np.isnan(gp.lower_bounds[~mask]))
+    assert np.all(np.isnan(gp.upper_bounds[~mask]))
+    assert np.all(gp.lower_bounds[mask] == lower_bounds[mask])
+    assert np.all(gp.upper_bounds[mask] == upper_bounds[mask])
+    gp.fit(X, y)
+    assert np.all(gp.lower_bounds[~mask] == default_lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[~mask] == default_upper_bounds[~mask])
+    assert np.all(gp.lower_bounds[mask] == lower_bounds[mask])
+    assert np.all(gp.upper_bounds[mask] == upper_bounds[mask])
+
+    # Test setting some bounds to defaults, via gp.fit():
+    lower_bounds = np.array([-2.0, np.nan, -np.inf, np.nan, -4.0])
+    upper_bounds = np.array([np.nan, np.inf, np.nan, np.inf, np.nan])
+    fit_options = {
+        "lower_bounds": lower_bounds,
+        "upper_bounds": upper_bounds,
+    }
+    hyp, _, _ = gp.fit(X=X, y=y, options=fit_options)
+    # Bounds should follow user-provided options, where not nan:
+    mask = np.isnan(lower_bounds)
+    assert np.all(gp.lower_bounds[~mask] == lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[mask] == upper_bounds[mask])
+    # Bounds should follow defaults, where nan:
+    assert np.all(gp.lower_bounds[mask] == default_lower_bounds[mask])
+    assert np.all(gp.upper_bounds[~mask] == default_upper_bounds[~mask])
+
+
 def test_fitting_options():
     N = 20
     D = 1
@@ -694,8 +807,6 @@ def test_fitting_options():
     gp_train_7 = {"opts_N": 0, "n_samples": 0, "init_N": 0}
     gp_train_8 = {"init_N": 1}
 
-    print(gp.lower_bounds)
-    print(gp.upper_bounds)
     # Test that all these at least can be run in a row.
     gp.fit(X=X, y=y, options=gp_train_1)
     gp.fit(X=X, y=y, options=gp_train_2)
