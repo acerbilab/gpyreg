@@ -133,9 +133,10 @@ class GP:
         bounds : dict, optional
             A dictionary of GP hyperparameter names and tuples of their lower
             and upper bounds. All hyperparameters need to appear in the
-            dictionary. Use the value ``None`` to set the bounds of a
-            hyperparameter to the recommended values. If ``bounds=None``, all
-            hyperparameter bounds will be set to their recommended values.
+            dictionary. Use the value ``None`` to set the bounds of a specific
+            hyperparameter to the default recommended values. If
+            ``bounds=None``, all hyperparameter bounds will be set to their
+            default recommended values.
 
         Raises
         ------
