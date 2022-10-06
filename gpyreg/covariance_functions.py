@@ -87,7 +87,7 @@ class AbstractKernel(ABC):
             ("covariance_log_lengthscale", D),
             ("covariance_log_outputscale", 1),
         ]
-    
+
     def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
         """
         Return information on the lower, upper, plausible lower

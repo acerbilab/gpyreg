@@ -3,6 +3,7 @@
 import math
 import time
 import warnings
+from textwrap import indent
 
 import numpy as np
 import scipy as sp
@@ -11,6 +12,7 @@ import matplotlib.pyplot as plt
 
 import gpyreg.covariance_functions
 import gpyreg.mean_functions
+from gpyreg.formatting import full_repr
 
 from gpyreg.f_min_fill import (
     f_min_fill,
@@ -61,6 +63,24 @@ class GP:
         self.temporary_data = dict()
 
     def __repr__(self):
+        return full_repr(
+            self,
+            "GP",
+            order = [
+                "D",
+                "covariance",
+                "mean",
+                "noise",
+                "X",
+                "y",
+                "s2",
+                "lower_bounds",
+                "upper_bounds",
+                "posteriors",
+            ]
+        )
+
+    def __str__(self):
         dimension = "Dimension: " + str(self.D) + "\n"
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -121,8 +141,9 @@ class GP:
         else:
             samples += str(np.size(self.posteriors))
 
-        total = dimension + cov + mean + noise + priors + samples
-        return total
+        title = "GP:\n"
+        body = dimension + cov + mean + noise + priors + samples
+        return title + indent(body, "    ")
 
     def set_bounds(self, bounds: dict = None):
         """
