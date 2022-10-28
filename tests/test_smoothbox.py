@@ -37,8 +37,8 @@ def test_pdf():
     yy = np.zeros((N,))
     for i in range(0, N):
         yy[i] = pdf(xx[i], sigma, a, b)
-    plt.plot(xx, yy)
-    plt.show()
+    # plt.plot(xx, yy)
+    # plt.show()
 
     assert np.isclose(
         pdf(a - np.spacing(a), sigma, a, b),

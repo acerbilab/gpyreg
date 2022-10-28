@@ -78,7 +78,7 @@ def test_empty_gp():
 
     # gp.quad(0, 1, compute_var=True)
 
-    gp.plot()
+    # gp.plot()
 
 
 @pytest.mark.filterwarnings(
@@ -109,7 +109,7 @@ def test_random_function():
     y = gp.random_function(X)
     gp.update(X_new=X, y_new=y)
 
-    gp.plot()
+    # gp.plot()
 
     X_new = np.random.standard_normal(size=(10, D))
     y_new = gp.random_function(X_new)
@@ -134,7 +134,7 @@ def test_random_function():
 
     gp.update(X_new=X_new, y_new=y_new)
 
-    gp.plot(delta_y=5, max_min_flag=False)
+    # gp.plot(delta_y=5, max_min_flag=False)
 
 
 def test_getters_setters():
@@ -296,7 +296,7 @@ def test_cleaning():
         assert posteriors[i].L_chol == gp.posteriors[i].L_chol
         assert posteriors[i].sn2_mult == posteriors[i].sn2_mult
 
-    gp.plot()
+    # gp.plot()
 
 
 def partial(f, x0_orig, x0_i, i):
@@ -450,7 +450,7 @@ def test_gp_gradient_computations():
     print(gp)
 
     # Test plotting
-    gp.plot()
+    # gp.plot()
 
 
 def test_split_update():
@@ -573,7 +573,7 @@ def test_quadrature_without_noise():
     assert np.isclose(F_var_bayes[0, 0], F_var_bayes_total[0, 0])
     assert np.isclose(F_var_bayes_2[0, 0], F_var_bayes_total[1, 0])
 
-    gp.plot()
+    # gp.plot()
 
 
 @pytest.mark.filterwarnings(
@@ -636,7 +636,7 @@ def test_quadrature_with_noise():
 
     assert np.abs(F_true - F_bayes) < 0.1
 
-    gp.plot()
+    # gp.plot()
 
 
 @pytest.mark.filterwarnings(
@@ -678,7 +678,7 @@ def test_fitting_with_fixed_bounds():
 
     assert np.all(hyp[:, 3] == 0.5)
 
-    gp.plot()
+    # gp.plot()
 
 
 def test_setting_bounds():
