@@ -17,6 +17,7 @@ from gpyreg.f_min_fill import (
     smoothbox_cdf,
     smoothbox_student_t_cdf,
 )
+from gpyreg.formatting import full_repr
 from gpyreg.slice_sample import SliceSampler
 
 
