@@ -7,4 +7,3 @@ gpyreg.slice_sample
     :members:
     :undoc-members:
     :show-inheritance:
-

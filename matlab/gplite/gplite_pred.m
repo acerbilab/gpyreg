@@ -27,7 +27,7 @@ fmu = zeros(Nstar,Ns);
 ymu = zeros(Nstar,Ns);
 if nargout > 1
     fs2 = zeros(Nstar,Ns);
-    ys2 = zeros(Nstar,Ns);    
+    ys2 = zeros(Nstar,Ns);
 end
 if ~isempty(ystar) && nargout > 4
     lp = zeros(Nstar,Ns);
@@ -56,16 +56,16 @@ for s = 1:Ns
     L = gp.post(s).L;
     Lchol = gp.post(s).Lchol;
     sW = gp.post(s).sW;
-    sn2_mult = gp.post(s).sn2_mult;    
-    
+    sn2_mult = gp.post(s).sn2_mult;
+
     % Get observation noise hyperpameters and evaluate noise at test points
     hyp_noise = hyp(Ncov+1:Ncov+Nnoise);
     sn2_star = gplite_noisefun(hyp_noise,Xstar,gp.noisefun,ystar,s2star);
-    
+
     % Get mean function hyperpameters and evaluate GP mean at test points
     hyp_mean = hyp(Ncov+Nnoise+1:Ncov+Nnoise+Nmean);
     mstar = gplite_meanfun(hyp_mean,Xstar,gp.meanfun,[],gp.meanfun_extras);
-    
+
     % Compute cross-kernel matrix Ks_mat
     if gp.covfun(1) == 1    % Hard-coded SE-ard for speed
         ell = exp(hyp(1:D));
@@ -75,16 +75,16 @@ for s = 1:Ns
         kss = sf2 * ones(Nstar,1);        % Self-covariance vector
     else
         hyp_cov = hyp(1:Ncov);
-        Ks_mat = gplite_covfun(hyp_cov,gp.X,gp.covfun,Xstar);            
+        Ks_mat = gplite_covfun(hyp_cov,gp.X,gp.covfun,Xstar);
         kss = gplite_covfun(hyp_cov,Xstar,gp.covfun,'diag');
     end
-    
+
     if N > 0
         fmu(:,s) = mstar + Ks_mat'*alpha;            % Conditional mean
     else
         fmu(:,s) = mstar;
     end
-        
+
     ymu(:,s) = fmu(:,s);                     % observed function mean
     if nargout > 1
         if N > 0
@@ -98,8 +98,8 @@ for s = 1:Ns
         else
             fs2(:,s) = kss;
         end
-                
-        fs2(:,s) = max(fs2(:,s),0);          % remove numerical noise i.e. negative variances        
+
+        fs2(:,s) = max(fs2(:,s),0);          % remove numerical noise i.e. negative variances
         ys2(:,s) = fs2(:,s) + sn2_star*sn2_mult;           % observed variance
 
         % Compute log probability of test inputs
@@ -108,24 +108,24 @@ for s = 1:Ns
             lp(:,s) = -(ystar-ymu(:,s)).^2./(sn2_star*sn2_mult)/2-log(2*pi*sn2_star*sn2_mult)/2;
         end
     end
-    
+
     % Adjust predictions for output-warped GP
     if outwarp_flag
         hyp_outwarp = hyp(Ncov+Nnoise+Nmean+1:Ncov+Nnoise+Nmean+Noutwarp);
-        
-        fmu_prewarp(:,s) = fmu(:,s);        
+
+        fmu_prewarp(:,s) = fmu(:,s);
         fmu(:,s) = gp.outwarpfun(hyp_outwarp,fmu_prewarp(:,s),'inv');
         ymu(:,s) = fmu_prewarp(:,s);
         if nargout > 1
-            
-            [~,dwarp_dt] = gp.outwarpfun(hyp_outwarp,fmu(:,s));            
+
+            [~,dwarp_dt] = gp.outwarpfun(hyp_outwarp,fmu(:,s));
             fs2(:,s) = fs2(:,s)./dwarp_dt.^2;
             ys2(:,s) = ys2(:,s)./dwarp_dt.^2;
             % The problem is that the sample variance explodes for multiple
             % samples (because the predictive means can be very far apart)
-                
+
             if nargout > 4
-                lp(:,s) = lp(:,s) + log(abs(dwarp_dt));                
+                lp(:,s) = lp(:,s) + log(abs(dwarp_dt));
             end
         end
     end
@@ -136,7 +136,7 @@ end
 if Ns > 1 && ~ssflag
     fbar = sum(fmu,2)/Ns;
     ybar = sum(ymu,2)/Ns;
-    if nargout > 1        
+    if nargout > 1
         vf = sum((fmu - fbar).^2,2)/(Ns-1);         % Sample variance
         fs2 = sum(fs2,2)/Ns + vf;
         vy = sum((ymu - ybar).^2,2)/(Ns-1);         % Sample variance

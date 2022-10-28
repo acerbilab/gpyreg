@@ -2,8 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.stats
-from gpyreg.f_min_fill import smoothbox_student_t_cdf, smoothbox_student_t_ppf
 from scipy.integrate import quad
+
+from gpyreg.f_min_fill import smoothbox_student_t_cdf, smoothbox_student_t_ppf
 
 
 def pdf(x, sigma, df, a, b):
@@ -40,8 +41,8 @@ def test_pdf():
     yy = np.zeros((N,))
     for i in range(0, N):
         yy[i] = pdf(xx[i], df, sigma, a, b)
-    plt.plot(xx, yy)
-    plt.show()
+    # plt.plot(xx, yy)
+    # plt.show()
 
     assert np.isclose(
         pdf(a - np.spacing(a), df, sigma, a, b),

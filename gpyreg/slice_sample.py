@@ -1,7 +1,7 @@
 """Module for slice sampling."""
 
-import math
 import logging
+import math
 
 import numpy as np
 
@@ -465,7 +465,8 @@ class SliceSampler:
                             # take absolute value to make sure we don't have
                             # issues with np.spacing returning negative values
                             self.widths[dd] = np.maximum(
-                                self.widths[dd] / 1.1, np.abs(np.spacing(delta))
+                                self.widths[dd] / 1.1,
+                                np.abs(np.spacing(delta)),
                             )
                         else:
                             self.widths[dd] = np.maximum(
@@ -511,7 +512,7 @@ class SliceSampler:
             # Store summary statistics starting half.way into burn-in.
             if burn / 2 <= i < burn:
                 xx_sum += xx
-                xx_sq_sum += xx ** 2
+                xx_sq_sum += xx**2
 
                 # End of burn-in, update widths if using adaptive method.
                 if i == burn - 1 and self.adaptive:

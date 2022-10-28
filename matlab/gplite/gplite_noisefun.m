@@ -1,9 +1,9 @@
 function [sn2,dsn2] = gplite_noisefun(hyp,X,noisefun,y,s2)
 %GPLITE_NOISEFUN Noise function for lite Gaussian Process regression.
 %   SN2 = GPLITE_NOISEFUN(HYP,X,NOISEFUN) computes the GP noise function
-%   NOISEFUN, that is the variance of observation noise evaluated at test 
-%   points X. HYP is a single column vector of noise function 
-%   hyperparameters. NOISEFUN is a numeric array whose elements specify 
+%   NOISEFUN, that is the variance of observation noise evaluated at test
+%   points X. HYP is a single column vector of noise function
+%   hyperparameters. NOISEFUN is a numeric array whose elements specify
 %   features of the noise function, as follows:
 %
 %                       FEATURE DESCRIPTION           EXTRA HYPERPARAMETERS
@@ -21,25 +21,25 @@ function [sn2,dsn2] = gplite_noisefun(hyp,X,noisefun,y,s2)
 %      0                no output-dependent noise                  0
 %      1                rectified linear output-dependent noise    2
 %
-%   The total noise variance is obtained by summing the independent 
+%   The total noise variance is obtained by summing the independent
 %   contribution of each noise feature (if present).
 %
 %   SN2 = GPLITE_NOISEFUN(HYP,X,NOISEFUN,[],S2) also takes as input a N-by-1
-%   array S2 of estimated noise variance associated with each training input 
+%   array S2 of estimated noise variance associated with each training input
 %   vector in X (used only if NOISEFUN(2) is different than 0).
-%  
-%   [SN2,DSN2] = GPLITE_NOISEFUN(HYP,X,NOISEFUN) also computes the gradient 
+%
+%   [SN2,DSN2] = GPLITE_NOISEFUN(HYP,X,NOISEFUN) also computes the gradient
 %   DSN2 with respect to GP hyperparameters. If the noise is input or output
-%   dependent, DSN2 is a N-by-NNOISE matrix, where each row represents the 
+%   dependent, DSN2 is a N-by-NNOISE matrix, where each row represents the
 %   gradient with respect to noise hyperparameters for a given training
 %   input. Otherwise, DSN2 is a 1-by-NNOISE matrix array.
 %
-%   NNOISE = GPLITE_NOISEFUN('info',X,NOISEFUN) returns the number of noise 
+%   NNOISE = GPLITE_NOISEFUN('info',X,NOISEFUN) returns the number of noise
 %   function hyperparameters requested by likelihood function LIKFUN.
 %
-%   [NNOISE,NOISEINFO] = GPLITE_NOISEFUN([],X,NOISEFUN,Y,S2), where X is 
+%   [NNOISE,NOISEINFO] = GPLITE_NOISEFUN([],X,NOISEFUN,Y,S2), where X is
 %   the matrix of training inputs, Y the matrix of training targets, and S2
-%   an optional matrix of estimated noise variance, also returns a struct 
+%   an optional matrix of estimated noise variance, also returns a struct
 %   NOISEINFO with additional information about the noise function
 %   hyperparameters, with fields: LB (lower bounds); UB (upper bounds); PLB
 %   (plausible lower bounds); PUB (plausible upper bounds); x0 (starting
@@ -73,7 +73,7 @@ switch noisefun(3)
     case 0
     case 1; Nnoise = Nnoise + 2;
     otherwise; Nnoise = NaN;
-end    
+end
 
 if ~isfinite(Nnoise)
     error('gplite_likfun:UnknownLikFun',...
@@ -84,7 +84,7 @@ end
 if ischar(hyp)
     sn2 = Nnoise;
     if nargout > 1
-        
+
         ToL = 1e-6;
         Big = exp(3);
         dsn2.LB = -Inf(1,Nnoise);
@@ -93,11 +93,11 @@ if ischar(hyp)
         dsn2.PUB = Inf(1,Nnoise);
         dsn2.x0 = NaN(1,Nnoise);
 
-        if numel(y) <= 1; y = [0;1]; end        
+        if numel(y) <= 1; y = [0;1]; end
         height = max(y) - min(y);
-        
+
         idx = 1;
-        
+
         switch noisefun(1)    % Base constant noise
             case 1  % Constant noise (log standard deviation)
                 dsn2.LB(idx) = log(ToL);
@@ -107,7 +107,7 @@ if ischar(hyp)
                 dsn2.x0(idx) = log(1e-3);
                 idx = idx + 1;
         end
-        
+
         switch noisefun(2)    % User-provided noise
             case 1
             case 2
@@ -117,9 +117,9 @@ if ischar(hyp)
                 dsn2.PUB(idx) = log(2);
                 dsn2.x0(idx) = log(1);
                 idx = idx + 1;
-            
+
         end
-        
+
         switch noisefun(3)    % Output-dependent noise
             case 1
                 miny = min(y);
@@ -138,15 +138,15 @@ if ischar(hyp)
                 dsn2.x0(idx) = log(0.1);
                 idx = idx + 1;
         end
-                
+
         % Plausible starting point
         idx_nan = isnan(dsn2.x0);
         dsn2.x0(idx_nan) = 0.5*(dsn2.PLB(idx_nan) + dsn2.PUB(idx_nan));
-        
+
         dsn2.noisefun = noisefun;
-        
+
     end
-    
+
     return;
 end
 
@@ -168,7 +168,7 @@ if compute_grad     % Allocate space for gradient
     if any(noisefun(2:end)>0)
         dsn2 = zeros(N,Nnoise);
     else
-        dsn2 = zeros(1,Nnoise);        
+        dsn2 = zeros(1,Nnoise);
     end
 end
 
@@ -182,17 +182,17 @@ switch noisefun(1)
         if compute_grad; dsn2(:,idx) = 2*sn2; end
         idx = idx+1;
 end
-        
+
 switch noisefun(2)
-    case 0        
+    case 0
     case 1
-        sn2 = sn2 + s2;        
+        sn2 = sn2 + s2;
     case 2
         sn2 = sn2 + exp(hyp(idx))*s2;
         if compute_grad; dsn2(:,idx) = exp(hyp(idx))*s2; end
         idx = idx + 1;
 end
-    
+
 switch noisefun(3)
     case 1
         if ~isempty(y)

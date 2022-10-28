@@ -1,12 +1,13 @@
 import copy
 
-import gpyreg as gpr
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.stats
 from scipy.integrate import quad
 from scipy.misc import derivative
+
+import gpyreg as gpr
 
 
 @pytest.mark.filterwarnings(
@@ -77,7 +78,7 @@ def test_empty_gp():
 
     # gp.quad(0, 1, compute_var=True)
 
-    gp.plot()
+    # gp.plot()
 
 
 @pytest.mark.filterwarnings(
@@ -108,24 +109,32 @@ def test_random_function():
     y = gp.random_function(X)
     gp.update(X_new=X, y_new=y)
 
-    gp.plot()
+    # gp.plot()
 
     X_new = np.random.standard_normal(size=(10, D))
     y_new = gp.random_function(X_new)
 
     # Test return_lpd:
-    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=False, separate_samples=False)
-    assert(lpd.shape == (10, 1))
-    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=False, separate_samples=True)
-    assert(lpd.shape == (10, N_s))
-    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=True, separate_samples=False)
-    assert(lpd.shape == (10, 1))
-    __, __, lpd = gp.predict(X_new, y_new, return_lpd=True, add_noise=True, separate_samples=True)
-    assert(lpd.shape == (10, N_s))
+    __, __, lpd = gp.predict(
+        X_new, y_new, return_lpd=True, add_noise=False, separate_samples=False
+    )
+    assert lpd.shape == (10, 1)
+    __, __, lpd = gp.predict(
+        X_new, y_new, return_lpd=True, add_noise=False, separate_samples=True
+    )
+    assert lpd.shape == (10, N_s)
+    __, __, lpd = gp.predict(
+        X_new, y_new, return_lpd=True, add_noise=True, separate_samples=False
+    )
+    assert lpd.shape == (10, 1)
+    __, __, lpd = gp.predict(
+        X_new, y_new, return_lpd=True, add_noise=True, separate_samples=True
+    )
+    assert lpd.shape == (10, N_s)
 
     gp.update(X_new=X_new, y_new=y_new)
 
-    gp.plot(delta_y=5, max_min_flag=False)
+    # gp.plot(delta_y=5, max_min_flag=False)
 
 
 def test_getters_setters():
@@ -287,7 +296,7 @@ def test_cleaning():
         assert posteriors[i].L_chol == gp.posteriors[i].L_chol
         assert posteriors[i].sn2_mult == posteriors[i].sn2_mult
 
-    gp.plot()
+    # gp.plot()
 
 
 def partial(f, x0_orig, x0_i, i):
@@ -441,7 +450,7 @@ def test_gp_gradient_computations():
     print(gp)
 
     # Test plotting
-    gp.plot()
+    # gp.plot()
 
 
 def test_split_update():
@@ -564,7 +573,7 @@ def test_quadrature_without_noise():
     assert np.isclose(F_var_bayes[0, 0], F_var_bayes_total[0, 0])
     assert np.isclose(F_var_bayes_2[0, 0], F_var_bayes_total[1, 0])
 
-    gp.plot()
+    # gp.plot()
 
 
 @pytest.mark.filterwarnings(
@@ -627,7 +636,7 @@ def test_quadrature_with_noise():
 
     assert np.abs(F_true - F_bayes) < 0.1
 
-    gp.plot()
+    # gp.plot()
 
 
 @pytest.mark.filterwarnings(
@@ -669,7 +678,7 @@ def test_fitting_with_fixed_bounds():
 
     assert np.all(hyp[:, 3] == 0.5)
 
-    gp.plot()
+    # gp.plot()
 
 
 def test_setting_bounds():
@@ -716,16 +725,20 @@ def test_setting_bounds():
     assert np.all(np.isnan(gp.lower_bounds))
     assert np.all(np.isnan(gp.upper_bounds))
     hyp, _, _ = gp.fit(X=X, y=y)
-    default_lower_bounds = np.concatenate([
-        gp.covariance.get_bounds_info(gp.X, gp.y)["LB"],
-        gp.noise.get_bounds_info(gp.X, gp.y)["LB"],
-        gp.mean.get_bounds_info(gp.X, gp.y)["LB"],
-    ])
-    default_upper_bounds = np.concatenate([
-        gp.covariance.get_bounds_info(gp.X, gp.y)["UB"],
-        gp.noise.get_bounds_info(gp.X, gp.y)["UB"],
-        gp.mean.get_bounds_info(gp.X, gp.y)["UB"],
-    ])
+    default_lower_bounds = np.concatenate(
+        [
+            gp.covariance.get_bounds_info(gp.X, gp.y)["LB"],
+            gp.noise.get_bounds_info(gp.X, gp.y)["LB"],
+            gp.mean.get_bounds_info(gp.X, gp.y)["LB"],
+        ]
+    )
+    default_upper_bounds = np.concatenate(
+        [
+            gp.covariance.get_bounds_info(gp.X, gp.y)["UB"],
+            gp.noise.get_bounds_info(gp.X, gp.y)["UB"],
+            gp.mean.get_bounds_info(gp.X, gp.y)["UB"],
+        ]
+    )
     assert np.all(gp.lower_bounds == default_lower_bounds)
     assert np.all(gp.upper_bounds == default_upper_bounds)
 
@@ -956,15 +969,14 @@ def test_quad_not_squared_exponential():
         in execinfo.value.args[0]
     )
 
+
 def test_predict_lpd():
     D = 3
     gp = gpr.GP(
         D=D,
         covariance=gpr.covariance_functions.SquaredExponential(),
         mean=gpr.mean_functions.NegativeQuadratic(),
-        noise=gpr.noise_functions.GaussianNoise(
-            user_provided_add=True
-        )
+        noise=gpr.noise_functions.GaussianNoise(user_provided_add=True),
     )
     hyp = np.array(
         [
@@ -1001,23 +1013,44 @@ def test_predict_lpd():
                 0.0,
                 0.0,
                 0.0,  # log scale
-            ]
+            ],
         ]
     )
     gp.update(hyp=hyp)
 
     X_star = np.arange(-9, 9).reshape((-1, 3))
-    offset = np.random.normal(size=(6,1))
-    y_star = scipy.stats.multivariate_normal.logpdf(X_star, mean=np.zeros((D,))).reshape(-1,1) + offset
+    offset = np.random.normal(size=(6, 1))
+    y_star = (
+        scipy.stats.multivariate_normal.logpdf(
+            X_star, mean=np.zeros((D,))
+        ).reshape(-1, 1)
+        + offset
+    )
     s2_star = np.arange(-3, 3).reshape((-1, 1))
-    s2_star = np.zeros((6,1))
-    f_mu, f_s2, lpd = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True)
-    assert np.allclose(lpd, scipy.stats.norm.logpdf(y_star, loc=f_mu, scale=np.sqrt(np.pi * s2_star + f_s2)))
-    __, __, lpd2 = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True)
+    s2_star = np.zeros((6, 1))
+    f_mu, f_s2, lpd = gp.predict(
+        X_star, y_star, s2_star=s2_star, return_lpd=True
+    )
+    assert np.allclose(
+        lpd,
+        scipy.stats.norm.logpdf(
+            y_star, loc=f_mu, scale=np.sqrt(np.pi * s2_star + f_s2)
+        ),
+    )
+    __, __, lpd2 = gp.predict(
+        X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True
+    )
     assert np.all(lpd2 == lpd)
-    __, __, lpd3 = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True, separate_samples=True)
-    assert np.all(lpd3[:, 0 : 1] == lpd)
-    assert np.all(lpd3[:, 1 : 2] == lpd)
+    __, __, lpd3 = gp.predict(
+        X_star,
+        y_star,
+        s2_star=s2_star,
+        return_lpd=True,
+        add_noise=True,
+        separate_samples=True,
+    )
+    assert np.all(lpd3[:, 0:1] == lpd)
+    assert np.all(lpd3[:, 1:2] == lpd)
 
 
 def test__str__and__repr__():
@@ -1055,7 +1088,10 @@ def test__str__and__repr__():
     str_ = gp.__str__()
     assert "Covariance function: Matern" in str_
     repr_ = gp.__repr__()
-    assert "self.covariance = <gpyreg.covariance_functions.Matern object at " in repr_
+    assert (
+        "self.covariance = <gpyreg.covariance_functions.Matern object at "
+        in repr_
+    )
     assert "self.lower_bounds = [-10.8" in repr_
 
     # 2-D:
@@ -1092,5 +1128,8 @@ def test__str__and__repr__():
     str_ = gp.__str__()
     assert "Covariance function: Matern" in str_
     repr_ = gp.__repr__()
-    assert "self.covariance = <gpyreg.covariance_functions.Matern object at " in repr_
+    assert (
+        "self.covariance = <gpyreg.covariance_functions.Matern object at "
+        in repr_
+    )
     assert "self.lower_bounds = [-10.8" in repr_

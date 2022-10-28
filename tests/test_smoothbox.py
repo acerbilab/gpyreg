@@ -1,10 +1,12 @@
+import itertools
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.stats
-from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, uuinv
 from scipy.integrate import quad
-import itertools
+
+from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, uuinv
 
 
 def pdf(x, sigma, a, b):
@@ -35,8 +37,8 @@ def test_pdf():
     yy = np.zeros((N,))
     for i in range(0, N):
         yy[i] = pdf(xx[i], sigma, a, b)
-    plt.plot(xx, yy)
-    plt.show()
+    # plt.plot(xx, yy)
+    # plt.show()
 
     assert np.isclose(
         pdf(a - np.spacing(a), sigma, a, b),

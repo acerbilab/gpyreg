@@ -20,7 +20,7 @@ if isempty(noisefun)
 end
 
 if isempty(X)
-    D = 2; 
+    D = 2;
     N = 20;
     X = randn(N,D);
 else
@@ -46,7 +46,7 @@ if isempty(s2)
 end
 
 if isempty(y)   % Generate from the GP prior
-    gp = gplite_post(hyp(:,1),X,[],covfun,meanfun,noisefun,s2,0,outwarpfun);    
+    gp = gplite_post(hyp(:,1),X,[],covfun,meanfun,noisefun,s2,0,outwarpfun);
     [~,y] = gplite_rnd(gp,X);
 end
 
@@ -93,7 +93,7 @@ if any(strcmpi(test,'rank1')) || all_flag
     for ii = idx+1:size(gp.X,1)
         xstar = X(ii,:);
         ystar = y(ii);
-        if ~isempty(s2); s2star = s2(ii); else; s2star = []; end    
+        if ~isempty(s2); s2star = s2(ii); else; s2star = []; end
         gp1 = gplite_post(gp1,xstar,ystar,[],[],[],s2star,1);
     end
 
@@ -108,7 +108,7 @@ if any(strcmpi(test,'meangrad')) || all_flag
     fprintf('---------------------------------------------------------------------------------\n');
     fprintf('Check mean function gradient computation...\n\n');
     f = @(x) gplite_meanfun(x,X(1,:),meanfun,y(1));
-    hyp0_mean = hyp0(Ncov+Nnoise+1:Ncov+Nnoise+Nmean);    
+    hyp0_mean = hyp0(Ncov+Nnoise+1:Ncov+Nnoise+Nmean);
     derivcheck(f,hyp0_mean.*exp(0.1*rand(size(hyp0_mean))));
 end
 
@@ -123,7 +123,7 @@ gplite_plot(gp);
 
 % fprintf('---------------------------------------------------------------------------------\n');
 % fprintf('Check GP training with warped data...\n\n');
-% 
+%
 % D = 1;
 % s2 = 2;
 % Xt = linspace(-3,3,51)';
@@ -139,7 +139,7 @@ gplite_plot(gp);
 % Ncov = D+1;
 % Nmean = gplite_meanfun([],X,meanfun);
 % Nhyp0 = Ncov+1+Nmean+2*D;
-% 
+%
 % warp.LB = LB; warp.UB = UB; warp.logpdf_flag = 1;
 % hyp0 = zeros(Nhyp0,1);
 % [gp,hyp] = gplite_train(hyp0,0,X,y,meanfun,[],warp);

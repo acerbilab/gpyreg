@@ -66,7 +66,7 @@ switch method
         end
         Xs = slicesamplebnd(logpfun, ...
             x0,Ns,widths,LB,UB,sampleopts);
-        
+
     case 'parallel'
         sampleopts.Burnin = ceil(Ns/5);
         sampleopts.Thin = 1;
@@ -75,15 +75,15 @@ switch method
         sampleopts.VarTransform = false;
         sampleopts.InversionSample = false;
         sampleopts.FitGMM = false;
-        
+
         if ~isempty(logprior)
             logPfuns = {logprior,logpfun};
         else
             logPfuns = logpfun;
         end
-                
+
         % sampleopts.TransitionOperators = {'transSliceSampleRD'};
-        
+
         W = 2*(D+1);
         if isempty(x0)
             % Take starting points from high posterior density region
@@ -94,7 +94,7 @@ switch method
                 [~,ord] = sort(gp.y,'descend');
             else
                 dy = logprior(gp.X);
-                [~,ord] = sort(gp.y + dy,'descend');                
+                [~,ord] = sort(gp.y + dy,'descend');
             end
             X_hpd = gp.X(ord(1:N_hpd),:);
             x0 = X_hpd(randperm(N_hpd,min(W,N_hpd)),:);

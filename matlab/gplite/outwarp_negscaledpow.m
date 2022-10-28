@@ -1,9 +1,9 @@
 function [ywarp,dwarp_dt,dwarp_dtheta,d2warp_dthetadt] = outwarp_negscaledpow(hyp,y,invflag)
 %GPLITE_NOISEFUN Noise function for lite Gaussian Process regression.
 %   SN2 = GPLITE_NOISEFUN(HYP,X,NOISEFUN) computes the GP noise function
-%   NOISEFUN, that is the variance of observation noise evaluated at test 
-%   points X. HYP is a single column vector of noise function 
-%   hyperparameters. NOISEFUN is a numeric array whose elements specify 
+%   NOISEFUN, that is the variance of observation noise evaluated at test
+%   points X. HYP is a single column vector of noise function
+%   hyperparameters. NOISEFUN is a numeric array whose elements specify
 %   features of the noise function, as follows:
 %
 %   See also GPLITE_COVFUN, GPLITE_MEANFUN.
@@ -27,31 +27,31 @@ N = size(y,1);      % Number of training points
 if ischar(hyp)
     ywarp = Noutwarp;
     if nargout > 1
-        
+
         % Initialize bounds for all hyperparameters
         outwarp_info.LB = -Inf(1,Noutwarp);
         outwarp_info.UB = Inf(1,Noutwarp);
         outwarp_info.PLB = -Inf(1,Noutwarp);
         outwarp_info.PUB = Inf(1,Noutwarp);
         outwarp_info.x0 = NaN(1,Noutwarp);
-        
+
         %------------------------------------------------------------------
         % CUSTOM: Initialize hyperparameter bounds and other details
-        
+
         % Threshold parameter
         outwarp_info.LB(1) = min(y);
         outwarp_info.UB(1) = max(y);
         outwarp_info.PLB(1) = min(y);
         outwarp_info.PUB(1) = max(y);
         outwarp_info.x0(1) = NaN;
-        
+
         % Scaling parameter a (log space)
         outwarp_info.LB(2) = -Inf;
         outwarp_info.UB(2) = Inf;
         outwarp_info.PLB(2) = -2;
         outwarp_info.PUB(2) = 2;
         outwarp_info.x0(2) = 0;
-        
+
         % Power exponent k (log space)
         outwarp_info.LB(3) = -Inf;
         outwarp_info.UB(3) = Inf;
@@ -60,18 +60,18 @@ if ischar(hyp)
         outwarp_info.x0(3) = 0;
 
         %------------------------------------------------------------------
-        
+
         % Assign handle of current output warping function
         outwarp_info.outwarpfun = str2func(mfilename);
-                
+
         % Plausible starting point
         idx_nan = isnan(outwarp_info.x0);
         outwarp_info.x0(idx_nan) = 0.5*(outwarp_info.PLB(idx_nan) + outwarp_info.PUB(idx_nan));
-        
+
         dwarp_dt = outwarp_info;
-        
+
     end
-    
+
     return;
 end
 
@@ -109,28 +109,28 @@ if nargout > 1
     % First-order derivative of output warping function in output space
     dwarp_dt = ones(size(y));
     adeltakm1 = adelta.^(k-1);
-    
+
     dwarp_dt(idx) = a*k*adeltakm1;
-    
+
     if nargout > 2
         % Gradient of output warping function wrt hyperparameters
         dwarp_dtheta = zeros(N,Noutwarp);
-        
+
         dwarp_dtheta(idx,1) = 1 - a*k*adeltakm1;            % y0
         dwarp_dtheta(idx,2) = -k*adeltak;                   % log(a)
         dwarp_dtheta(idx,3) = -k*adeltak.*log(adelta);      % log(k)
-        
+
         if nargout > 3
-            % Gradient of derivative of output warping function            
+            % Gradient of derivative of output warping function
             d2warp_dthetadt = zeros(N,Noutwarp);
-            
+
             d2warp_dthetadt(idx,1) = a^2*k*(k-1)*adelta.^(k-2);                % y0
             d2warp_dthetadt(idx,2) = a*k^2*adeltakm1;                           % log(a)
             d2warp_dthetadt(idx,3) = a*k*adeltakm1 + a*k^2*adeltakm1.*log(adelta);  % log(k)
-            
+
         end
-        
-    end    
+
+    end
 end
 
 end

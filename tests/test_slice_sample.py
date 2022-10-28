@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-from gpyreg.slice_sample import SliceSampler
 from scipy.stats import (
     beta,
     expon,
@@ -9,6 +8,8 @@ from scipy.stats import (
     norm,
     uniform,
 )
+
+from gpyreg.slice_sample import SliceSampler
 
 options = {"display": "off", "diagnostics": True}
 threshold = 0.1

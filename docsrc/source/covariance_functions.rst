@@ -7,4 +7,3 @@ gpyreg.covariance_functions
     :members:
     :undoc-members:
     :show-inheritance:
-

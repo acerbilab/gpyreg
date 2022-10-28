@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from gpyreg.mean_functions import ConstantMean, NegativeQuadratic, ZeroMean
 
 

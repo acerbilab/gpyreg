@@ -7,7 +7,7 @@ rand('twister', 12345)
 N = 20;
 D = 2;
 X = unifrnd(-3, 3, D, N)';
-s2 = zeros(size(X)); 
+s2 = zeros(size(X));
 y = sin(sum(X, 2)) + norminv(rand(N, 1), 0, 0.1);
 
 hyp0 = [];          % Starting hyperparameter vector for optimization
@@ -39,7 +39,7 @@ end
 [gp,hyp,output] = gplite_train(hyp0,Ns,X,y,covfun,meanfun,noisefun,s2,hprior,options);
 
 hyp            % Hyperparameter sample
- 
+
 [xx, yy] = meshgrid(linspace(-5, 5, 20), linspace(-5, 5, 20));
 xstar = [reshape(xx.', [], 1), reshape(yy.', [], 1)];
 % Compute GP posterior predictive mean and variance at test points

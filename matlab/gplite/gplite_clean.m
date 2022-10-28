@@ -14,7 +14,7 @@ if ~isempty(gp) && isfield(gp,'post')
     for ff = checkfields
         if isfield(gp.post(1),ff{:}); post0.(ff{:}) = []; end
     end
-    
+
     for iG = 1:numel(gp)
         Ns = numel(gp(iG).post);
         postnew = post0;
@@ -23,7 +23,7 @@ if ~isempty(gp) && isfield(gp,'post')
             for ff = copyfields
                 post_tmp.(ff{:}) = gp(iG).post(iS).(ff{:});
             end
-            postnew(iS) = post_tmp;            
+            postnew(iS) = post_tmp;
         end
         gp(iG).post = postnew;
     end
