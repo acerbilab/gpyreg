@@ -3,6 +3,7 @@
 import math
 import time
 import warnings
+from textwrap import indent
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,6 +61,24 @@ class GP:
         self.temporary_data = dict()
 
     def __repr__(self):
+        return full_repr(
+            self,
+            "GP",
+            order=[
+                "D",
+                "covariance",
+                "mean",
+                "noise",
+                "X",
+                "y",
+                "s2",
+                "lower_bounds",
+                "upper_bounds",
+                "posteriors",
+            ],
+        )
+
+    def __str__(self):
         dimension = "Dimension: " + str(self.D) + "\n"
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -120,8 +139,9 @@ class GP:
         else:
             samples += str(np.size(self.posteriors))
 
-        total = dimension + cov + mean + noise + priors + samples
-        return total
+        title = "GP:\n"
+        body = dimension + cov + mean + noise + priors + samples
+        return title + indent(body, "    ")
 
     def set_bounds(self, bounds: dict = None):
         """
@@ -132,12 +152,10 @@ class GP:
         bounds : dict, optional
             A dictionary of GP hyperparameter names and tuples of their lower
             and upper bounds. All hyperparameters need to appear in the
-            dictionary. Use the value ``None`` to set no bounds for a
-            hyperparameter (equivalent to setting the lower bound to ``-Inf``
-            and upper bound to ``+Inf``). If ``bounds=None``, all
-            hyperparameter bounds are removed, that is for all
-            hyperparameters the lower bounds will be set to ``-Inf`` and
-            upper bounds to ``+Inf``.
+            dictionary. Use the value ``None`` to set the bounds of a specific
+            hyperparameter to the default recommended values. If
+            ``bounds=None``, all hyperparameter bounds will be set to their
+            default recommended values.
 
         Raises
         ------
@@ -155,8 +173,8 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
-        lower_bounds = np.full((hyp_N,), -np.inf)
-        upper_bounds = np.full((hyp_N,), np.inf)
+        lower_bounds = np.full((hyp_N,), np.nan)
+        upper_bounds = np.full((hyp_N,), np.nan)
 
         lower = 0
 
@@ -238,12 +256,23 @@ class GP:
 
         return bounds_dict
 
-    def get_recommended_bounds(self):
+    def get_recommended_bounds(self, lower_bounds=None, upper_bounds=None):
         """
         Return the recommended hyperparameter lower and upper bounds as a dict.
 
+        Parameters
+        ----------
+        lower_bounds : ndarray, optional
+            If present, override the recommended lower bounds with these
+            values. Any `nan` values will be replaced by the corresponding
+            recommended bounds. Defaults to all `nan` values.
+        upper_bounds : ndarray, optional
+            If present, override the recommended upper bounds with these
+            values. Any `nan` values will be replaced by the corresponding
+            recommended bounds. Defaults to all `nan` values.
+
         Returns
-        =======
+        -------
         bounds_dict : dict
             A dictionary of the hyperparameter names and tuples of lower
             upper bounds.
@@ -251,10 +280,41 @@ class GP:
         Raises
         ------
         ValueError
-            Raise when GP does not have `X` or `y` set yet.
+            Raise when GP does not have `X` or `y` set yet, or when provided
+            bounds are not one of `"recommended"`/`None`, `"current"`, or
+            array_like.
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
+
+        if not isinstance(lower_bounds, (list, tuple, np.ndarray)):
+            if lower_bounds == "current":
+                # Use existing bounds; fill any nan values with recommended bounds
+                lower_bounds = self.lower_bounds.copy()
+            elif lower_bounds is None or lower_bounds == "recommended":
+                # Use all recommended bounds
+                lower_bounds = np.full_like(self.lower_bounds, np.nan)
+            else:
+                raise ValueError(
+                    "`lower_bounds` should be 'recommended'/`None`, 'current', or an array."
+                )
+        if not isinstance(upper_bounds, (list, tuple, np.ndarray)):
+            if upper_bounds == "current":
+                # Use existing bounds; fill any nan values with recommended bounds
+                upper_bounds = self.upper_bounds.copy()
+            elif upper_bounds is None or upper_bounds == "recommended":
+                # Use all recommended bounds
+                upper_bounds = np.full_like(self.upper_bounds, np.nan)
+            else:
+                raise ValueError(
+                    "`lower_bounds` should be 'recommended'/`None`, 'current', or an array."
+                )
+        # Otherwise, use provided arrays as bounds, replacing nan values with
+        # recommended bounds, and avoiding mutation:
+        if isinstance(lower_bounds, (list, tuple, np.ndarray)):
+            lower_bounds = lower_bounds.copy()
+        if isinstance(upper_bounds, (list, tuple, np.ndarray)):
+            upper_bounds = upper_bounds.copy()
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
@@ -264,28 +324,28 @@ class GP:
         mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
-        lb = self.lower_bounds.copy()
-        ub = self.upper_bounds.copy()
+        lb = lower_bounds
+        ub = upper_bounds
 
         lb_cov = lb[0:cov_N]
         lb_noise = lb[cov_N : cov_N + noise_N]
         lb_mean = lb[cov_N + noise_N : cov_N + noise_N + mean_N]
 
-        lb_cov[np.isinf(lb_cov)] = cov_bounds_info["LB"][np.isinf(lb_cov)]
-        lb_noise[np.isinf(lb_noise)] = noise_bounds_info["LB"][
-            np.isinf(lb_noise)
+        lb_cov[np.isnan(lb_cov)] = cov_bounds_info["LB"][np.isnan(lb_cov)]
+        lb_noise[np.isnan(lb_noise)] = noise_bounds_info["LB"][
+            np.isnan(lb_noise)
         ]
-        lb_mean[np.isinf(lb_mean)] = mean_bounds_info["LB"][np.isinf(lb_mean)]
+        lb_mean[np.isnan(lb_mean)] = mean_bounds_info["LB"][np.isnan(lb_mean)]
 
         ub_cov = ub[0:cov_N]
         ub_noise = ub[cov_N : cov_N + noise_N]
         ub_mean = ub[cov_N + noise_N : cov_N + noise_N + mean_N]
 
-        ub_cov[np.isinf(ub_cov)] = cov_bounds_info["UB"][np.isinf(ub_cov)]
-        ub_noise[np.isinf(ub_noise)] = noise_bounds_info["UB"][
-            np.isinf(ub_noise)
+        ub_cov[np.isnan(ub_cov)] = cov_bounds_info["UB"][np.isnan(ub_cov)]
+        ub_noise[np.isnan(ub_noise)] = noise_bounds_info["UB"][
+            np.isnan(ub_noise)
         ]
-        ub_mean[np.isinf(ub_mean)] = mean_bounds_info["UB"][np.isinf(ub_mean)]
+        ub_mean[np.isnan(ub_mean)] = mean_bounds_info["UB"][np.isnan(ub_mean)]
 
         lb = np.concatenate([lb_cov, lb_noise, lb_mean])
         ub = np.concatenate([ub_cov, ub_noise, ub_mean])
@@ -707,6 +767,7 @@ class GP:
                 L = self.posteriors[s].L
                 L_chol = self.posteriors[s].L_chol
 
+                full_update_s = False
                 if L_chol:  # High-noise parametrization
                     new_L_column = sp.linalg.solve_triangular(
                         L, Ks, trans=1, check_finite=False
@@ -729,7 +790,6 @@ class GP:
                             stacklevel=2,
                         )
                     else:  # Otherwise continue with rank-1 update:
-                        full_update_s = False
                         alpha_update = (
                             sp.linalg.solve_triangular(
                                 L,
@@ -877,9 +937,14 @@ class GP:
                     Thinning parameter for slice sampling.
                 **burn** : int, defaults to ``thin * n_samples``
                     Burn parameter for slice sampling.
-                **use_recommended_bounds** : bool, defaults to True
-                    Whether to only use user provided lower and upper bounds
-                    or to try to choose them intelligently.
+                **lower_bounds** : str or ndarray, defaults to "current"
+                    User-provided lower bounds. Any values which are `nan` will
+                    be filled with the recommended bounds. "recommended" means use
+                    all recommended bounds. "current" means use current bounds.
+                **upper_bounds** : str or ndarray, defaults to "current"
+                    User-provided upper bounds. Any values which are `nan` will
+                    be filled with the recommended bounds. "recommended" means use
+                    all recommended bounds. "current" means use current bounds.
                 **init_method** : {'sobol', 'rand'}, defaults to 'sobol'
                     Specify whether to use Sobol or random sequences for
                     the initial space-filling design.
@@ -927,7 +992,8 @@ class GP:
         sampler_name = options.get("sampler", "slicesample")
         s_N = options.get("n_samples", 10)
         burn_in = options.get("burn", thin * s_N)
-        use_recommended_bounds = options.get("use_recommended_bounds", True)
+        lower_bounds = options.get("lower_bounds", "current")
+        upper_bounds = options.get("upper_bounds", "current")
 
         # Initialize GP if requested.
         if X is not None:
@@ -950,8 +1016,28 @@ class GP:
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
-        if use_recommended_bounds:
-            self.set_bounds(self.get_recommended_bounds())
+
+        # Set any unset bounds:
+        use_current_bounds = (
+            type(lower_bounds) == str
+            and lower_bounds == "current"
+            and type(upper_bounds) == str
+            and upper_bounds == "current"
+        )
+        if use_current_bounds and (
+            np.any(np.isnan(self.lower_bounds))
+            or np.any(np.isnan(self.upper_bounds))
+        ):  # If we're using the existing bounds, fill any nan's:
+            self.set_bounds(
+                self.get_recommended_bounds(
+                    self.lower_bounds, self.upper_bounds
+                )
+            )
+        else:  # Otherwise set the bounds according to the provided options:
+            self.set_bounds(
+                self.get_recommended_bounds(lower_bounds, upper_bounds)
+            )
+
         LB = self.lower_bounds
         UB = self.upper_bounds
 
@@ -1500,7 +1586,7 @@ class GP:
 
         # Preallocate space
         mu = np.zeros((N_star, s_N))
-        cov = np.zeros((N_star, N_star, s_N))
+        cov = np.zeros((s_N, N_star, N_star))
 
         for s in range(0, s_N):
             hyp = self.posteriors[s].hyp
@@ -1549,7 +1635,7 @@ class GP:
             C = (C + C.T) / 2
 
             mu[:, s : s + 1] = tmp_mu
-            cov[:, :, s] = C
+            cov[s, :, :] = C
             if add_noise:
                 sn2_mult = self.posteriors[s].sn2_mult
                 if sn2_mult is None:
@@ -1558,9 +1644,9 @@ class GP:
                 sn2_star = self.noise.compute(
                     hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
                 )
-                cov[:, :, s] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
+                cov[s, :, :] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
 
-        return mu, cov
+        return mu, cov.transpose(1, 2, 0)
 
     def predict(
         self,

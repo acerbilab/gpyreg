@@ -28,18 +28,18 @@ def test_empty_gp():
 
     # Test that lower and upper bounds are set appropriately.
     bounds = gp.get_bounds()
-    assert np.all(bounds["covariance_log_lengthscale"][0] == -np.inf)
-    assert np.all(bounds["covariance_log_lengthscale"][1] == np.inf)
-    assert np.all(bounds["covariance_log_outputscale"][0] == -np.inf)
-    assert np.all(bounds["covariance_log_outputscale"][1] == np.inf)
-    assert np.all(bounds["noise_log_scale"][0] == -np.inf)
-    assert np.all(bounds["noise_log_scale"][1] == np.inf)
-    assert np.all(bounds["mean_const"][0] == -np.inf)
-    assert np.all(bounds["mean_const"][1] == np.inf)
-    assert np.all(bounds["mean_location"][0] == -np.inf)
-    assert np.all(bounds["mean_location"][1] == np.inf)
-    assert np.all(bounds["mean_log_scale"][0] == -np.inf)
-    assert np.all(bounds["mean_log_scale"][1] == np.inf)
+    assert np.all(np.isnan(bounds["covariance_log_lengthscale"]))
+    assert np.all(np.isnan(bounds["covariance_log_lengthscale"]))
+    assert np.all(np.isnan(bounds["covariance_log_outputscale"]))
+    assert np.all(np.isnan(bounds["covariance_log_outputscale"]))
+    assert np.all(np.isnan(bounds["noise_log_scale"]))
+    assert np.all(np.isnan(bounds["noise_log_scale"]))
+    assert np.all(np.isnan(bounds["mean_const"]))
+    assert np.all(np.isnan(bounds["mean_const"]))
+    assert np.all(np.isnan(bounds["mean_location"]))
+    assert np.all(np.isnan(bounds["mean_location"]))
+    assert np.all(np.isnan(bounds["mean_log_scale"]))
+    assert np.all(np.isnan(bounds["mean_log_scale"]))
 
     # Test that hyperparameter priors are set appropriately.
     prior = gp.get_priors()
@@ -672,6 +672,119 @@ def test_fitting_with_fixed_bounds():
     gp.plot()
 
 
+def test_setting_bounds():
+    N = 20
+    D = 2
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(3),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp_bounds = {
+        "covariance_log_outputscale": (-np.inf, 1.0),
+        "covariance_log_lengthscale": (-2.0, np.inf),
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": (-4.0, 4.0),
+    }
+
+    gp_priors = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": None,
+    }
+
+    # Test setting all bounds manually:
+    lower_bounds = np.array([-2.0, -2.0, -np.inf, -np.inf, -4.0])
+    upper_bounds = np.array([np.inf, np.inf, 1.0, np.inf, 4.0])
+    gp.set_priors(gp_priors)
+    gp.set_bounds(gp_bounds)
+    hyp, _, _ = gp.fit(X=X, y=y)
+    assert np.all(gp.lower_bounds == lower_bounds)
+    # Make sure fitting doesn't undo the set bounds:
+    hyp, _, _ = gp.fit(X=X, y=y)
+    assert np.all(gp.lower_bounds == lower_bounds)
+    assert np.all(gp.upper_bounds == upper_bounds)
+
+    # Test setting all bounds automatically (by default)
+    gp.set_bounds(None)
+    assert np.all(np.isnan(gp.lower_bounds))
+    assert np.all(np.isnan(gp.upper_bounds))
+    hyp, _, _ = gp.fit(X=X, y=y)
+    default_lower_bounds = np.concatenate([
+        gp.covariance.get_bounds_info(gp.X, gp.y)["LB"],
+        gp.noise.get_bounds_info(gp.X, gp.y)["LB"],
+        gp.mean.get_bounds_info(gp.X, gp.y)["LB"],
+    ])
+    default_upper_bounds = np.concatenate([
+        gp.covariance.get_bounds_info(gp.X, gp.y)["UB"],
+        gp.noise.get_bounds_info(gp.X, gp.y)["UB"],
+        gp.mean.get_bounds_info(gp.X, gp.y)["UB"],
+    ])
+    assert np.all(gp.lower_bounds == default_lower_bounds)
+    assert np.all(gp.upper_bounds == default_upper_bounds)
+
+    # Test setting some bounds to defaults, via set_bounds.
+    # Bounds with value ``None`` should map to default values. Other bounds
+    # should stay the same.
+    gp_bounds = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": (-2.0, np.inf),
+        "noise_log_scale": None,
+        "mean_const": (-4.0, 4.0),
+    }
+    gp.set_bounds(gp_bounds)
+    mask = np.array([False, False, True, True, False])
+    assert np.all(np.isnan(gp.lower_bounds[mask]))
+    assert np.all(np.isnan(gp.upper_bounds[mask]))
+    assert np.all(gp.lower_bounds[~mask] == lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[~mask] == upper_bounds[~mask])
+    gp.fit(X, y)
+    assert np.all(gp.lower_bounds[mask] == default_lower_bounds[mask])
+    assert np.all(gp.upper_bounds[mask] == default_upper_bounds[mask])
+    assert np.all(gp.lower_bounds[~mask] == lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[~mask] == upper_bounds[~mask])
+
+    gp_bounds = {
+        "covariance_log_outputscale": (-np.inf, 1.0),
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": (-np.inf, np.inf),
+        "mean_const": None,
+    }
+    gp.set_bounds(gp_bounds)
+    mask = np.array([False, False, True, True, False])
+    assert np.all(np.isnan(gp.lower_bounds[~mask]))
+    assert np.all(np.isnan(gp.upper_bounds[~mask]))
+    assert np.all(gp.lower_bounds[mask] == lower_bounds[mask])
+    assert np.all(gp.upper_bounds[mask] == upper_bounds[mask])
+    gp.fit(X, y)
+    assert np.all(gp.lower_bounds[~mask] == default_lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[~mask] == default_upper_bounds[~mask])
+    assert np.all(gp.lower_bounds[mask] == lower_bounds[mask])
+    assert np.all(gp.upper_bounds[mask] == upper_bounds[mask])
+
+    # Test setting some bounds to defaults, via gp.fit():
+    lower_bounds = np.array([-2.0, np.nan, -np.inf, np.nan, -4.0])
+    upper_bounds = np.array([np.nan, np.inf, np.nan, np.inf, np.nan])
+    fit_options = {
+        "lower_bounds": lower_bounds,
+        "upper_bounds": upper_bounds,
+    }
+    hyp, _, _ = gp.fit(X=X, y=y, options=fit_options)
+    # Bounds should follow user-provided options, where not nan:
+    mask = np.isnan(lower_bounds)
+    assert np.all(gp.lower_bounds[~mask] == lower_bounds[~mask])
+    assert np.all(gp.upper_bounds[mask] == upper_bounds[mask])
+    # Bounds should follow defaults, where nan:
+    assert np.all(gp.lower_bounds[mask] == default_lower_bounds[mask])
+    assert np.all(gp.upper_bounds[~mask] == default_upper_bounds[~mask])
+
+
 def test_fitting_options():
     N = 20
     D = 1
@@ -905,3 +1018,79 @@ def test_predict_lpd():
     __, __, lpd3 = gp.predict(X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True, separate_samples=True)
     assert np.all(lpd3[:, 0 : 1] == lpd)
     assert np.all(lpd3[:, 1 : 2] == lpd)
+
+
+def test__str__and__repr__():
+    # 1-D:
+    N = 20
+    D = 1
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(3),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp_bounds = {
+        "covariance_log_outputscale": (np.nan, np.nan),
+        "covariance_log_lengthscale": (np.nan, np.nan),
+        "noise_log_scale": (np.nan, np.nan),
+        "mean_const": (0.5, 0.5),
+    }
+
+    gp_priors = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": None,
+    }
+
+    gp.set_priors(gp_priors)
+    gp.set_bounds(gp_bounds)
+    hyp, _, _ = gp.fit(X=X, y=y)
+
+    str_ = gp.__str__()
+    assert "Covariance function: Matern" in str_
+    repr_ = gp.__repr__()
+    assert "self.covariance = <gpyreg.covariance_functions.Matern object at " in repr_
+    assert "self.lower_bounds = [-10.8" in repr_
+
+    # 2-D:
+    N = 20
+    D = 2
+    X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
+    y = 1 + np.sin(X)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.Matern(3),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    gp_bounds = {
+        "covariance_log_outputscale": (np.nan, np.nan),
+        "covariance_log_lengthscale": (np.nan, np.nan),
+        "noise_log_scale": (np.nan, np.nan),
+        "mean_const": (0.5, 0.5),
+    }
+
+    gp_priors = {
+        "covariance_log_outputscale": None,
+        "covariance_log_lengthscale": None,
+        "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
+        "mean_const": None,
+    }
+
+    gp.set_priors(gp_priors)
+    gp.set_bounds(gp_bounds)
+    hyp, _, _ = gp.fit(X=X, y=y)
+
+    str_ = gp.__str__()
+    assert "Covariance function: Matern" in str_
+    repr_ = gp.__repr__()
+    assert "self.covariance = <gpyreg.covariance_functions.Matern object at " in repr_
+    assert "self.lower_bounds = [-10.8" in repr_
