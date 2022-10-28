@@ -2,7 +2,7 @@ function [nlZ,dnlZ,post,K_mat,Q] = gplite_core(hyp,gp,compute_nlZ,compute_nlZ_gr
 %GPLITE_CORE Core kernel computations for lite GP regression.
 
 %% Initialize GP hyperparameters
-    
+
 [N,D] = size(gp.X);         % Number of training points and dimension
 
 Ncov = gp.Ncov;
@@ -59,7 +59,7 @@ else
     if compute_nlZ_grad
         [K_mat,dK_mat] = gplite_covfun(hyp_cov,gp.X,gp.covfun,[]);
     else
-        K_mat = gplite_covfun(hyp_cov,gp.X,gp.covfun,[]);        
+        K_mat = gplite_covfun(hyp_cov,gp.X,gp.covfun,[]);
     end
 end
 
@@ -74,7 +74,7 @@ if Lchol
         sn2div = min(sn2);
         sn2_mat = diag(sn2/sn2div);
     end
-    
+
     for iter = 1:10
         [L,p] = chol(K_mat/(sn2div*sn2_mult)+sn2_mat);
         if p > 0; sn2_mult = sn2_mult*10; else; break; end
@@ -106,11 +106,11 @@ alpha = L\(L'\(y-m)) / sl;     % alpha = inv(K_mat + diag(sn2)) * (y - m)  I
 nlZ = []; dnlZ = []; Q = [];
 
 if compute_nlZ
-    Nhyp = size(hyp,1);    
-    
+    Nhyp = size(hyp,1);
+
     % Compute negative log marginal likelihood
     nlZ = (y-m)'*alpha/2 + sum(log(diag(L))) + N*log(2*pi*sl)/2;
-    
+
     if outwarp_flag     % Jacobian correction for output warping
         nlZ = nlZ - sum(log(abs(dwarp_dt)));
     end
@@ -118,16 +118,16 @@ if compute_nlZ
     if compute_nlZ_grad
         % Compute gradient of negative log marginal likelihood
 
-        dnlZ = zeros(Nhyp,1);    % allocate space for derivatives        
+        dnlZ = zeros(Nhyp,1);    % allocate space for derivatives
         Q = L\(L'\eye(N))/sl - alpha*alpha';
-        
+
         if gp.covfun(1) == 1
             for i = 1:D                             % Grad of cov length scales
                 K_temp = K_mat .* sq_dist(gp.X(:,i)'/ell(i));
                 dnlZ(i) = sum(sum(Q.*K_temp))/2;
             end
             dnlZ(D+1) = sum(sum(Q.*(2*K_mat)))/2;   % Grad of cov output scale
-        else            
+        else
             for i = 1:Ncov                          % Grad of cov hyperparameters
                 dnlZ(i) = sum(sum(Q.*dK_mat(:,:,i)))/2;
             end
@@ -149,7 +149,7 @@ if compute_nlZ
         if Nmean > 0
             dnlZ(Ncov+Nnoise+(1:Nmean)) = -dm'*alpha;
         end
-        
+
         % Gradient of output warping function
         if outwarp_flag && Noutwarp > 0
             for i = 1:Noutwarp

@@ -28,7 +28,7 @@ if nargin==1                                                     % subtract mean
   if bsx
     a = bsxfun(@minus,a,mu);
   else
-    a = a - repmat(mu,1,size(a,2));  
+    a = a - repmat(mu,1,size(a,2));
   end
   b = a; m = n;
 else

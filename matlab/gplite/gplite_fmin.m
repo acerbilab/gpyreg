@@ -18,14 +18,14 @@ UB = max(gp.X) + MaxBnd*diam;
 if ~isfield(gp,'post') || isempty(gp.post)
     % How many samples for the GP?
     if isfield(gp,'Ns') && ~isempty(gp.Ns); Ns_gp = gp.Ns; else; Ns_gp = 0; end
-    options.Nopts = 1;  % Do only one optimization    
+    options.Nopts = 1;  % Do only one optimization
     gp = gplite_train(...
         [],Ns_gp,gp.X,gp.y,gp.covfun,gp.meanfun,gp.noisefun,[],[],options);
 end
 
 % Start from the min (or max) of the training data
 if maxflag
-    [~,ord] = sort(gp.y,'descend');    
+    [~,ord] = sort(gp.y,'descend');
 else
     [~,ord] = sort(gp.y,'ascend');
 end

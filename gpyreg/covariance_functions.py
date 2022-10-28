@@ -1,54 +1,58 @@
 """Module for different covariance functions used by Gaussian Processes."""
 
-import numpy as np
-from scipy.spatial.distance import pdist, cdist, squareform
-
 from abc import ABC, abstractclassmethod
 
-class AbstractKernel(ABC):
+import numpy as np
+from scipy.spatial.distance import cdist, pdist, squareform
 
+
+class AbstractKernel(ABC):
     @abstractclassmethod
-    def compute(self, hyp: np.ndarray, X: np.ndarray, X_star: np.ndarray = None,
+    def compute(
+        self,
+        hyp: np.ndarray,
+        X: np.ndarray,
+        X_star: np.ndarray = None,
         compute_diag: bool = False,
         compute_grad: bool = False,
     ):
         """
-            Compute the covariance matrix for given training points
-            and test points.
+        Compute the covariance matrix for given training points
+        and test points.
 
-            Parameters
-            ----------
-            hyp : ndarray, shape (cov_N,)
-                A 1D array of hyperparameters, where ``cov_N`` is
-                the number of hyperparameters.
-            X : ndarray, shape (N, D)
-                A 2D array where each row is a training point.
-            X_star : ndarray, shape (M, D), optional
-                A 2D array where each row is a test point. If this is not
-                given, the self-covariance matrix is being computed.
-            compute_diag : bool, defaults to False
-                Whether to only compute the diagonal of the self-covariance
-                matrix.
-            compute_grad : bool, defaults to False
-                Whether to compute the gradient with respect to the
-                hyperparameters.
+        Parameters
+        ----------
+        hyp : ndarray, shape (cov_N,)
+            A 1D array of hyperparameters, where ``cov_N`` is
+            the number of hyperparameters.
+        X : ndarray, shape (N, D)
+            A 2D array where each row is a training point.
+        X_star : ndarray, shape (M, D), optional
+            A 2D array where each row is a test point. If this is not
+            given, the self-covariance matrix is being computed.
+        compute_diag : bool, defaults to False
+            Whether to only compute the diagonal of the self-covariance
+            matrix.
+        compute_grad : bool, defaults to False
+            Whether to compute the gradient with respect to the
+            hyperparameters.
 
-            Returns
-            -------
-            K : ndarray
-                The covariance matrix which is by default of shape ``(N, N)``. If
-                ``compute_diag = True`` the shape is ``(N,)``.
-            dK : ndarray, shape (N, N, cov_N), optional
-                The gradient of the covariance matrix with respect to the
-                hyperparameters.
+        Returns
+        -------
+        K : ndarray
+            The covariance matrix which is by default of shape ``(N, N)``. If
+            ``compute_diag = True`` the shape is ``(N,)``.
+        dK : ndarray, shape (N, N, cov_N), optional
+            The gradient of the covariance matrix with respect to the
+            hyperparameters.
 
-            Raises
-            ------
-            ValueError
-                Raised when `hyp` has not the expected number of hyperparameters.
-            ValueError
-                Raised when `hyp` is not an 1D array but of higher dimension.
-            """
+        Raises
+        ------
+        ValueError
+            Raised when `hyp` has not the expected number of hyperparameters.
+        ValueError
+            Raised when `hyp` is not an 1D array but of higher dimension.
+        """
         pass
 
     def hyperparameter_count(self, D: int):
@@ -133,7 +137,8 @@ class SquaredExponential(AbstractKernel):
         X: np.ndarray,
         X_star: np.ndarray = None,
         compute_diag: bool = False,
-        compute_grad: bool = False,):
+        compute_grad: bool = False,
+    ):
 
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
@@ -214,8 +219,9 @@ class Matern(AbstractKernel):
         X: np.ndarray,
         X_star: np.ndarray = None,
         compute_diag: bool = False,
-        compute_grad: bool = False,):
-        
+        compute_grad: bool = False,
+    ):
+
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
 
@@ -275,12 +281,13 @@ class RationalQuadraticARD(AbstractKernel):
 
     def hyperparameter_count(self, D: int):
         return D + 2
-    
+
     def hyperparameter_info(self, D: int):
         return [
             ("covariance_log_lengthscale", D),
             ("covariance_log_outputscale", 1),
-            ("covariance_log_shape", 1)]
+            ("covariance_log_shape", 1),
+        ]
 
     def compute(
         self,
@@ -290,7 +297,7 @@ class RationalQuadraticARD(AbstractKernel):
         compute_diag: bool = False,
         compute_grad: bool = False,
     ):
-        
+
         N, D = X.shape
         cov_N = self.hyperparameter_count(D)
 
@@ -307,41 +314,44 @@ class RationalQuadraticARD(AbstractKernel):
 
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
-        alpha = np.exp(hyp[D+1])
+        alpha = np.exp(hyp[D + 1])
 
         if X_star is None:
             if compute_diag:
                 tmp = np.zeros((N, 1))
             else:
-                tmp = squareform(pdist(X @ np.diag(1. / ell), "sqeuclidean"))
+                tmp = squareform(pdist(X @ np.diag(1.0 / ell), "sqeuclidean"))
         else:
-            a = X @ np.diag(1. / ell)
-            b = X_star @ np.diag(1. / ell)
+            a = X @ np.diag(1.0 / ell)
+            b = X_star @ np.diag(1.0 / ell)
             tmp = cdist(a, b, "sqeuclidean")
 
-        M = (1 + 0.5 * tmp/alpha) 
-        K = sf2 * M **(-alpha)
+        M = 1 + 0.5 * tmp / alpha
+        K = sf2 * M ** (-alpha)
 
         if compute_grad:
             dK = np.zeros((cov_N, N, N))
 
             # Gradient respect of lenght scale.
             for i in range(0, D):
-                Ki = squareform(pdist(np.reshape(1. / ell[i] * X[:, i], (-1, 1)),
-                        "sqeuclidean",))
+                Ki = squareform(
+                    pdist(
+                        np.reshape(1.0 / ell[i] * X[:, i], (-1, 1)),
+                        "sqeuclidean",
+                    )
+                )
                 with np.errstate(all="ignore"):
-                    dK[i, :, :] = sf2 * M**(-alpha-1) * Ki
+                    dK[i, :, :] = sf2 * M ** (-alpha - 1) * Ki
 
             # Gradient of cov output scale.
             dK[D, :, :] = 2 * K
 
             # Gradient respect of alpha.
-            dK[D+1, :, :] = K * (0.5 * tmp/M - alpha * np.log(M))
+            dK[D + 1, :, :] = K * (0.5 * tmp / M - alpha * np.log(M))
 
             return K, dK.transpose(1, 2, 0)
 
         return K
-
 
 
 def _bounds_info_helper(cov_N, X, y):

@@ -1,31 +1,31 @@
 function [samples,logP,exitflag,output,fvals] = eissample_lite(logPfuns,x0,N,K,widths,LB,UB,options,varargin)
 %EISSAMPLE_LITE Ensemble slice sampling MCMC (lite version).
 %
-%   SAMPLES = EISSAMPLE(LOGF,X0,N) draws N random samples from a target 
-%   distribution with the log probability density function (pdf) LOGPFUNS 
-%   using a mixture of ensemble (slice) sampling methods. 
-%   X0 is a row vector or a matrix in which each row contains an initial 
-%   starting point for the the random sample sequences. Each initial 
+%   SAMPLES = EISSAMPLE(LOGF,X0,N) draws N random samples from a target
+%   distribution with the log probability density function (pdf) LOGPFUNS
+%   using a mixture of ensemble (slice) sampling methods.
+%   X0 is a row vector or a matrix in which each row contains an initial
+%   starting point for the the random sample sequences. Each initial
 %   starting point must be within the domain of the target distribution.
-%   By default, EISSAMPLE uses an ensemble of K = 2*(D+1) walkers, where D 
+%   By default, EISSAMPLE uses an ensemble of K = 2*(D+1) walkers, where D
 %   is the number of dimensions of the target distribution (columns of X0).
-%   If X0 contains more rows than walkers, the algorithm takes only the 
-%   first K rows. If X0 contains less rows than walkers, additional initial 
+%   If X0 contains more rows than walkers, the algorithm takes only the
+%   first K rows. If X0 contains less rows than walkers, additional initial
 %   vectors are created by jittering the initial points by a small amount.
 %   N is the number of samples to be returned.
 %   LOGPFUNS is either a function handle created using @, or a cell array
-%   of function handles. Functions in LOGPFUNS take one row array as input 
-%   that has the same type and number of columns as X0 and returns the 
-%   target log density function (the normalization constant of the pdf need 
-%   not be known). The log density returned by each function can either be 
-%   a scalar or a row vector (one element per data point). If multiple 
-%   function handles are provided, they are evaluated sequentially and the 
-%   log probability is summed over them. 
-%   If a function returns -Inf, the point is considered invalid, and next 
-%   functions in the sequence are not evaluated. In Bayesian inference, 
-%   typically the first function provided is the prior (which may also 
+%   of function handles. Functions in LOGPFUNS take one row array as input
+%   that has the same type and number of columns as X0 and returns the
+%   target log density function (the normalization constant of the pdf need
+%   not be known). The log density returned by each function can either be
+%   a scalar or a row vector (one element per data point). If multiple
+%   function handles are provided, they are evaluated sequentially and the
+%   log probability is summed over them.
+%   If a function returns -Inf, the point is considered invalid, and next
+%   functions in the sequence are not evaluated. In Bayesian inference,
+%   typically the first function provided is the prior (which may also
 %   encode nonlinear bounds), and the second function is the likelihood.
-%   SAMPLES is a matrix each row of which corresponds to a sampled point in 
+%   SAMPLES is a matrix each row of which corresponds to a sampled point in
 %   the sequence.
 %
 %   SAMPLES = EISSAMPLE(LOGF,X0,N,K) uses K walkers. The default number of
@@ -33,60 +33,60 @@ function [samples,logP,exitflag,output,fvals] = eissample_lite(logPfuns,x0,N,K,w
 %   walkers. More walkers may better explore the posterior landscape, but
 %   convergence of the chains may take longer.
 %
-%   SAMPLES = EISSAMPLE(LOGF,X0,N,K,WIDTHS) uses WIDTHS as a scalar or 
-%   vector of typical widths. If it is a scalar, all dimensions are assumed 
-%   to have the same typical widths. If it is a vector, each element of the 
-%   vector is the typical width of the marginal target distribution in that 
-%   dimension. The default value of W(i) is (UB(i)-LB(i))/2 if the i-th 
-%   bounds are finite, or 10 otherwise. By default EISSAMPLE uses an 
-%   adaptive widths method during warmup, so the choice of typical widths 
+%   SAMPLES = EISSAMPLE(LOGF,X0,N,K,WIDTHS) uses WIDTHS as a scalar or
+%   vector of typical widths. If it is a scalar, all dimensions are assumed
+%   to have the same typical widths. If it is a vector, each element of the
+%   vector is the typical width of the marginal target distribution in that
+%   dimension. The default value of W(i) is (UB(i)-LB(i))/2 if the i-th
+%   bounds are finite, or 10 otherwise. By default EISSAMPLE uses an
+%   adaptive widths method during warmup, so the choice of typical widths
 %   is not crucial.
 %
-%   SAMPLES = EISSAMPLE(LOGF,X0,N,K,WIDTHS,LB,UB) defines a set of lower 
+%   SAMPLES = EISSAMPLE(LOGF,X0,N,K,WIDTHS,LB,UB) defines a set of lower
 %   and upper bounds on the domain of the target density function, which is
-%   assumed to be zero outside the range LB <= X <= UB. Use empty matrices 
-%   for LB and UB if no bounds exist. Set LB(i) = -Inf if X(i) is unbounded 
+%   assumed to be zero outside the range LB <= X <= UB. Use empty matrices
+%   for LB and UB if no bounds exist. Set LB(i) = -Inf if X(i) is unbounded
 %   below; set UB(i) = Inf if X(i) is unbounded above. If LB(i) == UB(i),
 %   the variable is assumed to be fixed on that dimension.
 %
-%   SAMPLES = EISSAMPLE(LOGF,X0,N,WIDTHS,LB,UB,OPTIONS) samples with 
-%   the default sampling parameters replaced by values in the structure 
+%   SAMPLES = EISSAMPLE(LOGF,X0,N,WIDTHS,LB,UB,OPTIONS) samples with
+%   the default sampling parameters replaced by values in the structure
 %   OPTIONS. EISSAMPLE uses these options:
 %
-%     OPTIONS.Thin generates random samples with Thin-1 out of Thin values 
+%     OPTIONS.Thin generates random samples with Thin-1 out of Thin values
 %     omitted in the generated sequence (after warmup). Thin is a positive
 %     integer. The default value of Thin is 1.
 %
-%     OPTIONS.Burnin omits the first Burnin points before starting recording 
-%     points for the generated sequence. Burnin is a non-negative integer. 
+%     OPTIONS.Burnin omits the first Burnin points before starting recording
+%     points for the generated sequence. Burnin is a non-negative integer.
 %     The default value of Burnin is round(2*N) (that is, double the number
 %     of recorded samples).
 %
 %     OPTIONS.Display defines the level of display. Accepted values for
-%     Display are 'iter', 'notify', 'final', and 'off' for no display. The 
-%     default value of Display is 'notify'. 
-%    
+%     Display are 'iter', 'notify', 'final', and 'off' for no display. The
+%     default value of Display is 'notify'.
+%
 %     OPTIONS.Diagnostics specifies whether convergence diagnostics are
-%     performed at the end of the run. Diagnostics is a boolean value. Set 
-%     OPTIONS.Diagnostics to true to run the diagnostics, false to skip it. 
-%     The default for OPTIONS.Diagnostics is true. The diagnostics tests 
-%     use the PSRF function by Simo Särkkä and Aki Vehtari, which implements 
+%     performed at the end of the run. Diagnostics is a boolean value. Set
+%     OPTIONS.Diagnostics to true to run the diagnostics, false to skip it.
+%     The default for OPTIONS.Diagnostics is true. The diagnostics tests
+%     use the PSRF function by Simo Särkkä and Aki Vehtari, which implements
 %     diagnostics from Gelman et al. (2013).
 %
 %     OPTIONS.Noise is a flag that specifies whether the computation of the
-%     target pdf is stochastic (noisy). The MCMC procedure is still 
-%     asymptotically correct if LOGPFUNS returns an unbiased estimator of 
+%     target pdf is stochastic (noisy). The MCMC procedure is still
+%     asymptotically correct if LOGPFUNS returns an unbiased estimator of
 %     the pdf. The default value of Noise is false.
 %
 %   SAMPLES = EISSAMPLE(...,VARARGIN) passes additional arguments
 %   VARARGIN to LOGF.
 %
-%   [SAMPLES,LOGP] = EISSAMPLE(...) returns the sequence of values 
+%   [SAMPLES,LOGP] = EISSAMPLE(...) returns the sequence of values
 %   LOGP of the target log pdf at the sampled points (sum over functions,
 %   if multiple function handles are provided in LOGPFUNS).
 %
 %   [SAMPLES,LOGP,EXITFLAG] = EISSAMPLE(...) returns an EXITFLAG that
-%   describes the exit condition of EISSAMPLE. Possible values of 
+%   describes the exit condition of EISSAMPLE. Possible values of
 %   EXITFLAG and the corresponding exit conditions are
 %
 %    1  Target number of recorded samples reached, with no explicit
@@ -94,23 +94,23 @@ function [samples,logP,exitflag,output,fvals] = eissample_lite(logPfuns,x0,N,K,w
 %    0  Target number of recorded samples reached, convergence status is
 %       unknown (no diagnostics have been run).
 %    -1 No explicit violation of convergence detected, but the number of
-%       effective (independent) samples in the sampled sequence is much 
-%       lower than the number of requested samples N for at least one 
+%       effective (independent) samples in the sampled sequence is much
+%       lower than the number of requested samples N for at least one
 %       dimension.
 %    -3 Detected probable lack of convergence of the sampling procedure.
 %    -4 Detected lack of convergence of the sampling procedure.
 %    -5 One of more slice sampling iterations failed by shrinking back to
-%       the point. This flag is returned only if OPTIONS.Noise is 0; in 
-%       which case it usually means that there is some problem with the 
-%       target distribution. For noisy functions it is a normal occurrence 
+%       the point. This flag is returned only if OPTIONS.Noise is 0; in
+%       which case it usually means that there is some problem with the
+%       target distribution. For noisy functions it is a normal occurrence
 %       and it is not reported.
 %
 %   [SAMPLES,LOGP,EXITFLAG,OUTPUT] = EISSAMPLE(...) returns a structure
-%   OUTPUT with the number of evaluations of LOGF in OUTPUT.funccount, the 
-%   value WIDTHS used during sampling in OUTPUT.widths (they can differ from 
+%   OUTPUT with the number of evaluations of LOGF in OUTPUT.funccount, the
+%   value WIDTHS used during sampling in OUTPUT.widths (they can differ from
 %   the initial WIDTHS due to width adaptation during warmup). OUTPUT also
-%   contains results of the convergence diagnostics, if available, such as 
-%   the Potential Scale Reduction Factor in OUTPUT.R, the number of 
+%   contains results of the convergence diagnostics, if available, such as
+%   the Potential Scale Reduction Factor in OUTPUT.R, the number of
 %   effective samples in OUTPUT.Neff and the estimated autocorrelation time
 %   in OUTPUT.tau.
 %
@@ -120,18 +120,18 @@ function [samples,logP,exitflag,output,fvals] = eissample_lite(logPfuns,x0,N,K,w
 %   of values returned by the m-th function, each row corresponding to
 %   a sample and columns corresponding to data points (if LOGPFUNS returns
 %   the log pdf per data point).
-%   Knowing the log pdf of the sampled points per each data point can be 
-%   useful to compute estimates of predictive error such as the widely 
+%   Knowing the log pdf of the sampled points per each data point can be
+%   useful to compute estimates of predictive error such as the widely
 %   applicable information criterion (WAIC); see Watanabe (2010).
 %
-%   References: 
+%   References:
 %   - R. Neal (2003), Slice Sampling, Annals of Statistics, 31(3), p705-67.
-%   - D. J. MacKay (2003), Information theory, inference and learning 
+%   - D. J. MacKay (2003), Information theory, inference and learning
 %     algorithms, Cambridge university press, p374-7.
 %   - S. Watanabe (2010), Asymptotic equivalence of Bayes cross validation
-%     and widely applicable information criterion in singular learning 
+%     and widely applicable information criterion in singular learning
 %     theory, The Journal of Machine Learning Research, 11, p3571-94.
-%   - A. Gelman, et al (2013), Bayesian data analysis. Vol. 2. Boca Raton, 
+%   - A. Gelman, et al (2013), Bayesian data analysis. Vol. 2. Boca Raton,
 %     FL, USA: Chapman & Hall/CRC.
 
 % Author:   Luigi Acerbi
@@ -152,7 +152,7 @@ function [samples,logP,exitflag,output,fvals] = eissample_lite(logPfuns,x0,N,K,w
 
 % Use persistent variable to avoid overhead for repeated usage
 % persistent STARTUP;
-% 
+%
 % if isempty(STARTUP)
 %     % Add subdirectories to path
 %     basedir = fileparts(mfilename('fullpath'));
@@ -253,19 +253,19 @@ end
 
 if ~isempty(options.LoadFile) && exist(options.LoadFile,'file')
     %% Load interrupted execution from file
-    
-    optionsnew = options;           % Store current options    
-    if options.VarTransform; logPfuns_temp = logPfuns; end    
+
+    optionsnew = options;           % Store current options
+    if options.VarTransform; logPfuns_temp = logPfuns; end
     load(options.LoadFile,'-mat');  % Load run from recovery file
     i0 = ii;                        % Start from recovered iteration
     if trace > 1; fprintf('Loading sampling from file ''%s''.\n', options.LoadFile); end
 
     % Copy some new OPTIONS to the old options structure
-    copyfields = {'LoadFile','SaveFile','SaveTime','Diagnostics','Display'};    
-    for f = 1:numel(copyfields)    
+    copyfields = {'LoadFile','SaveFile','SaveTime','Diagnostics','Display'};
+    for f = 1:numel(copyfields)
         options.(copyfields{f}) = optionsnew.(copyfields{f});
     end
-    
+
     % Check that these fields exist and are nonempty (for retrocompatibility)
     checkfields = {'VarTransform','VarTransformRestarts','VarTransformMethod','VarTransformStages'};
     for f = 1:numel(checkfields)
@@ -273,7 +273,7 @@ if ~isempty(options.LoadFile) && exist(options.LoadFile,'file')
             options.(checkfields{f}) = optionsnew.(checkfields{f});
         end
     end
-    
+
     %----------------------------------------------------------------------
     % TEMPORARY PATCH FOR RETROCOMPATIBILITY
     if ~isempty(trinfo) && options.VarTransformMethod == 4 ...
@@ -283,33 +283,33 @@ if ~isempty(options.LoadFile) && exist(options.LoadFile,'file')
         end
     end
     %----------------------------------------------------------------------
-    
+
     % Reload function handles
     if options.VarTransform
         logPfuns_orig = logPfuns_temp;
         [logPfuns,nocell_tr] = trans_logPfuns(logPfuns_orig,trinfo);
     end
-        
+
     clear copyfields f optionsnew logPfuns_temp;
-    
+
 else
     %% Startup and initial checks
-    
+
     % Provided WIDTHS is a covariance matrix
     if ~isempty(widths) && ~isvector(widths)
         covmat = widths;
         widths = sqrt(diag(covmat))';
     else
         covmat = [];
-    end    
-    
+    end
+
     % Transform constrained variables
     if options.VarTransform
         logPfuns_orig = logPfuns;
         [trinfo,x0,widths,LB,UB,logPfuns,nocell_tr] = ...
             trans_init(logPfuns,x0,K,widths,LB,UB,trace,options);
     end
-    
+
     % Initialize algorithm variables
     [sampleState,logPfuns,nocell] = ...
         sampleinit(logPfuns,nvars,N,LB,UB,widths,covmat,options);
@@ -325,10 +325,10 @@ else
     else
         warmup = [];
     end
-        
+
     % Initial population
     x0 = sampleinitpop(logPfuns,x0,K,sampleState,options,trace,varargin);
-        
+
     % Evaluate starting points
     ensemble.x = x0;
     ensemble.logP = zeros(K,1);
@@ -343,17 +343,17 @@ else
         [ensemble.logP(k),ftemp,fc] = feval(@logpdfbnd,ensemble.x(k,:),logPfuns,sampleState.LB,sampleState.UB,options,varargin{:});
         sampleState.funccount = sampleState.funccount + fc;
         ensemble.fval = assignfval(ensemble.fval,ftemp,k);
-    end    
-    
+    end
+
     % Make space for stored variables
     samples = zeros(N, nvars);
     if nargout > 1; logP = zeros(N, 1); end
     if nargout > 4
         for j = 1:numel(ensemble.fval)
-            fvals{j} = zeros(N, size(ensemble.fval{j},2));            
+            fvals{j} = zeros(N, size(ensemble.fval{j},2));
         end
     elseif nargout > 1 && ~isempty(trinfo)  % Record log transorm
-        fvals{1} = zeros(N,1);            
+        fvals{1} = zeros(N,1);
     end
 
     % Check arguments and options
@@ -366,7 +366,7 @@ else
     idx = 1;
     xx_sum = zeros(1,nvars);
     xx_sqsum = zeros(1,nvars);
-    
+
     % Warmup steps
     warmiters = round(linspace(sampleState.burn/options.WarmUpStages, ...
         sampleState.burn,options.WarmUpStages));
@@ -384,12 +384,12 @@ fun = @(x_) feval(@logpdfbnd,x_,logPfuns,sampleState.LB,sampleState.UB,options,v
 
 % Main loop
 for ii = i0:sampleState.totN
-        
+
     % Save current progress to file
     if ~isempty(options.SaveFile) && (toc(lastsave) > options.SaveTime ||  ii == sampleState.totN)
         if trace > 1; fprintf('Saving temp file ''%s''...\n', options.SaveFile); end
         filename = options.SaveFile;
-        
+
         if ~exist(filename,'file')
             save(filename);
         else
@@ -416,21 +416,21 @@ for ii = i0:sampleState.totN
             % Remove temporary old file
             if exist(tempfile,'file'); delete(tempfile); end
         end
-        
+
         lastsave = tic;
     end
-    
+
     % Current walker index (from 1 to K)
     idx = mod(idx, K) + 1;
     xx = ensemble.x(idx,:);
     sampleState.others = ensemble.x;
     sampleState.others(idx,:) = [];
-    
+
     if trace > 1 && ii == sampleState.burn+1
         action = 'start recording';
         fprintf(displayFormat,ii-sampleState.burn,sampleState.funccount(end),ensemble.logP(idx),action);
     end
-    
+
     % Independent Metropolis step
     % if ii < sampleState.burn/2; mhfrac = 0.5; elseif ii < sampleState.burn; mhfrac = 1; else mhfrac = 1; end
 
@@ -440,18 +440,18 @@ for ii = i0:sampleState.totN
     else
         printfun = @(action) 0;
     end
-    
+
     [xx,ensemble.logP(idx),ftemp,exitflag,sampleState] = ...
         feval(options.TransitionOperators{:}, ...
         fun,xx,ensemble.logP(idx), ...
         cellgetrow(ensemble.fval,idx),sampleState,options,printfun);
-    
+
     if exitflag == -1
         error('Transition operator failed.');
     end
 
     ensemble.fval = assignfval(ensemble.fval,ftemp,idx);
-    
+
     % Something may be wrong with logP, try to update
     if exitflag == 1
         templogP = sum(cellfun(@sum,ftemp));
@@ -461,10 +461,10 @@ for ii = i0:sampleState.totN
             printfun('fixed potential numerical error');
         end
     end
-    
-    %% Record samples and miscellaneous bookkeeping    
+
+    %% Record samples and miscellaneous bookkeeping
     ensemble.x(idx,:) = xx;
-    
+
     % Record samples?
     record = ii > sampleState.burn && mod(ii - sampleState.burn - 1, sampleState.thin) == 0;
     if record
@@ -479,17 +479,17 @@ for ii = i0:sampleState.totN
             fvals{1}(ismpl,:) = ensemble.fval{1}(idx,:);
         end
     end
-    
+
     if ii <= sampleState.burn
-        warmup(end+1,:) = xx;        
+        warmup(end+1,:) = xx;
         warmiter = find(ii == warmiters,1);
-        
+
         if ~isempty(warmiter)
             action = ['end warmup stage #' num2str(warmiter)];
             if trace > 1
                 fprintf(displayFormat,ii-sampleState.burn,sampleState.funccount(end),ensemble.logP(idx),action);
             end
-            
+
             if options.VarTransform && any(warmiter == options.VarTransformStages)
                 warmup = pdftrans(warmup,'inv',trinfo);
                 ensemble.x = pdftrans(ensemble.x,'inv',trinfo);
@@ -498,15 +498,15 @@ for ii = i0:sampleState.totN
                 trinfo
                 ensemble.x = pdftrans(ensemble.x,'dir',trinfo);
                 ensemble.fval{1} = pdftrans(ensemble.x,'logpdf',trinfo);
-                ensemble.logP = ensemble.logP + ensemble.fval{1};                
-                [logPfuns,nocell_tr] = trans_logPfuns(logPfuns_orig,trinfo);                
+                ensemble.logP = ensemble.logP + ensemble.fval{1};
+                [logPfuns,nocell_tr] = trans_logPfuns(logPfuns_orig,trinfo);
                 fun = @(x_) feval(@logpdfbnd,x_,logPfuns,sampleState.LB,sampleState.UB,options,varargin{:});
             end
-            
+
             if options.FitGMM
                 [sampleState.gmm,sampleState.vbmodel] = fitgmm(warmup,warmiter,options);
             end
-            
+
             % Update WIDTHS if using adaptive method
             if options.AdaptiveWidths
                 newwidths = options.SigmaFactor*std(warmup);
@@ -515,26 +515,26 @@ for ii = i0:sampleState.totN
                 if isempty(sampleState.basewidths)
                     sampleState.widths = newwidths;
                 else
-                    % Max between new widths and geometric mean with user-supplied 
+                    % Max between new widths and geometric mean with user-supplied
                     % widths (i.e. bias towards keeping larger widths)
                     sampleState.widths = max(newwidths, sqrt(newwidths.*sampleState.basewidths));
                 end
                 % sampleState.widths
             end
-            
+
             if warmiter > 0; warmup(1:floor(sampleState.burn/numel(warmiters)/2),:) = []; end
-            
+
         end
     end
-    
+
     if trace > 2
         if ii <= sampleState.burn; action = 'burn';
         elseif ~record; action = 'thin';
         else action = 'record';
         end
         fprintf(displayFormat,ii-sampleState.burn,sampleState.funccount,ensemble.logP(idx),action);
-    end    
-    
+    end
+
 end
 
 if trace > 0
@@ -542,7 +542,7 @@ if trace > 0
         thinmsg = ['\n   and keeping 1 sample every ' num2str(sampleState.thin) ', '];
     else
         thinmsg = '\n   ';
-    end    
+    end
     fprintf(['\nSampling terminated:\n * %d samples obtained after a burn-in period of %d samples' thinmsg 'for a total of %d full function evaluations.'], ...
         N, sampleState.burn, sampleState.funccount(end));
 end
@@ -596,12 +596,12 @@ end
 %--------------------------------------------------------------------------
 function [gmm,vbmodel] = fitgmm(X,iter,options)
 %FITGMM Fit variational Gaussian mixture model to X
-    [N,nvars] = size(X);    
+    [N,nvars] = size(X);
     if N < nvars; gmm = []; vbmodel = []; return; end
-    
+
     prior.alpha = 0.1;
     prior.nu = nvars+1;
-    
+
     prior.M = prior.nu*cov(X);
     optvb.Display = 'off';
     optvb.ClusterInit = 'kmeans';
@@ -609,10 +609,10 @@ function [gmm,vbmodel] = fitgmm(X,iter,options)
     elseif iter < 10; optvb.Nstarts = 3;
     else optvb.Nstarts = 5;
     end
-        
+
     vbmodel = vbgmmfit(X',10+5*nvars,prior,optvb);
     gmm = vbgmmgmm(vbmodel,'mean');
-    
+
     % Add global component
     gmm.w(end+1) = 1/iter;
     gmm.w = gmm.w/sum(gmm.w);
@@ -626,10 +626,10 @@ function [trinfo,x0,widths,LB,UB,logPfuns,nocell_tr] = trans_init(logPfuns,x0,K,
 
     [m0,nvars] = size(x0);
     trinfo = pdftrans(nvars,LB,UB);
-                
+
     if any(trinfo.type > 0)
         if trace > 1; fprintf('Applying nonlinear transformation to constrained variables.\n'); end
-        
+
         if any(options.VarTransformStages == 0) && m0 > K
             [trinfo,x0] = trans_gauss(x0,trinfo,options);
         else
@@ -640,7 +640,7 @@ function [trinfo,x0,widths,LB,UB,logPfuns,nocell_tr] = trans_init(logPfuns,x0,K,
         newbound = abs(log(sqrt(eps)));
         x0(bsxfun(@and, trinfo.type == 1 | trinfo.type == 3, x0 < -newbound)) = log(sqrt(eps));
         x0(bsxfun(@and, trinfo.type == 2 | trinfo.type == 3, x0 > newbound)) = -log(sqrt(eps));
-        
+
         % Convert WIDTHS to unconstrained space
         if ~isempty(widths)
             if isscalar(widths); widths = widths*ones(1,nvars); end
@@ -656,7 +656,7 @@ function [trinfo,x0,widths,LB,UB,logPfuns,nocell_tr] = trans_init(logPfuns,x0,K,
                     case 2
                         x0w(i) = x0w(i) - widths(i);
                         y0w = pdftrans(x0w,'d',trinfo);
-                        widths(i) = max(y0w(i) - y0mean(i),1);                        
+                        widths(i) = max(y0w(i) - y0mean(i),1);
                     case 3
                         x0w2 = x0w;
                         x0w(i) = min(x0w(i) + widths(i)/2, UB(i) - eps(LB(i)));
@@ -667,14 +667,14 @@ function [trinfo,x0,widths,LB,UB,logPfuns,nocell_tr] = trans_init(logPfuns,x0,K,
                 end
             end
         end
-        
+
         % Switch to unconstrained space
         LB(trinfo.type > 0) = -Inf;
         UB(trinfo.type > 0) = Inf;
-        
+
         % Add log probability transform to log pdfs
         [logPfuns,nocell_tr] = trans_logPfuns(logPfuns,trinfo);
-        
+
     else
         trinfo = [];
     end
@@ -810,12 +810,12 @@ if size(x0,1) < K
     if trace > 1; fprintf(['Generating ' num2str(K) ' initial starting points...\n']); end
 end
 
-x0 = x0(1:K,:); % Take only first K initial points    
+x0 = x0(1:K,:); % Take only first K initial points
 
 % Add small jitter to all points
 if isfield(options,'TolX'); tolx = options.TolX; else tolx = 1e-6; end
 widths = sampleState.widths;
-x0 = bsxfun(@plus,x0,bsxfun(@times,sqrt(tolx)*widths,randn(K,D)));    
+x0 = bsxfun(@plus,x0,bsxfun(@times,sqrt(tolx)*widths,randn(K,D)));
 
 % Move starting point within bounds (mirror off bounds)
 moved = 0;
@@ -824,8 +824,8 @@ moved = 0;
 fixed_dim = LB == UB;
 if any(fixed_dim) && (any(any(bsxfun(@gt,x0(:,fixed_dim),LB(fixed_dim)))) || ...
     any(any(bsxfun(@lt,x0(:,fixed_dim),LB(fixed_dim)))))
-        moved = 1;            
-        x0(:,fixed_dim) = LB(fixed_dim); 
+        moved = 1;
+        x0(:,fixed_dim) = LB(fixed_dim);
 end
 
 % Reflect points inside bounds
@@ -850,7 +850,7 @@ effUB(UB == Inf & LB == -Inf) = 10;
 randomized = 0;
 
 for i = 1:1e3
-    
+
     % Randomly generate points that are still invalid
     invalid = any(bsxfun(@lt, x0, LB) | bsxfun(@gt, x0, UB),2);
 
@@ -862,8 +862,8 @@ for i = 1:1e3
             if ~isfinite(fvaltemp); invalid(k) = true; end
         end
     end
-    
-    if ~any(invalid); break; end    
+
+    if ~any(invalid); break; end
     randomized = 1;
 
     correct = bsxfun(@plus, bsxfun(@times, effUB - effLB, rand(K,D)), effLB);
@@ -871,14 +871,14 @@ for i = 1:1e3
 end
 
 if any(invalid)
-    error('Could not find valid initial starting points.');    
+    error('Could not find valid initial starting points.');
 end
 
 if moved > 0 && trace > 1
     fprintf('Starting points outside bounds were reflected inside the function domain.\n');
 end
 if randomized > 0 && trace > 1
-    fprintf('Invalid starting points were randomly initialized.\n');    
+    fprintf('Invalid starting points were randomly initialized.\n');
 end
 
 end
@@ -915,7 +915,7 @@ assert(all(all(bsxfun(@ge, x0, LB))) & all(all(bsxfun(@le, x0, UB))), ...
     'Initial starting point X0 outside the bounds.');
 if size(x0,1) == 1
     assert(all(isfinite(y)) && isreal(y), ...
-        'Initial starting point X0 needs to evaluate to a real number (not Inf or NaN).');    
+        'Initial starting point X0 needs to evaluate to a real number (not Inf or NaN).');
 else
     assert(all(isfinite(y)) && isreal(y), ...
         'All initial starting points X0 need to evaluate to a real number (no Inf or NaN).');
@@ -955,7 +955,7 @@ cholsigma = sampleState.cholsigma;
 
 if size(sampleState.others,1) >= 2
     % Parallel slice sampling
-    ord = randperm(size(sampleState.others,1));        
+    ord = randperm(size(sampleState.others,1));
     xr = sampleState.others(ord(1:2),:);
     wvec = (xr(2,:) - xr(1,:))*options.SigmaFactor;
     wsize = 1;
@@ -970,14 +970,14 @@ else
     % Random-direction slice sampling
     wsize = 1;
     uvec = randn(1,D);
-    uvec = uvec / norm(uvec);    
+    uvec = uvec / norm(uvec);
     if ~isempty(cholsigma)
         wvec = uvec*cholsigma;      % Covariance-based sampling
     else
-        wvec = uvec.*sampleState.widths;        
-    end    
+        wvec = uvec.*sampleState.widths;
+    end
 end
-        
+
 [x,logP,fval,exitflag,fc] = ...
     slicesample1(dd,fun,wvec,x,logP,...
     fval,wsize,jacobianflag,LB,UB,gmm,printfun,options);
@@ -998,7 +998,7 @@ function [xnew,logPnew,fvalnew,exitflag,funccount] = ...
     slicesample1(dd,fun,wvec,x_c,logP,fval,wsize,jacobianflag,LB,UB,gmm,printfun,options)
 %SLICESAMPLE1 Slice sampling along a given direction.
 %
-% The standard slice sampling code is inspired by a MATLAB implementation 
+% The standard slice sampling code is inspired by a MATLAB implementation
 % of slice sampling by Iain Murray. See pseudo-code in MacKay (2003).
 
 D = size(x_c,2);
@@ -1019,7 +1019,7 @@ if inversion_sample
     try
         if ~isfield(gmm,'ischol'); gmm.ischol = 0; end
         if D > 1
-            % Multivariate GMM, condition on direction        
+            % Multivariate GMM, condition on direction
             [g.w1,g.mu1,v1] = gmmslice1(wvec,x_c,gmm.w,gmm.Mu,gmm.Sigma,gmm.ischol);
             g.s1 = sqrt(v1);
         else
@@ -1031,7 +1031,7 @@ if inversion_sample
                 g.s1 = sqrt(gmm.Sigma(:)');
             end
         end
-        
+
         if debugplot
             hold off;
             xx = linspace(-5,5,1e4);
@@ -1040,28 +1040,28 @@ if inversion_sample
             hold on;
             plot([0 0],[0, max(yy)],'-k','LineWidth',2);
         end
-        
+
     catch
         warning('Inversion slice sampling failed. Trying standard slice sampling.');
         g = [];
     end
 end
-    
+
 if inversion_sample && ~isempty(g)
-    %% Inversion slice sampling    
+    %% Inversion slice sampling
     if isfield(options,'MinWeightGlobalComponent') ...
             && options.MinWeightGlobalComponent > 0
         wbase = sum(g.w1(1:end-1));
         g.w1(end) = max(options.MinWeightGlobalComponent*wbase, g.w1(end));
         g.w1 = g.w1/sum(g.w1);
     end
-        
+
     g.mu1 = g.mu1/norm(wvec);
     g.s1 = g.s1/norm(wvec);
-    
+
     % Effective dimensionality of adaptive-direction Jacobian transform
     if jacobianflag; g.effjdim = D; else g.effjdim = 1; end
-    
+
     % Convert to cdf variable
     x_c0 = x_c;
     x_c = gmm1djcdf(0,g.w1,g.mu1,g.s1,g.effjdim);
@@ -1069,18 +1069,18 @@ if inversion_sample && ~isempty(g)
     rr = x_c;
     % tolx = options.TolF;
     tolx = eps;
-    
+
     wvec0 = wvec;
     wvec = 1;
     wsize = 1;
-    
+
     wrappedfun = fun;
     fun = @(x_) inversepdfbnd(x_,x_c0,wvec0,wrappedfun,g,options);
-    
+
     delta = 0;
     lf = log(gmm1djpdf(delta,g.w1,g.mu1,g.s1,g.effjdim));
     log_uprime = log_uprime - lf;
-    
+
     if debugplot
         hold off;
         xx = linspace(-3,3,1e3);
@@ -1092,10 +1092,10 @@ if inversion_sample && ~isempty(g)
         set(gcf,'Color','w');
         drawnow;
     end
-    
+
 else
     %% Standard slice sampling
-    
+
     % Create interval (x_l, x_r) of size wsize (in wvec units) enclosing x_c
     rr = rand*wsize;    % rr is position of x_c with respect to x_l
     x_l = x_c - rr*wvec;
@@ -1125,7 +1125,7 @@ else
     % Step-out procedure
     if options.StepOut
         error('STEPOUT needs to be checked.');
-        
+
         steps = 0;
         wbase = wsize;
 
@@ -1153,15 +1153,15 @@ else
         if ~isempty(printfun) && steps >= 10
             if dd == 0
                 action = ['step-out adaptive dim (' num2str(steps) ' steps)'];
-            else        
+            else
                 action = ['step-out dim ' num2str(dd) ' (' num2str(steps) ' steps)'];
             end
             printfun(action);
-        end    
+        end
     end
-    
+
     tolx = sqrt(sum((options.TolX.*wvec).^2));
-    
+
 end
 
 % Shrink procedure: propose XNEW and shrink interval until good one found
@@ -1178,25 +1178,25 @@ exitflag = 0;
 while 1
     shrink = shrink + 1;
     tolr = tolx/wsize;
-    
+
     rr2 = rand()*wsize;
     xnew = x_l + rr2*wvec;
-    
+
     if inversion_sample && jacobianflag
         [logPnew,fvalnew,fc,delta] = fun(xnew);
     else
         [logPnew,fvalnew,fc] = fun(xnew);
     end
     funccount = funccount + fc;
-    
+
     if jacobianflag
         if inversion_sample
-            logjacobian = (D-1)*log(abs(1-delta));            
+            logjacobian = (D-1)*log(abs(1-delta));
         else
             logjacobian = (D-1)*log(abs(1-(rr2-rr)));
         end
     end
-    
+
     if logPnew + logjacobian > log_uprime
         break;          % This is the main way to leave the while loop
     else
@@ -1218,7 +1218,7 @@ while 1
                 errorstr = ['Shrunk to current position and proposal still not acceptable. ' ...
                 'Current position: ' num2str(xnew,' %g') '. ' ...
                 'Log f: (new value) ' num2str(logPnew), ', (target value) ' num2str(log_uprime) '.'];
-%                warning(errorstr);                
+%                warning(errorstr);
             end
             % Reset to current point
             xnew = x_start;
@@ -1241,7 +1241,7 @@ end
 
 if ~isempty(printfun) && shrink >= 10
     if dd == 0
-        action = ['shrink adaptive dim (' num2str(shrink) ' steps)'];        
+        action = ['shrink adaptive dim (' num2str(shrink) ' steps)'];
     else
         action = ['shrink dim ' num2str(dd) ' (' num2str(shrink) ' steps)'];
     end
@@ -1253,7 +1253,7 @@ end
 %--------------------------------------------------------------------------
 function [logP,fval,funccount,delta] = inversepdfbnd(p,x_c0,wvec0,wrappedfun,g,options)
 %INVERSEPDFBND Compute pdf for inversion sampling.
-    
+
 % Outside cdf bounds, return immediately
 if p <= 0 || p >= 1
     logP = -Inf;
@@ -1269,7 +1269,7 @@ effjdim = g.effjdim;
 
 % [delta,fval,exitflag,output] = gmm1djinv(x,w1,mu1,s1,effjdim,options.TolX);
 % Map from cdf space to pdf space
-delta = gmm1djinv(p,w1,mu1,s1,effjdim,options.TolX);        
+delta = gmm1djinv(p,w1,mu1,s1,effjdim,options.TolX);
 xtemp = x_c0 + wvec0*delta;
 [logP,fval,funccount] = wrappedfun(xtemp);
 if isfinite(logP)
@@ -1307,7 +1307,7 @@ for k = 1:Nfuns
         elseif any(fval{k} == Inf)
             warning(['Log density #' num2str(k) ' returned Inf. Trying to continue.']);
         end
-        return;        
+        return;
     end
 end
 
@@ -1326,4 +1326,3 @@ y = cellfun(@(x_) getrow(x_,n),x,'UniformOutput',0);
     end
 
 end
-

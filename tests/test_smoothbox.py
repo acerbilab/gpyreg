@@ -1,10 +1,12 @@
+import itertools
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.stats
-from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, uuinv
 from scipy.integrate import quad
-import itertools
+
+from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, uuinv
 
 
 def pdf(x, sigma, a, b):

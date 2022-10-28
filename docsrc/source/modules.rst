@@ -9,4 +9,3 @@ gpyreg
    noise_functions
    gaussian_process
    slice_sample
-

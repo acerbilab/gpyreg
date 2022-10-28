@@ -36,7 +36,7 @@ else
 
     x = sort(x,1);
     n = sum(~isnan(x), 1); % Number of non-NaN values
-    
+
     if isequal(p,0.5) % make the median fast
         if rem(n,2) % n is odd
             y = x((n+1)/2,:);

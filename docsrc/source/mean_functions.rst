@@ -7,4 +7,3 @@ gpyreg.mean_functions
     :members:
     :undoc-members:
     :show-inheritance:
-

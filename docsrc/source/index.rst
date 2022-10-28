@@ -10,7 +10,7 @@ Note that this project is work in progress!
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-   
+
    modules
 
 Indices and tables

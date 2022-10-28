@@ -2,8 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.stats
-from gpyreg.f_min_fill import smoothbox_student_t_cdf, smoothbox_student_t_ppf
 from scipy.integrate import quad
+
+from gpyreg.f_min_fill import smoothbox_student_t_cdf, smoothbox_student_t_ppf
 
 
 def pdf(x, sigma, df, a, b):

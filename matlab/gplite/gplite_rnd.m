@@ -1,6 +1,6 @@
 function [Fstar,Ystar] = gplite_rnd(gp,Xstar,nowarpflag)
 %GPLITE_RND Draw a random function from Gaussian process.
-%   FSTAR = GPLITE_RND(GP,XSTAR) draws a random function from GP, evaluated 
+%   FSTAR = GPLITE_RND(GP,XSTAR) draws a random function from GP, evaluated
 %   at XSTAR.
 %
 %   [FSTAR,YSTAR] = GPLITE_RND(GP,XSTAR) adds observation noise to the
@@ -33,13 +33,13 @@ hyp_mean = hyp(Ncov+Nnoise+1:Ncov+Nnoise+Nmean);
 mstar = gplite_meanfun(hyp_mean,Xstar,gp.meanfun,[],gp.meanfun_extras);
 
 % Compute kernel matrix
-hyp_cov = hyp(1:Ncov); 
+hyp_cov = hyp(1:Ncov);
 Kstar_mat = gplite_covfun(hyp_cov,Xstar,gp.covfun);
 
-if ~isempty(gp.y)    
+if ~isempty(gp.y)
     % Compute cross-kernel matrix Ks_mat
     Ks_mat = gplite_covfun(hyp_cov,gp.X,gp.covfun,Xstar);
-        
+
     fmu = mstar + Ks_mat'*alpha;            % Conditional mean
 
     if Lchol
@@ -49,10 +49,10 @@ if ~isempty(gp.y)
         LKs = L*Ks_mat;
         C = Kstar_mat + Ks_mat'*LKs;
     end
-else    
+else
     fmu = mstar;                            % No data, draw from prior
     C = Kstar_mat + eps*eye(Nstar);
-end 
+end
 
 C = (C + C')/2;   % Enforce symmetry if lost due to numerical errors
 
@@ -77,10 +77,10 @@ if ~isempty(gp.outwarpfun) && ~nowarpflag
     hyp_outwarp = hyp(Ncov+Nnoise+Nmean+1:Ncov+Nnoise+Nmean+Noutwarp);
     Fstar = gp.outwarpfun(hyp_outwarp,Fstar,'inv');
     if nargout > 1
-        Ystar = gp.outwarpfun(hyp_outwarp,Ystar,'inv');            
+        Ystar = gp.outwarpfun(hyp_outwarp,Ystar,'inv');
     end
 end
-    
+
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -113,4 +113,3 @@ end
 
 
 end
-    

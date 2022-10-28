@@ -7,9 +7,9 @@ if isstruct(hyp)
     Nhyp = hyp.Ncov + hyp.Nnoise + hyp.Nmean + Noutwarp;
     hprior.mu = NaN(Nhyp,1);
     hprior.sigma = NaN(Nhyp,1);
-    hprior.df = NaN(Nhyp,1);    
-    hprior.LB = NaN(Nhyp,1);    
-    hprior.UB = NaN(Nhyp,1);    
+    hprior.df = NaN(Nhyp,1);
+    hprior.LB = NaN(Nhyp,1);
+    hprior.UB = NaN(Nhyp,1);
     lp = hprior;    dlp = [];
 else
 
@@ -46,7 +46,7 @@ else
         if compute_grad
             dlp(gidx) = -(hyp(gidx) - mu(gidx))./sigma(gidx).^2;
         end
-    end    
+    end
 
     % Student's t prior
     if any(tidx)

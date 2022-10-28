@@ -181,10 +181,10 @@ def f_min_fill(
 
 def uuinv(p, B, w):
     """
-    Inverse of cumulative distribution function of mixture of uniform 
+    Inverse of cumulative distribution function of mixture of uniform
     distributions. The mixture is:
-    .. math:: 
-    w \text{Uniform}(B[1], B[2]) + 
+    .. math::
+    w \text{Uniform}(B[1], B[2]) +
     \frac{1 - w}{2} (\text{Uniform}(B[0], B[1]) + \text{Uniform}(B[2], B[3]))
 
     Parameters
@@ -194,7 +194,7 @@ def uuinv(p, B, w):
     B : ndarray, list
         1D array or list containing [LB, PLB, PUB, UB].
     w : float
-        The coefficient for mixture of uniform distributions. 
+        The coefficient for mixture of uniform distributions.
         :math: `0 \leq w \leq 1`.
 
     Returns

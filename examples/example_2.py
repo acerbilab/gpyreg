@@ -1,4 +1,5 @@
 import numpy as np
+
 import gpyreg as gpr
 
 # Create toy training data for the GP

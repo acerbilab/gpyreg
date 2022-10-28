@@ -7,4 +7,3 @@ gpyreg.gaussian_process
     :members:
     :undoc-members:
     :show-inheritance:
-

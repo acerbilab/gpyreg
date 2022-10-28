@@ -78,7 +78,7 @@ if N > N0
                 Xs(:,iVar) = uuinv(S(:,iVar),[LB(iVar),PLB(iVar),PUB(iVar),UB(iVar)],w);
             else
                 % All starting points from inside the plausible box
-                Xs(:,iVar) = S(:,iVar)*(PUB(iVar)-PLB(iVar)) + PLB(iVar);                
+                Xs(:,iVar) = S(:,iVar)*(PUB(iVar)-PLB(iVar)) + PLB(iVar);
             end
 
         else                                    % Student's t prior
@@ -132,7 +132,7 @@ end
 function x = uuinv(p,B,w)
 %UUINV Inverse of mixture of uniforms cumulative distribution function (cdf).
 % The mixture is:
-% w \text{Uniform}(B(2), B(3)) + 
+% w \text{Uniform}(B(2), B(3)) +
 % \frac{1 - w}{2} (\text{Uniform}(B(1), B(2)) + \text{Uniform}(B(3), B(4))
 
 x = zeros(size(p));
@@ -159,7 +159,7 @@ else
 
 % Second step
     idx2 = (p <= (1-w) * (B(2) - B(1)) / L + w) & ~idx1;
-    if w ~= 0 
+    if w ~= 0
         x(idx2) = (p(idx2) - (1 - w) * (B(2) - B(1)) / L) * (B(3) - B(2)) / w + B(2);
     end
 % Third step
@@ -205,7 +205,7 @@ xpos = (x > 0);
 p(xpos) = 1 - p(xpos); % p < .5, cancellation not a problem
 
 % Special case for Cauchy distribution
-p(cauchy)  = xpos(cauchy) + acot(-x(cauchy))/pi; 
+p(cauchy)  = xpos(cauchy) + acot(-x(cauchy))/pi;
 
 % Normal Approximation for very large nu.
 p(normal) = normcdf(x(normal));
@@ -217,7 +217,7 @@ end
 %--------------------------------------------------------------------------
 function x = tinv(p,v)
 %TINV   Inverse of Student's T cumulative distribution function (cdf).
-%   X=TINV(P,V) returns the inverse of Student's T cdf with V degrees 
+%   X=TINV(P,V) returns the inverse of Student's T cdf with V degrees
 %   of freedom, at the values in P.
 
 % Initialize Y to zero, or NaN for invalid d.f.
@@ -278,7 +278,7 @@ function r = sobol_generate(D,N,skip)
 %   N points in D dimensions. R is a D-by-N matrix of points in the
 %   quasirandom sequence.
 %
-%   R = SOBOL_GENERATE(M,N,SKIP) skips the first SKIP initial points 
+%   R = SOBOL_GENERATE(M,N,SKIP) skips the first SKIP initial points
 %   (default is zero).
 %
 %   Modified from John Burkardt's implementation.
@@ -337,7 +337,7 @@ function [quasi,seed] = sobol(D,seed)
 %
 %    Bennett Fox,
 %    Algorithm 647:
-%    Implementation and Relative Efficiency of Quasirandom 
+%    Implementation and Relative Efficiency of Quasirandom
 %    Sequence Generators,
 %    ACM Transactions on Mathematical Software,
 %    Volume 12, Number 4, pages 362-376, 1986.
@@ -346,10 +346,10 @@ function [quasi,seed] = sobol(D,seed)
 %    USSR Computational Mathematics and Mathematical Physics,
 %    Volume 16, pages 236-242, 1977.
 %
-%    Ilya Sobol, Levitan, 
-%    The Production of Points Uniformly Distributed in a Multidimensional 
+%    Ilya Sobol, Levitan,
+%    The Production of Points Uniformly Distributed in a Multidimensional
 %    Cube (in Russian),
-%    Preprint IPM Akad. Nauk SSSR, 
+%    Preprint IPM Akad. Nauk SSSR,
 %    Number 40, Moscow 1976.
 %
 %  Parameters:
@@ -420,7 +420,7 @@ function [quasi,seed] = sobol(D,seed)
       1, 3, 7, 9, 5,13,13,11, 3,15, ...
       5, 3,15, 7, 9,13, 9, 1,11, 7, ...
       5,15, 1,15,11, 5, 3, 1, 7, 9 ]';
-  
+
     v(8:40,5) = [ ...
                            9, 3,27, ...
      15,29,21,23,19,11,25, 7,13,17, ...
@@ -467,7 +467,7 @@ function [quasi,seed] = sobol(D,seed)
 %
 %  Check parameters.
 %
-    if D < 1 || D > dim_max 
+    if D < 1 || D > dim_max
         error('sobol:WrongDims', ...
             ['The requested dimension D should be between 1 and ' num2str(dim_max) '.']);
     end
@@ -509,7 +509,7 @@ function [quasi,seed] = sobol(D,seed)
 %  Calculate the remaining elements of row I as explained
 %  in Bratley and Fox, section 2.
 %
-      for j = m + 1 : maxcol 
+      for j = m + 1 : maxcol
         newv = v(i,j-m);
         l = 1;
         for k = 1 : m
@@ -599,7 +599,7 @@ function [quasi,seed] = sobol(D,seed)
 
   seed_save = seed;
   seed = seed + 1;
-  
+
 
 end
 
@@ -608,7 +608,7 @@ function bit = bit_lo0(n)
 
 s = ['0' dec2bin(n)];
 idx = find(s == '0',1,'last');
-bit = numel(s)-idx+1;  
+bit = numel(s)-idx+1;
 
 end
 
@@ -617,12 +617,10 @@ function bit = bit_hi1(n)
 
 s = dec2bin(n);
 idx = find(s == '1',1,'first');
-if isempty(idx) 
+if isempty(idx)
     bit = 0;
 else
     bit = numel(s)-idx+1;
 end
-    
+
 end
-
-

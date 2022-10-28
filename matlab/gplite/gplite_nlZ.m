@@ -1,13 +1,13 @@
 function [nlZ,dnlZ,post,K_mat,Q] = gplite_nlZ(hyp,gp,hprior)
 %GPLITE_NLZ Negative log marginal likelihood for lite GP regression.
-%   [NLZ,DNLZ] = GPLITE_INF(HYP,GP) computes the log marginal likelihood 
-%   NLZ and its gradient DNLZ for hyperparameter vector HYP. HYP is a column 
+%   [NLZ,DNLZ] = GPLITE_INF(HYP,GP) computes the log marginal likelihood
+%   NLZ and its gradient DNLZ for hyperparameter vector HYP. HYP is a column
 %   vector (see below). GP is a GPLITE struct.
-%   
+%
 %   [NLZ,DNLZ] = GPLITE_INF(HYP,GP,HPRIOR) uses prior over hyperparameters
 %   defined by the struct HPRIOR. HPRIOR has fields HPRIOR.mu, HPRIOR.sigma
-%   and HPRIOR.nu which contain vectors representing, respectively, the mean, 
-%   standard deviation and degrees of freedom of the prior for each 
+%   and HPRIOR.nu which contain vectors representing, respectively, the mean,
+%   standard deviation and degrees of freedom of the prior for each
 %   hyperparameter. Priors are generally represented by Student's t distributions.
 %   Set HPRIOR.nu(i) = Inf to have instead a Gaussian prior for the i-th
 %   hyperparameter. Set HPRIOR.sigma(i) = Inf to have a (non-normalized)

@@ -7,4 +7,3 @@ gpyreg.noise_functions
     :members:
     :undoc-members:
     :show-inheritance:
-

@@ -7,7 +7,7 @@ if nargin < 6; s2star = []; end
 Ns = numel(gp.post);           % Hyperparameter samples
 Nstar = size(Xstar,1);         % Number of test inputs
 
-nx = 10; 
+nx = 10;
 xx = norminv(linspace(0.5/nx,1-0.5/nx,nx));
 
 switch lower(type(1))
@@ -29,7 +29,7 @@ end
 
 % Get GP prediction (observed or latent), by hyperparameter sample
 if obs_flag
-    [gmu,gs2] = gplite_pred(gp,Xstar,ystar,s2star,1,1);   
+    [gmu,gs2] = gplite_pred(gp,Xstar,ystar,s2star,1,1);
 else
     [~,~,gmu,gs2] = gplite_pred(gp,Xstar,ystar,s2star,1,1);
 end
@@ -47,4 +47,3 @@ for s = 1:Ns
 end
 
 y = quantile(y,p,2);
-
