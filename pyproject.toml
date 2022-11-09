@@ -1,3 +1,28 @@
+# pyproject.toml
+
+[project]
+name = "gpyreg"
+version = "0.1.0"
+description = "Lightweight package for Gaussian process regression."
+readme = "README.md"
+license = { file = "LICENSE" }
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "pytest",
+    "pytest-rerunfailures",
+    "scipy",
+]
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["gpyreg"]
+
+[project.optional-dependencies]
+dev = [
+    "sphinx",
+]
+
 [tool.black]
 line-length = 79
 
