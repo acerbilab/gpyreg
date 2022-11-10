@@ -2,7 +2,6 @@
 
 [project]
 name = "gpyreg"
-version = "0.1.0"
 description = "Lightweight package for Gaussian process regression."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -14,6 +13,7 @@ dependencies = [
     "scipy >= 1.9.3",
 ]
 requires-python = ">=3.9"
+dynamic = ["version"]
 
 [tool.setuptools]
 packages = ["gpyreg"]
@@ -21,6 +21,12 @@ packages = ["gpyreg"]
 [project.optional-dependencies]
 dev = [
     "sphinx >= 5.3.0",
+]
+
+[build-system]
+requires = [
+    "setuptools >= 45",
+    "setuptools_scm[toml] >= 6.2",
 ]
 
 [tool.black]
@@ -37,3 +43,5 @@ profile = "black"
 
 [tool.pycln]
 all = true
+
+[tool.setuptools_scm]
