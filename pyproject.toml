@@ -7,11 +7,11 @@ description = "Lightweight package for Gaussian process regression."
 readme = "README.md"
 license = { file = "LICENSE" }
 dependencies = [
-    "matplotlib",
-    "numpy",
-    "pytest",
-    "pytest-rerunfailures",
-    "scipy",
+    "matplotlib >= 3.6.2",
+    "numpy >= 1.23.4",
+    "pytest >= 7.2.0",
+    "pytest-rerunfailures >= 10.2",
+    "scipy >= 1.9.3",
 ]
 requires-python = ">=3.9"
 
@@ -20,7 +20,7 @@ packages = ["gpyreg"]
 
 [project.optional-dependencies]
 dev = [
-    "sphinx",
+    "sphinx >= 5.3.0",
 ]
 
 [tool.black]
