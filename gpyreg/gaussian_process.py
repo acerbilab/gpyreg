@@ -8,7 +8,6 @@ from textwrap import indent
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-import scipy.stats
 
 import gpyreg.covariance_functions
 import gpyreg.mean_functions
@@ -59,7 +58,7 @@ class GP:
         self.set_priors()
 
         # dict to store temporary data e.g. for pyvbmc
-        self.temporary_data = dict()
+        self.temporary_data = {}
 
     def __repr__(self):
         return full_repr(
@@ -290,25 +289,29 @@ class GP:
 
         if not isinstance(lower_bounds, (list, tuple, np.ndarray)):
             if lower_bounds == "current":
-                # Use existing bounds; fill any nan values with recommended bounds
+                # Use existing bounds; fill any nan values with recommended
+                # bounds
                 lower_bounds = self.lower_bounds.copy()
             elif lower_bounds is None or lower_bounds == "recommended":
                 # Use all recommended bounds
                 lower_bounds = np.full_like(self.lower_bounds, np.nan)
             else:
                 raise ValueError(
-                    "`lower_bounds` should be 'recommended'/`None`, 'current', or an array."
+                    "`lower_bounds` should be 'recommended'/`None`, 'current',"
+                    " or an array."
                 )
         if not isinstance(upper_bounds, (list, tuple, np.ndarray)):
             if upper_bounds == "current":
-                # Use existing bounds; fill any nan values with recommended bounds
+                # Use existing bounds; fill any nan values with recommended
+                # bounds
                 upper_bounds = self.upper_bounds.copy()
             elif upper_bounds is None or upper_bounds == "recommended":
                 # Use all recommended bounds
                 upper_bounds = np.full_like(self.upper_bounds, np.nan)
             else:
                 raise ValueError(
-                    "`lower_bounds` should be 'recommended'/`None`, 'current', or an array."
+                    "`lower_bounds` should be 'recommended'/`None`, 'current',"
+                    " or an array."
                 )
         # Otherwise, use provided arrays as bounds, replacing nan values with
         # recommended bounds, and avoiding mutation:
@@ -714,7 +717,8 @@ class GP:
         Raises
         =======
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability values to the matrix.
+            Raised when the Cholesky decomposition failed multiple times even
+            by adding numerical stability values to the matrix.
         """
 
         # Create local copies so we won't get trouble
@@ -776,7 +780,7 @@ class GP:
                     # If rank-1 update is not numerically stable, perform a
                     # full update for this posterior instead:
                     sqrt_arg = (
-                        sn2_eff**2
+                        sn2_eff ** 2
                         + K * sn2_eff
                         - np.dot(new_L_column.T, new_L_column)
                     )
@@ -786,8 +790,8 @@ class GP:
                         )
                         full_updates.append(s)
                         warnings.warn(
-                            "Rank-one update of Cholesky factor "
-                            + f"unstable for posterior {s}. Reverting to full update.",
+                            "Rank-one update of Cholesky factor unstable "
+                            + f"for posterior {s}. Reverting to full update.",
                             stacklevel=2,
                         )
                     else:  # Otherwise continue with rank-1 update:
@@ -820,7 +824,8 @@ class GP:
                         ]
                     )
 
-                # Finish rank-1 update if computation was stable for posterior s
+                # Finish rank-1 update if computation was stable for posterior
+                # s
                 if not full_update_s:
                     self.posteriors[s].sW = np.concatenate(
                         (
@@ -886,7 +891,7 @@ class GP:
         """
 
         # dict to store temporary data e.g. for pyvbmc
-        self.temporary_data = dict()
+        self.temporary_data = {}
 
         # Check if there are posteriors to clean.
         if self.posteriors is not None:
@@ -940,12 +945,14 @@ class GP:
                     Burn parameter for slice sampling.
                 **lower_bounds** : str or ndarray, defaults to "current"
                     User-provided lower bounds. Any values which are `nan` will
-                    be filled with the recommended bounds. "recommended" means use
-                    all recommended bounds. "current" means use current bounds.
+                    be filled with the recommended bounds. "recommended" means
+                    use all recommended bounds. "current" means use current
+                    bounds.
                 **upper_bounds** : str or ndarray, defaults to "current"
                     User-provided upper bounds. Any values which are `nan` will
-                    be filled with the recommended bounds. "recommended" means use
-                    all recommended bounds. "current" means use current bounds.
+                    be filled with the recommended bounds. "recommended" means
+                    use all recommended bounds. "current" means use current
+                    bounds.
                 **init_method** : {'sobol', 'rand'}, defaults to 'sobol'
                     Specify whether to use Sobol or random sequences for
                     the initial space-filling design.
@@ -980,7 +987,7 @@ class GP:
         if options is None:
             options = {}
         opts_N = options.get("opts_N", 3)
-        init_N = options.get("init_N", 2**10)
+        init_N = options.get("init_N", 2 ** 10)
         init_method = options.get("init_method", "sobol")
         thin = options.get("thin", 5)
         df_base = options.get("df_base", 7)
@@ -1020,9 +1027,9 @@ class GP:
 
         # Set any unset bounds:
         use_current_bounds = (
-            type(lower_bounds) == str
+            isinstance(lower_bounds, str)
             and lower_bounds == "current"
-            and type(upper_bounds) == str
+            and isinstance(upper_bounds, str)
             and upper_bounds == "current"
         )
         if use_current_bounds and (
@@ -1336,7 +1343,7 @@ class GP:
             if np.any(sb_idx_b | sb_idx_a):
                 lp -= 0.5 * np.sum(
                     np.log(
-                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
+                        C ** 2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
                     )
                     + z2_tmp[sb_idx_b | sb_idx_a]
                 )
@@ -1499,7 +1506,8 @@ class GP:
         Raises
         =======
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability values to the matrix.
+            Raised when the Cholesky decomposition failed multiple times even
+            by adding numerical stability values to the matrix.
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
@@ -1675,9 +1683,9 @@ class GP:
             Whether to return the results separately for each hyperparameter
             sample or averaged.
         return_lpd : bool, defaults to ``False``
-            Whether to return the log predictive density at the input points. If
-            separate_samples is ``False``, returns the lpd of the corresponding
-            mean approximation.
+            Whether to return the log predictive density at the input points.
+            If separate_samples is ``False``, returns the lpd of the
+            corresponding mean approximation.
 
         Returns
         =======
@@ -1910,7 +1918,7 @@ class GP:
             sn2_eff = sn2 * self.posteriors[s].sn2_mult
 
             # Compute posterior mean of the integral
-            tau = np.sqrt(sigma**2 + ell**2)
+            tau = np.sqrt(sigma ** 2 + ell ** 2)
             lnnf = (
                 ln_sf2 + sum_lnell - np.sum(np.log(tau), 1)
             )  # Covariance normalization factor
@@ -1927,15 +1935,15 @@ class GP:
             if quadratic_mean_fun:
                 nu_k = -0.5 * np.sum(
                     1
-                    / omega**2
-                    * (mu**2 + sigma**2 - 2 * mu * xm + xm**2),
+                    / omega ** 2
+                    * (mu ** 2 + sigma ** 2 - 2 * mu * xm + xm ** 2),
                     1,
                 )
                 F[:, s] += nu_k
 
             # Compute posterior variance of the integral
             if compute_var:
-                tau_kk = np.sqrt(2 * sigma**2 + ell**2)
+                tau_kk = np.sqrt(2 * sigma ** 2 + ell ** 2)
                 nf_kk = np.exp(ln_sf2 + sum_lnell - np.sum(np.log(tau_kk), 1))
                 if L_chol:
                     tmp_result = sp.linalg.solve_triangular(
@@ -2018,7 +2026,7 @@ class GP:
             ell[:, s] = np.exp(
                 self.posteriors[s].hyp[0 : self.D]
             )  # Extract length scale from HYP
-        ellbar = np.sqrt(np.mean(ell**2, 1)).T
+        ellbar = np.sqrt(np.mean(ell ** 2, 1)).T
 
         if lb is None:
             if self.X is not None:
@@ -2052,7 +2060,7 @@ class GP:
             )
 
             xx_vec = np.reshape(
-                np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)),
+                np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
                 (-1, 1),
             )
             if self.D > 1:
@@ -2085,7 +2093,7 @@ class GP:
                     ub[i] = x0[i] + 0.5 * dx
 
                 xx_vec = np.reshape(
-                    np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)),
+                    np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
                     (-1, 1),
                 )
                 if self.D > 1:
@@ -2141,9 +2149,9 @@ class GP:
                 )
 
                 if x0 is not None:
-                    xx = np.tile(x0, (x_N**2, 1))
+                    xx = np.tile(x0, (x_N ** 2, 1))
                 else:
-                    xx = np.tile(np.full((self.D,), 0.0), (x_N**2, 1))
+                    xx = np.tile(np.full((self.D,), 0.0), (x_N ** 2, 1))
                 xx[:, i] = xx_vec[:, 0]
                 xx[:, j] = xx_vec[:, 1]
 
@@ -2348,7 +2356,8 @@ class GP:
             Raises
             ------
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even by adding numerical stability values to the matrix.
+            Raised when the Cholesky decomposition failed multiple times even
+            by adding numerical stability values to the matrix.
         """
         N, d = self.X.shape
         cov_N = self.covariance.hyperparameter_count(d)
@@ -2461,14 +2470,18 @@ class GP:
 
             if compute_nlZ_grad:
                 dnlZ = np.zeros(hyp.shape)
-                Q = sp.linalg.solve_triangular(
-                    L,
+                Q = (
                     sp.linalg.solve_triangular(
-                        L, np.eye(N), trans=1, check_finite=False
-                    ),
-                    trans=0,
-                    check_finite=False,
-                ) / sl - np.dot(alpha, alpha.T)
+                        L,
+                        sp.linalg.solve_triangular(
+                            L, np.eye(N), trans=1, check_finite=False
+                        ),
+                        trans=0,
+                        check_finite=False,
+                    )
+                    / sl
+                    - np.dot(alpha, alpha.T)
+                )
 
                 # Gradient of covariance hyperparameters.
                 for i in range(0, cov_N):

@@ -114,8 +114,8 @@ class ZeroMean:
 
         if hyp.size != mean_N:
             raise ValueError(
-                "Expected %d mean function hyperparameters, %d "
-                "passed instead." % (mean_N, hyp.size)
+                f"Expected {mean_N} mean function hyperparameters, "
+                f"{hyp.size} passed instead."
             )
         if hyp.ndim != 1:
             raise ValueError(
@@ -242,8 +242,8 @@ class ConstantMean:
 
         if hyp.size != mean_N:
             raise ValueError(
-                "Expected %d mean function hyperparameters, %d "
-                "passed instead." % (mean_N, hyp.size)
+                f"Expected {mean_N} mean function hyperparameters, "
+                f"{hyp.size} passed instead."
             )
         if hyp.ndim != 1:
             raise ValueError(
@@ -372,8 +372,8 @@ class NegativeQuadratic:
 
         if hyp.size != mean_N:
             raise ValueError(
-                "Expected %d mean function hyperparameters, %d "
-                "passed instead." % (mean_N, hyp.size)
+                f"Expected {mean_N} mean function hyperparameters, "
+                f"{hyp.size} passed instead."
             )
         if hyp.ndim != 1:
             raise ValueError(
@@ -390,7 +390,7 @@ class NegativeQuadratic:
         if compute_grad:
             dm = np.zeros((N, mean_N))
             dm[:, 0] = np.ones((N,))
-            dm[:, 1 : D + 1] = (X - x_m) / omega**2
+            dm[:, 1 : D + 1] = (X - x_m) / omega ** 2
             dm[:, D + 1 :] = z_2
             return m, dm
 

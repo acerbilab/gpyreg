@@ -512,7 +512,7 @@ class SliceSampler:
             # Store summary statistics starting half.way into burn-in.
             if burn / 2 <= i < burn:
                 xx_sum += xx
-                xx_sq_sum += xx**2
+                xx_sq_sum += xx ** 2
 
                 # End of burn-in, update widths if using adaptive method.
                 if i == burn - 1 and self.adaptive:
