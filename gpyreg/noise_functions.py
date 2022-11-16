@@ -229,8 +229,8 @@ class GaussianNoise:
 
         if hyp.size != noise_N:
             raise ValueError(
-                "Expected %d noise function hyperparameters, %d "
-                "passed instead." % (noise_N, hyp.size)
+                f"Expected {noise_N} noise function hyperparameters, "
+                f"{hyp.size} passed instead."
             )
         if hyp.ndim != 1:
             raise ValueError(
@@ -269,10 +269,10 @@ class GaussianNoise:
                 w2 = np.exp(2 * hyp[i + 1])
                 zz = np.maximum(0, y_tresh - y)
 
-                sn2 += w2 * zz**2
+                sn2 += w2 * zz ** 2
                 if compute_grad:
                     dsn2[:, i : i + 1] = 2 * w2 * (y_tresh - y) * (zz > 0)
-                    dsn2[:, i + 1 : i + 2] = 2 * w2 * zz**2
+                    dsn2[:, i + 1 : i + 2] = 2 * w2 * zz ** 2
             i += 2
 
         if compute_grad:

@@ -50,8 +50,7 @@ coverage.xml
 # do not commit build docs in docsrc folder
 docsrc/_build/
 
-# vscode
+# IDE / Editors
 .vscode
-
-# intellij
 .idea
+*.~undo-tree~

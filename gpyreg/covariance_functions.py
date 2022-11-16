@@ -1,13 +1,15 @@
 """Module for different covariance functions used by Gaussian Processes."""
 
-from abc import ABC, abstractclassmethod
+from abc import ABC, abstractmethod
 
 import numpy as np
 from scipy.spatial.distance import cdist, pdist, squareform
 
 
 class AbstractKernel(ABC):
-    @abstractclassmethod
+    """Abstract base class for covariance kernels."""
+
+    @abstractmethod
     def compute(
         self,
         hyp: np.ndarray,
@@ -53,7 +55,6 @@ class AbstractKernel(ABC):
         ValueError
             Raised when `hyp` is not an 1D array but of higher dimension.
         """
-        pass
 
     def hyperparameter_count(self, D: int):
         """
@@ -145,8 +146,8 @@ class SquaredExponential(AbstractKernel):
 
         if hyp.size != cov_N:
             raise ValueError(
-                "Expected %d covariance function hyperparameters, %d "
-                "passed instead." % (cov_N, hyp.size)
+                f"Expected {cov_N} covariance function hyperparameters, "
+                f"{hyp.size} passed instead."
             )
         if hyp.ndim != 1:
             raise ValueError(
@@ -227,8 +228,8 @@ class Matern(AbstractKernel):
 
         if hyp.size != cov_N:
             raise ValueError(
-                "Expected %d covariance function hyperparameters "
-                ", %d passed instead." % (cov_N, hyp.size)
+                f"Expected {cov_N} covariance function hyperparameters, "
+                f"{hyp.size} passed instead."
             )
         if hyp.ndim != 1:
             raise ValueError(
@@ -303,8 +304,8 @@ class RationalQuadraticARD(AbstractKernel):
 
         if hyp.size != cov_N:
             raise ValueError(
-                "Expected %d covariance function hyperparameters, %d "
-                "passed instead." % (cov_N, hyp.size)
+                f"Expected {cov_N} covariance function hyperparameters, "
+                f"{hyp.size} passed instead."
             )
         if hyp.ndim != 1:
             raise ValueError(
@@ -354,10 +355,10 @@ class RationalQuadraticARD(AbstractKernel):
         return K
 
     def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
-        # Override the default get_bounds_info function.
-        # The function has the same behavior of the `_bounds_info_helper`
-        # But it also initializes the covariance_log_shape hyperparameter as in BADS. A better initialization should be considered for future releases.
-        
+        # Override the default get_bounds_info function. The function has the
+        # same behavior of the `_bounds_info_helper` But it also initializes
+        # the covariance_log_shape hyperparameter as in BADS. A better
+        # initialization should be considered for future releases.
         cov_N = self.hyperparameter_count(X.shape[1])
         _, D = X.shape
         tol = 1e-6
@@ -383,13 +384,14 @@ class RationalQuadraticARD(AbstractKernel):
         plausible_lower_bounds[D] = np.log(height) + 0.5 * np.log(tol)
         plausible_upper_bounds[D] = np.log(height)
         plausible_x0[D] = np.log(np.std(y, ddof=1))
-        
-        # Initialization of the covariance_log_shape hyperparameter (like in BADS)
-        lower_bounds[-1] = -5.
+
+        # Initialization of the covariance_log_shape hyperparameter (like in
+        # BADS)
+        lower_bounds[-1] = -5.0
         upper_bounds[-1] = 5
-        plausible_lower_bounds[-1] = -5.
-        plausible_upper_bounds[D] = 5.
-        plausible_x0[-1] = 1.
+        plausible_lower_bounds[-1] = -5.0
+        plausible_upper_bounds[D] = 5.0
+        plausible_x0[-1] = 1.0
 
         # Plausible starting point
         i_nan = np.isnan(plausible_x0)

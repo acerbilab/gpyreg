@@ -1,16 +1,9 @@
-from setuptools import find_packages, setup
+#!/usr/bin/env python
 
-setup(
-    name="gpyreg",
-    version="0.1.0",
-    description="Lightweight Gaussian process regression package",
-    packages=find_packages(),
-    install_requires=[
-        "numpy",
-        "scipy",
-        "matplotlib",
-        "pytest",
-        "sphinx",
-        "numpydoc",
-    ],
-)
+import setuptools
+
+if __name__ == "__main__":
+    setuptools.setup(
+        use_scm_version=True,
+        setup_requires=["setuptools_scm"],
+    )

@@ -1,9 +1,0 @@
-# run: pip install -i requirements.txt
-numpy
-scipy
-matplotlib
-pytest
-pytest-cov
-pytest-rerunfailures
-sphinx
-numpydoc
