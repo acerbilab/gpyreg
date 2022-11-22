@@ -17,11 +17,12 @@ GPyReg is not yet available on `pip`/`conda-forge`, but can be installed in a fe
    conda create --name gpyreg-env python=3.9
    conda activate gpyreg-env
    ```
-3. Install the repos:
+3. Install the package:
    ```console
    cd ./gpyreg
    pip install -e .
    ```
+
 ## Troubleshooting and contact
 
 If you have trouble doing something with GPyReg, spot bugs or strange behavior, or you simply have some questions, please feel free to:
