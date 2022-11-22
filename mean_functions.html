@@ -1,0 +1,839 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>Mean functions &#8212; GPyReg</title>
+    
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=1999514e3f237ded88cf" rel="stylesheet">
+<link href="_static/styles/pydata-sphinx-theme.css?digest=1999514e3f237ded88cf" rel="stylesheet">
+
+    
+  <link rel="stylesheet"
+    href="_static/vendor/fontawesome/5.13.0/css/all.min.css">
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+    href="_static/vendor/fontawesome/5.13.0/webfonts/fa-solid-900.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+    href="_static/vendor/fontawesome/5.13.0/webfonts/fa-brands-400.woff2">
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" href="_static/styles/sphinx-book-theme.css?digest=5115cc725059bd94278eecd172e13a965bf8f5a9" type="text/css" />
+    
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=1999514e3f237ded88cf">
+
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?digest=9c920249402e914e316237a7dbc6769907cce411"></script>
+    <link rel="canonical" href="https://acerbilab.github.io/gpyreg/mean_functions.html" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Noise functions" href="noise_functions.html" />
+    <link rel="prev" title="Covariance functions" href="covariance_functions.html" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="docsearch:language" content="None">
+    
+
+    <!-- Google Analytics -->
+    
+  </head>
+  <body data-spy="scroll" data-target="#bd-toc-nav" data-offset="60">
+<!-- Checkboxes to toggle the left sidebar -->
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle navigation sidebar">
+<label class="overlay overlay-navbar" for="__navigation">
+    <div class="visually-hidden">Toggle navigation sidebar</div>
+</label>
+<!-- Checkboxes to toggle the in-page toc -->
+<input type="checkbox" class="sidebar-toggle" name="__page-toc" id="__page-toc" aria-label="Toggle in-page Table of Contents">
+<label class="overlay overlay-pagetoc" for="__page-toc">
+    <div class="visually-hidden">Toggle in-page Table of Contents</div>
+</label>
+<!-- Headers at the top -->
+<div class="announcement header-item noprint"></div>
+<div class="header header-item noprint"></div>
+
+    
+    <div class="container-fluid" id="banner"></div>
+
+    
+
+    <div class="container-xl">
+      <div class="row">
+          
+<!-- Sidebar -->
+<div class="bd-sidebar noprint" id="site-navigation">
+    <div class="bd-sidebar__content">
+        <div class="bd-sidebar__top"><div class="navbar-brand-box">
+    <a class="navbar-brand text-wrap" href="index.html">
+      
+      
+      
+      <h1 class="site-logo" id="site-title">GPyReg</h1>
+      
+    </a>
+</div><form class="bd-search d-flex align-items-center" action="search.html" method="get">
+  <i class="icon fas fa-search"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search the docs ..." aria-label="Search the docs ..." autocomplete="off" >
+</form><nav class="bd-links" id="bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item active">
+        <p aria-level="2" class="caption" role="heading">
+ <span class="caption-text">
+  Contents:
+ </span>
+</p>
+<ul class="current nav bd-sidenav">
+ <li class="toctree-l1">
+  <a class="reference internal" href="gaussian_process.html">
+   Gaussian processes
+  </a>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference internal" href="covariance_functions.html">
+   Covariance functions
+  </a>
+ </li>
+ <li class="toctree-l1 current active">
+  <a class="current reference internal" href="#">
+   Mean functions
+  </a>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference internal" href="noise_functions.html">
+   Noise functions
+  </a>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference internal" href="slice_sample.html">
+   Slice sampling
+  </a>
+ </li>
+</ul>
+
+    </div>
+</nav></div>
+        <div class="bd-sidebar__bottom">
+             <!-- To handle the deprecated key -->
+            
+            <div class="navbar_extra_footer">
+            Theme by the <a href="https://ebp.jupyterbook.org">Executable Book Project</a>
+            </div>
+            
+        </div>
+    </div>
+    <div id="rtd-footer-container"></div>
+</div>
+
+
+          
+
+
+          
+<!-- A tiny helper pixel to detect if we've scrolled -->
+<div class="sbt-scroll-pixel-helper"></div>
+<!-- Main content -->
+<div class="col py-0 content-container">
+    
+    <div class="header-article row sticky-top noprint">
+        
+
+
+
+<div class="col py-1 d-flex header-article-main">
+    <div class="header-article__left">
+        
+        <label for="__navigation"
+  class="headerbtn"
+  data-toggle="tooltip"
+data-placement="right"
+title="Toggle navigation"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-bars"></i>
+  </span>
+
+</label>
+
+        
+    </div>
+    <div class="header-article__right">
+<button onclick="toggleFullScreen()"
+  class="headerbtn"
+  data-toggle="tooltip"
+data-placement="bottom"
+title="Fullscreen mode"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+<div class="menu-dropdown menu-dropdown-repository-buttons">
+  <button class="headerbtn menu-dropdown__trigger"
+      aria-label="Source repositories">
+      <i class="fab fa-github"></i>
+  </button>
+  <div class="menu-dropdown__content">
+    <ul>
+      <li>
+        <a href="https://github.com/acerbilab/gpyreg"
+   class="headerbtn"
+   data-toggle="tooltip"
+data-placement="left"
+title="Source repository"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="headerbtn__text-container">repository</span>
+</a>
+
+      </li>
+      
+      <li>
+        <a href="https://github.com/acerbilab/gpyreg/issues/new?title=Issue%20on%20page%20%2Fmean_functions.html&body=Your%20issue%20content%20here."
+   class="headerbtn"
+   data-toggle="tooltip"
+data-placement="left"
+title="Open an issue"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="headerbtn__text-container">open issue</span>
+</a>
+
+      </li>
+      
+      <li>
+        <a href="https://github.com/acerbilab/gpyreg/edit/main/mean_functions.rst"
+   class="headerbtn"
+   data-toggle="tooltip"
+data-placement="left"
+title="Edit this page"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="headerbtn__text-container">suggest edit</span>
+</a>
+
+      </li>
+      
+    </ul>
+  </div>
+</div>
+
+<div class="menu-dropdown menu-dropdown-download-buttons">
+  <button class="headerbtn menu-dropdown__trigger"
+      aria-label="Download this page">
+      <i class="fas fa-download"></i>
+  </button>
+  <div class="menu-dropdown__content">
+    <ul>
+      <li>
+        <a href="_sources/mean_functions.rst.txt"
+   class="headerbtn"
+   data-toggle="tooltip"
+data-placement="left"
+title="Download source file"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="headerbtn__text-container">.rst</span>
+</a>
+
+      </li>
+      
+      <li>
+        
+<button onclick="printPdf(this)"
+  class="headerbtn"
+  data-toggle="tooltip"
+data-placement="left"
+title="Print to PDF"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="headerbtn__text-container">.pdf</span>
+</button>
+
+      </li>
+      
+    </ul>
+  </div>
+</div>
+<label for="__page-toc"
+  class="headerbtn headerbtn-page-toc"
+  
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-list"></i>
+  </span>
+
+</label>
+
+    </div>
+</div>
+
+<!-- Table of contents -->
+<div class="col-md-3 bd-toc show noprint">
+    <div class="tocsection onthispage pt-5 pb-3">
+        <i class="fas fa-list"></i> Contents
+    </div>
+    <nav id="bd-toc-nav" aria-label="Page">
+        <ul class="visible nav section-nav flex-column">
+ <li class="toc-h2 nav-item toc-entry">
+  <a class="reference internal nav-link" href="#gpyreg-mean-functions">
+   <code class="docutils literal notranslate">
+    <span class="pre">
+     gpyreg.mean_functions
+    </span>
+   </code>
+  </a>
+  <ul class="visible nav section-nav flex-column">
+   <li class="toc-h3 nav-item toc-entry">
+    <a class="reference internal nav-link" href="#constantmean">
+     <code class="docutils literal notranslate">
+      <span class="pre">
+       ConstantMean
+      </span>
+     </code>
+    </a>
+   </li>
+   <li class="toc-h3 nav-item toc-entry">
+    <a class="reference internal nav-link" href="#negativequadratic">
+     <code class="docutils literal notranslate">
+      <span class="pre">
+       NegativeQuadratic
+      </span>
+     </code>
+    </a>
+   </li>
+   <li class="toc-h3 nav-item toc-entry">
+    <a class="reference internal nav-link" href="#zeromean">
+     <code class="docutils literal notranslate">
+      <span class="pre">
+       ZeroMean
+      </span>
+     </code>
+    </a>
+   </li>
+  </ul>
+ </li>
+</ul>
+
+    </nav>
+</div>
+    </div>
+    <div class="article row">
+        <div class="col pl-md-3 pl-lg-5 content-container">
+            <!-- Table of contents that is only displayed when printing the page -->
+            <div id="jb-print-docs-body" class="onlyprint">
+                <h1>Mean functions</h1>
+                <!-- Table of contents -->
+                <div id="print-main-content">
+                    <div id="jb-print-toc">
+                        
+                        <div>
+                            <h2> Contents </h2>
+                        </div>
+                        <nav aria-label="Page">
+                            <ul class="visible nav section-nav flex-column">
+ <li class="toc-h2 nav-item toc-entry">
+  <a class="reference internal nav-link" href="#gpyreg-mean-functions">
+   <code class="docutils literal notranslate">
+    <span class="pre">
+     gpyreg.mean_functions
+    </span>
+   </code>
+  </a>
+  <ul class="visible nav section-nav flex-column">
+   <li class="toc-h3 nav-item toc-entry">
+    <a class="reference internal nav-link" href="#constantmean">
+     <code class="docutils literal notranslate">
+      <span class="pre">
+       ConstantMean
+      </span>
+     </code>
+    </a>
+   </li>
+   <li class="toc-h3 nav-item toc-entry">
+    <a class="reference internal nav-link" href="#negativequadratic">
+     <code class="docutils literal notranslate">
+      <span class="pre">
+       NegativeQuadratic
+      </span>
+     </code>
+    </a>
+   </li>
+   <li class="toc-h3 nav-item toc-entry">
+    <a class="reference internal nav-link" href="#zeromean">
+     <code class="docutils literal notranslate">
+      <span class="pre">
+       ZeroMean
+      </span>
+     </code>
+    </a>
+   </li>
+  </ul>
+ </li>
+</ul>
+
+                        </nav>
+                    </div>
+                </div>
+            </div>
+            <main id="main-content" role="main">
+                
+              <div>
+                
+  <section id="mean-functions">
+<h1>Mean functions<a class="headerlink" href="#mean-functions" title="Permalink to this headline">#</a></h1>
+<section id="gpyreg-mean-functions">
+<h2><code class="docutils literal notranslate"><span class="pre">gpyreg.mean_functions</span></code><a class="headerlink" href="#gpyreg-mean-functions" title="Permalink to this headline">#</a></h2>
+<p>Each mean function is implemented as its own class. An instance of one of these classes is passed to <code class="docutils literal notranslate"><span class="pre">gpyreg.GP</span></code> at initialization and defines the type of mean function for that Gaussian process.</p>
+<section id="constantmean">
+<h3><code class="docutils literal notranslate"><span class="pre">ConstantMean</span></code><a class="headerlink" href="#constantmean" title="Permalink to this headline">#</a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gpyreg.mean_functions.</span></span><span class="sig-name descname"><span class="pre">ConstantMean</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean" title="Permalink to this definition">#</a></dt>
+<dd><p>Constant mean function.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.compute" title="Permalink to this definition">#</a></dt>
+<dd><p>Compute the mean function at given test points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (mean_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is
+the number returned by the function <code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>.</p>
+</dd>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>compute_grad</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute the gradient with respect to hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>m</strong><span class="classifier">ndarray, shape (N,)</span></dt><dd><p>The mean values.</p>
+</dd>
+<dt><strong>dm</strong><span class="classifier">ndarray, shape (N, mean_N), optional</span></dt><dd><p>The gradient with respect to hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.get_bounds_info">
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.get_bounds_info" title="Permalink to this definition">#</a></dt>
+<dd><p>Return information on the lower, upper, plausible lower
+and plausible upper bounds of the hyperparameters of this
+mean function.</p>
+<dl class="field-list">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl>
+<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info with the following elements:</p>
+<dl class="simple">
+<dt><strong>LB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>UB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PLB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PUB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>x0</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible starting point.</p>
+</dd>
+</dl>
+<p>where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is the number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.hyperparameter_count">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.hyperparameter_count" title="Permalink to this definition">#</a></dt>
+<dd><p>Return the number of hyperparameters of this mean function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the mean function (unused).</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ConstantMean.hyperparameter_info">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ConstantMean.hyperparameter_info" title="Permalink to this definition">#</a></dt>
+<dd><p>Return information on the names of hyperparameters for setting
+them in other parts of the program.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the mean function (unused).</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
+in the order they are in the hyperparameter array.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="negativequadratic">
+<h3><code class="docutils literal notranslate"><span class="pre">NegativeQuadratic</span></code><a class="headerlink" href="#negativequadratic" title="Permalink to this headline">#</a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gpyreg.mean_functions.</span></span><span class="sig-name descname"><span class="pre">NegativeQuadratic</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic" title="Permalink to this definition">#</a></dt>
+<dd><p>Centered negative quadratic mean functions.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.compute" title="Permalink to this definition">#</a></dt>
+<dd><p>Compute the mean function at given test points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (mean_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is
+the number returned by the function <code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>.</p>
+</dd>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>compute_grad</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute the gradient with respect to hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>m</strong><span class="classifier">ndarray, shape (N,)</span></dt><dd><p>The mean values.</p>
+</dd>
+<dt><strong>dm</strong><span class="classifier">ndarray, shape (N, mean_N), optional</span></dt><dd><p>The gradient with respect to hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.get_bounds_info">
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.get_bounds_info" title="Permalink to this definition">#</a></dt>
+<dd><p>Return information on the lower, upper, plausible lower
+and plausible upper bounds of the hyperparameters of this
+mean function.</p>
+<dl class="field-list">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl>
+<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info with the following elements:</p>
+<dl class="simple">
+<dt><strong>LB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>UB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PLB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PUB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>x0</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible starting point.</p>
+</dd>
+</dl>
+<p>where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is the number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.hyperparameter_count">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.hyperparameter_count" title="Permalink to this definition">#</a></dt>
+<dd><p>Return the number of hyperparameters this mean function has.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the mean function.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.NegativeQuadratic.hyperparameter_info">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.NegativeQuadratic.hyperparameter_info" title="Permalink to this definition">#</a></dt>
+<dd><p>Return information on the names of hyperparameters for setting
+them in other parts of the program.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the mean function.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
+in the order they are in the hyperparameter array.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="zeromean">
+<h3><code class="docutils literal notranslate"><span class="pre">ZeroMean</span></code><a class="headerlink" href="#zeromean" title="Permalink to this headline">#</a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gpyreg.mean_functions.</span></span><span class="sig-name descname"><span class="pre">ZeroMean</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean" title="Permalink to this definition">#</a></dt>
+<dd><p>Zero mean function.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.compute" title="Permalink to this definition">#</a></dt>
+<dd><p>Compute the mean function at given test points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (mean_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is
+the number returned by the function <code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>.</p>
+</dd>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>compute_grad</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute the gradient with respect to hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>m</strong><span class="classifier">ndarray, shape (N,)</span></dt><dd><p>The mean values.</p>
+</dd>
+<dt><strong>dm</strong><span class="classifier">ndarray, shape (N, mean_N), optional</span></dt><dd><p>The gradient with respect to hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.get_bounds_info">
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.get_bounds_info" title="Permalink to this definition">#</a></dt>
+<dd><p>Return information on the lower, upper, plausible lower
+and plausible upper bounds of the hyperparameters of this
+mean function.</p>
+<dl class="field-list">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl>
+<dt>mean_bound_info: dict</dt><dd><p>A dictionary containing the bound info with the following elements:</p>
+<dl class="simple">
+<dt><strong>LB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>UB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PLB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PUB</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>x0</strong><span class="classifier">np.ndarray, shape (mean_N, 1)</span></dt><dd><p>The plausible starting point.</p>
+</dd>
+</dl>
+<p>where <code class="docutils literal notranslate"><span class="pre">mean_N</span></code> is the number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.hyperparameter_count">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.hyperparameter_count" title="Permalink to this definition">#</a></dt>
+<dd><p>Return the number of hyperparameters of this mean function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the mean function (unused).</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.mean_functions.ZeroMean.hyperparameter_info">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/mean_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.mean_functions.ZeroMean.hyperparameter_info" title="Permalink to this definition">#</a></dt>
+<dd><p>Return information on the names of hyperparameters for setting
+them in other parts of the program.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the mean function (unused).</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
+in the order they are in the hyperparameter array.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+              </div>
+              
+            </main>
+            <footer class="footer-article noprint">
+                
+    <!-- Previous / next buttons -->
+<div class='prev-next-area'>
+    <a class='left-prev' id="prev-link" href="covariance_functions.html" title="previous page">
+        <i class="fas fa-angle-left"></i>
+        <div class="prev-next-info">
+            <p class="prev-next-subtitle">previous</p>
+            <p class="prev-next-title">Covariance functions</p>
+        </div>
+    </a>
+    <a class='right-next' id="next-link" href="noise_functions.html" title="next page">
+    <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Noise functions</p>
+    </div>
+    <i class="fas fa-angle-right"></i>
+    </a>
+</div>
+            </footer>
+        </div>
+    </div>
+    <div class="footer-content row">
+        <footer class="col footer"><p>
+  
+    By Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki)<br/>
+  
+      &copy; Copyright 2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).<br/>
+</p>
+        </footer>
+    </div>
+    
+</div>
+
+
+      </div>
+    </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="_static/scripts/pydata-sphinx-theme.js?digest=1999514e3f237ded88cf"></script>
+
+
+  </body>
+</html>
