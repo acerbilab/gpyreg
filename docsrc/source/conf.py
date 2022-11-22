@@ -74,7 +74,7 @@ def linkcode_resolve(domain, info):
 
     # to get rid of the local path, quiet hacky, but works
     filename = filename[filename.index("gpyreg/") + 7 :]
-    return "https://github.com/lacerbi/gpyreg/tree/main/%s" % filename
+    return "https://github.com/acerbilab/gpyreg/tree/main/%s" % filename
 
 
 # Add any paths that contain templates here, relative to this directory.
