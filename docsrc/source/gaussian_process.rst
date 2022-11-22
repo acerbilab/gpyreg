@@ -1,9 +1,18 @@
-gpyreg.gaussian_process
-=======================
+==================
+Gaussian processes
+==================
+---------------------------
+``gpyreg.gaussian_process``
+---------------------------
 
-:mod:`gaussian_process` Module
-------------------------------
-.. automodule:: gpyreg.gaussian_process
+``GP``
+============
+.. autoclass:: gpyreg.GP
     :members:
     :undoc-members:
-    :show-inheritance:
+
+``Posterior``
+===================
+.. autoclass:: gpyreg.gaussian_process.Posterior
+    :members:
+    :undoc-members:

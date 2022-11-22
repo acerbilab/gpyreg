@@ -1,9 +1,12 @@
-gpyreg.slice_sample
-===================
+==============
+Slice sampling
+==============
+-----------------------
+``gpyreg.slice_sample``
+-----------------------
 
-:mod:`slice_sample` Module
---------------------------------
-.. automodule:: gpyreg.slice_sample
+``SliceSampler``
+----------------
+.. autoclass:: gpyreg.slice_sample.SliceSampler
     :members:
     :undoc-members:
-    :show-inheritance:
