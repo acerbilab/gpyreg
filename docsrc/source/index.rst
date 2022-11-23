@@ -51,5 +51,10 @@ Indices and tables
 License and source
 ==================
 
-GPyReg is released under the terms of the :mainbranch:`MIT License <LICENSE>`.
+GPyReg is released under the terms of the :mainbranch:`BSD 3-Clause License <LICENSE>`.
 The source code is on :labrepos:`GitHub <gpyreg>`.
+
+Acknowledgments
+===============
+
+GPyReg was developed by `members <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people>`_ (past and current) of the `Machine and Human Intelligence Lab <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/>`_ at the University of Helsinki. Development is being supported by the `Finnish Center for Artificial Intelligence (FCAI) <https://fcai.fi/>`_.

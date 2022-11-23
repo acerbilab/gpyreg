@@ -51,7 +51,7 @@ autodoc_default_options = {
 # Define shorthand for external links:
 extlinks = {
     "labrepos": ("https://github.com/acerbilab/%s", None),
-    "mainbranch": ("https://github.com/acerbilab/pyvbmc/blob/main/%s", None),
+    "mainbranch": ("https://github.com/acerbilab/gpyreg/blob/main/%s", None),
 }
 
 coverage_show_missing_items = True
