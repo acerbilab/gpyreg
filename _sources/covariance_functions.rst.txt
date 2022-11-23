@@ -19,7 +19,6 @@ Each covariance function is implemented as a subclass of :ref:`\`\`AbstractKerne
     :undoc-members:
     :show-inheritance:
 
-
 ``Matern``
 ----------
 .. autoclass:: gpyreg.covariance_functions.Matern
