@@ -36,6 +36,8 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
     "sphinx.ext.linkcode",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.extlinks",
 ]
 numpydoc_show_class_members = False
 
@@ -44,6 +46,12 @@ autodoc_default_options = {
     "special-members": "__call__",
     "undoc-members": True,
     "exclude-members": "__weakref__",
+}
+
+# Define shorthand for external links:
+extlinks = {
+    "labrepos": ("https://github.com/acerbilab/%s", None),
+    "mainbranch": ("https://github.com/acerbilab/gpyreg/blob/main/%s", None),
 }
 
 coverage_show_missing_items = True
@@ -66,7 +74,7 @@ def linkcode_resolve(domain, info):
 
     # to get rid of the local path, quiet hacky, but works
     filename = filename[filename.index("gpyreg/") + 7 :]
-    return "https://github.com/lacerbi/gpyreg/tree/main/%s" % filename
+    return "https://github.com/acerbilab/gpyreg/tree/main/%s" % filename
 
 
 # Add any paths that contain templates here, relative to this directory.
@@ -83,12 +91,26 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "alabaster"
+html_theme = "sphinx_book_theme"
+html_title = "GPyReg"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["css/custom.css"]
 
-html_theme_options = {"page_width": "1200px"}
+html_show_sourcelink = False
+html_theme_options = {
+    "repository_url": "https://github.com/acerbilab/gpyreg",
+    "repository_branch": "main",
+    "use_edit_page_button": True,
+    "use_issues_button": True,
+    "use_repository_button": True,
+    "collapse_navigation": True,
+    "use_download_button": True,
+    "show_navbar_depth": 2,
+    "show_toc_level": 3,
+}
+html_baseurl = "https://acerbilab.github.io/gpyreg/"
+
 todo_include_todos = True

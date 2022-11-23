@@ -50,6 +50,9 @@ coverage.xml
 # do not commit build docs in docsrc folder
 docsrc/_build/
 
+# Don't commit Sphinx documentation on main branch(es), use gh-pages branch instead
+docs/
+
 # IDE / Editors
 .vscode
 .idea
