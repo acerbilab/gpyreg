@@ -57,4 +57,4 @@ The source code is on :labrepos:`GitHub <gpyreg>`.
 Acknowledgments
 ===============
 
-GPyReg was developed by `members <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people>`_ (past and current) of the `Machine and Human Intelligence Lab <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/>`_ at the University of Helsinki. Development is being supported by the `Finnish Center for Artificial Intelligence (FCAI) <https://fcai.fi/>`_.
+GPyReg was developed by `members <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people>`_ (past and current) of the `Machine and Human Intelligence Lab <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/>`_ at the University of Helsinki. Development is being supported by the `Finnish Center for Artificial Intelligence FCAI <https://fcai.fi/>`_.
