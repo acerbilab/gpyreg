@@ -1,7 +1,7 @@
 # pyproject.toml
 
 [project]
-name = "gpyreg"
+name = "GPyReg"
 dynamic = ["version"]  # use git tags for version, via setuptools_scm
 description = "Lightweight package for Gaussian process regression."
 readme = "README.md"
