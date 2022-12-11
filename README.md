@@ -6,7 +6,7 @@ GPyReg is a lightweight package for Gaussian process regression in Python. It wa
 The documentation is currently hosted on [github.io](https://acerbilab.github.io/gpyreg/).
 
 ## Installation
-GPyReg is available via `pip` (and soon, `conda-forge`):
+GPyReg is available via `pip` and `conda-forge`:
 ```console
 python -m pip install gpyreg
 ```
