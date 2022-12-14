@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    uses: Bobby-Huggins/gpyreg-test/.github/workflows/build.yml@main
+    uses: acerbilab/gpyreg/.github/workflows/build.yml@main
   upload_to_pypi:
     needs: [build]
     runs-on: ubuntu-latest
