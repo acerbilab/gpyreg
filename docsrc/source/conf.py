@@ -14,6 +14,7 @@ import inspect
 #
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath("../.."))
 
@@ -70,11 +71,9 @@ def linkcode_resolve(domain, info):
         obj = getattr(obj, part)
 
     # unwrap to get rid of decorators.
-    filename = inspect.getsourcefile(inspect.unwrap(obj))
-
-    # to get rid of the local path, quiet hacky, but works
-    filename = filename[filename.index("gpyreg/") + 7 :]
-    return "https://github.com/acerbilab/gpyreg/tree/main/%s" % filename
+    file = Path(inspect.getsourcefile(inspect.unwrap(obj)))
+    filename = file.name
+    return "https://github.com/acerbilab/gpyreg/tree/main/gpyreg/%s" % filename
 
 
 # Add any paths that contain templates here, relative to this directory.
