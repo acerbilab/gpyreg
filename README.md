@@ -1,4 +1,12 @@
 # GPyReg
+![Version](https://img.shields.io/badge/dynamic/json?label=python&query=info.requires_python&url=https%3A%2F%2Fpypi.org%2Fpypi%2Fgpyreg%2Fjson)
+[![Conda](https://img.shields.io/conda/v/conda-forge/gpyreg)](https://anaconda.org/conda-forge/gpyreg)
+[![PyPI](https://img.shields.io/pypi/v/gpyreg)](https://pypi.org/project/gpyreg/)
+<br />
+[![Discussion](https://img.shields.io/badge/-discussion-blue?logo=github)](https://github.com/orgs/acerbilab/discussions)
+[![tests](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/tests.yml?branch=main&label=tests)](https://github.com/acerbilab/gpyreg/actions/workflows/tests.yml)
+[![docs](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/build.yml?branch=main&label=docs)](https://github.com/acerbilab/gpyreg/actions/workflows/docs.yml)
+[![build](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/docs.yml?branch=main&label=build)](https://github.com/acerbilab/gpyreg/actions/workflows/build.yml)
 ### What is it?
 GPyReg is a lightweight package for Gaussian process regression in Python. It was developed for use with [PyVBMC](https://github.com/acerbilab/pyvbmc) (a Python package for efficient black-box Bayesian inference) but is usable as a standalone package.
 
