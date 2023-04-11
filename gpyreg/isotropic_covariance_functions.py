@@ -49,6 +49,40 @@ class AbstractIsotropicKernel(AbstractKernel):
             ("covariance_log_outputscale", 1),
         ]
 
+    def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
+        """
+        Return information on the lower, upper, plausible lower
+        and plausible upper bounds of the hyperparameters of this
+        covariance function.
+
+        Parameters
+        ----------
+        X : ndarray, shape (N, D)
+            A 2D array where each row is a test point.
+        y : ndarray, shape (N, 1)
+            A 2D array where each row is a test target.
+
+        Returns
+        -------
+        cov_bound_info: dict
+            A dictionary containing the bound info with the following elements:
+
+            **LB** : np.ndarray, shape (cov_N, 1)
+                    The lower bounds of the hyperparameters.
+            **UB** : np.ndarray, shape (cov_N, 1)
+                    The upper bounds of the hyperparameters.
+            **PLB** : np.ndarray, shape (cov_N, 1)
+                    The plausible lower bounds of the hyperparameters.
+            **PUB** : np.ndarray, shape (cov_N, 1)
+                    The plausible upper bounds of the hyperparameters.
+            **x0** : np.ndarray, shape (cov_N, 1)
+                    The plausible starting point.
+
+            where ``cov_N`` is the number of hyperparameters.
+        """
+        cov_N = self.hyperparameter_count(X.shape[1])
+        return _isotropic_bounds_info_helper(cov_N, X, y)
+
 class MaternIsotropic(AbstractIsotropicKernel, Matern):
     """
     Isotropic Matern kernel.
@@ -177,3 +211,43 @@ class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
 
         return K
 
+def _isotropic_bounds_info_helper(cov_N, X, y):
+    _, D = X.shape
+    tol = 1e-6
+    lower_bounds = np.full((cov_N,), -np.inf)
+    upper_bounds = np.full((cov_N,), np.inf)
+    plausible_lower_bounds = np.full((cov_N,), -np.inf)
+    plausible_upper_bounds = np.full((cov_N,), np.inf)
+    plausible_x0 = np.full((cov_N,), np.nan)
+
+    width = np.mean(np.max(X, axis=0) - np.min(X, axis=0))
+    if np.size(y) <= 1:
+        y = np.array([0, 1])
+    height = np.max(y) - np.min(y)
+
+    lower_bounds[0:cov_N - 1] = np.log(width) + np.log(tol)
+    upper_bounds[0:cov_N - 1] = np.log(width * 10)
+    plausible_lower_bounds[0:cov_N - 1] = np.log(width) + 0.5 * np.log(tol)
+    plausible_upper_bounds[0:cov_N - 1] = np.log(width)
+    plausible_x0[0:cov_N - 1] = np.log(np.std(X, ddof=1))
+
+    lower_bounds[cov_N - 1] = np.log(height) + np.log(tol)
+    upper_bounds[cov_N - 1] = np.log(height * 10)
+    plausible_lower_bounds[cov_N - 1] = np.log(height) + 0.5 * np.log(tol)
+    plausible_upper_bounds[cov_N - 1] = np.log(height)
+    plausible_x0[cov_N - 1] = np.log(np.std(y, ddof=1))
+
+    # Plausible starting point
+    i_nan = np.isnan(plausible_x0)
+    plausible_x0[i_nan] = 0.5 * (
+        plausible_lower_bounds[i_nan] + plausible_upper_bounds[i_nan]
+    )
+
+    bounds_info = {
+        "LB": lower_bounds,
+        "UB": upper_bounds,
+        "PLB": plausible_lower_bounds,
+        "PUB": plausible_upper_bounds,
+        "x0": plausible_x0,
+    }
+    return bounds_info
