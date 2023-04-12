@@ -225,14 +225,16 @@ def _isotropic_bounds_info_helper(cov_N, X, y):
     plausible_x0 = np.full((cov_N,), np.nan)
 
     width = np.mean(np.max(X, axis=0) - np.min(X, axis=0))
+    min_width = np.min(width)
+    max_width = np.max(width)
     if np.size(y) <= 1:
         y = np.array([0, 1])
     height = np.max(y) - np.min(y)
 
-    lower_bounds[0:cov_N - 1] = np.log(width) + np.log(tol)
-    upper_bounds[0:cov_N - 1] = np.log(width * 10)
-    plausible_lower_bounds[0:cov_N - 1] = np.log(width) + 0.5 * np.log(tol)
-    plausible_upper_bounds[0:cov_N - 1] = np.log(width)
+    lower_bounds[0:cov_N - 1] = np.log(min_width) + np.log(tol)
+    upper_bounds[0:cov_N - 1] = np.log(max_width * 10)
+    plausible_lower_bounds[0:cov_N - 1] = np.log(min_width) + 0.5 * np.log(tol)
+    plausible_upper_bounds[0:cov_N - 1] = np.log(max_width)
     plausible_x0[0:cov_N - 1] = np.log(np.std(X, ddof=1))
 
     lower_bounds[cov_N - 1] = np.log(height) + np.log(tol)
