@@ -169,6 +169,8 @@ class SquaredExponential(AbstractKernel):
         K = sf2 * np.exp(-tmp / 2)
 
         if compute_grad:
+            if X_star is not None:
+                raise ValueError("X_star should be None when compute_grad is True.")
             dK = np.zeros((cov_N, N, N))
             for i in range(0, D):
                 # Gradient of cov length scales
@@ -255,6 +257,8 @@ class Matern(AbstractKernel):
         K = sf2 * self.f(tmp) * np.exp(-tmp)
 
         if compute_grad:
+            if X_star is not None:
+                raise ValueError("X_star should be None when compute_grad is True.")
             dK = np.zeros((cov_N, N, N))
             for i in range(0, D):
                 Ki = squareform(
@@ -331,6 +335,8 @@ class RationalQuadraticARD(AbstractKernel):
         K = sf2 * M ** (-alpha)
 
         if compute_grad:
+            if X_star is not None:
+                raise ValueError("X_star should be None when compute_grad is True.")
             dK = np.zeros((cov_N, N, N))
 
             # Gradient respect of lenght scale.
