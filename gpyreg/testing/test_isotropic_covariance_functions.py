@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from gpyreg.covariance_functions import AbstractKernel
+from gpyreg.covariance_functions import AbstractKernel, Matern, SquaredExponential
 from gpyreg.isotropic_covariance_functions import (
     AbstractIsotropicKernel,
     MaternIsotropic,
@@ -14,6 +14,7 @@ def test_squared_exponential_isotropic_compute_sanity_checks():
     D = 3
     N = 20
     X = np.ones((N, D))
+    X_star = np.zeros((N, D))
 
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones(D + 2)
@@ -27,6 +28,13 @@ def test_squared_exponential_isotropic_compute_sanity_checks():
         squared_expontential.compute(hyp, X)
     assert (
         "Covariance function output is available only for"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        hyp = np.ones(2)
+        squared_expontential.compute(hyp, X, X_star, compute_grad=True)
+    assert (
+        "X_star should be None when compute_grad is True."
         in execinfo.value.args[0]
     )
 
@@ -48,6 +56,7 @@ def test_matern_isotropic_compute_sanity_checks():
     D = 3
     N = 20
     X = np.ones((N, D))
+    X_star = np.zeros((N, D))
 
     with pytest.raises(ValueError) as execinfo:
         hyp = np.ones(D + 2)
@@ -61,6 +70,13 @@ def test_matern_isotropic_compute_sanity_checks():
         matern.compute(hyp, X)
     assert (
         "Covariance function output is available only for"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        hyp = np.ones(2)
+        matern.compute(hyp, X, X_star, compute_grad=True)
+    assert (
+        "X_star should be None when compute_grad is True."
         in execinfo.value.args[0]
     )
 
@@ -138,4 +154,77 @@ def _test_kernel_gradient_(
         finite_diff[:, :, idx] = finite_diff[:, :, idx] / (12 * h)
 
     assert np.all(np.abs(finite_diff - dK) <= eps)
+
+def test_matern_isotropic_against_anisotropic():
+    N = 10
+    M = 5
+    for degree in [1, 3, 5]:
+        D = np.random.randint(1, 11)
+
+        # Isotropic kernel:
+        matern_iso = MaternIsotropic(degree)
+        n_hyp_iso = matern_iso.hyperparameter_count(D)
+        hyp_iso = np.random.normal(size=n_hyp_iso)
+
+        # Anisotropic kernel with equal length scales:
+        matern = Matern(degree)
+        n_hyp = matern.hyperparameter_count(D)
+        hyp = np.zeros(n_hyp)
+        hyp[0:-1] = hyp_iso[0]
+        hyp[-1] = hyp_iso[1]
+
+        # Test both on random data:
+        X = np.random.normal(size=(N, D))
+        X_star = np.random.normal(size=(M, D))
+
+        K1_iso = matern_iso.compute(hyp_iso, X)
+        K1 = matern.compute(hyp, X)
+        assert np.allclose(K1_iso, K1), f"degree {degree}"
+
+        K2_iso, dK2_iso = matern_iso.compute(hyp_iso, X, compute_grad=True)
+        K2, dK2 = matern.compute(hyp, X, compute_grad=True)
+        dK2 = np.dstack([dK2[:, :, 0:-1].sum(axis=2, keepdims=True), dK2[:, :, [-1]]])
+        assert np.allclose(K2_iso, K2), f"degree {degree}"
+        assert np.allclose(dK2_iso, dK2, equal_nan=True), f"degree {degree}"
+        assert np.allclose(K2_iso, K1_iso), f"degree {degree}"
+
+        K3_iso = matern_iso.compute(hyp_iso, X, X_star)
+        K3 = matern.compute(hyp, X, X_star)
+        assert np.allclose(K3_iso, K3), f"degree {degree}"
+
+def test_squared_exponential_isotropic_against_anisotropic():
+    N = 10
+    M = 5
+    D = np.random.randint(1, 11)
+
+    # Isotropic kernel:
+    sqexp_iso = SquaredExponentialIsotropic()
+    n_hyp_iso = sqexp_iso.hyperparameter_count(D)
+    hyp_iso = np.random.normal(size=n_hyp_iso)
+
+    # Anisotropic kernel with equal length scales:
+    sqexp = SquaredExponential()
+    n_hyp = sqexp.hyperparameter_count(D)
+    hyp = np.zeros(n_hyp)
+    hyp[0:-1] = hyp_iso[0]
+    hyp[-1] = hyp_iso[1]
+
+    # Test both on random data:
+    X = np.random.normal(size=(N, D))
+    X_star = np.random.normal(size=(M, D))
+
+    K1_iso = sqexp_iso.compute(hyp_iso, X)
+    K1 = sqexp.compute(hyp, X)
+    assert np.allclose(K1_iso, K1)
+
+    K2_iso, dK2_iso = sqexp_iso.compute(hyp_iso, X, compute_grad=True)
+    K2, dK2 = sqexp.compute(hyp, X, compute_grad=True)
+    dK2 = np.dstack([dK2[:, :, 0:-1].sum(axis=2, keepdims=True), dK2[:, :, [-1]]])
+    assert np.allclose(K2_iso, K2)
+    assert np.allclose(dK2_iso, dK2)
+    assert np.allclose(K2_iso, K1_iso)
+
+    K3_iso = sqexp_iso.compute(hyp_iso, X, X_star)
+    K3 = sqexp.compute(hyp, X, X_star)
+    assert np.allclose(K3_iso, K3)
 
