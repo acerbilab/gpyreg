@@ -88,8 +88,8 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
     Isotropic Matern kernel.
 
     Overrides `compute`. Inherits `hyperparameter_count` and
-    `hyperparameter_info` from `AbstractIsotropicKernel`. Inherits other
-    methods from `SquaredExponential`.
+    `hyperparameter_info` from :class:`AbstractIsotropicKernel`. Inherits other
+    methods from :class:`Matern`.
 
     Parameters
     ----------
@@ -142,6 +142,8 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
         K = sf2 * self.f(tmp) * np.exp(-tmp)
 
         if compute_grad:
+            if X_star is not None:
+                raise ValueError("X_star should be None when compute_grad is True.")
             dK = np.zeros((cov_N, N, N))
             # Gradient of cov length scale
             K_ls = squareform(pdist(np.sqrt(self.degree) / ell * X, "sqeuclidean"))
@@ -160,8 +162,8 @@ class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
     """Isotropic squared exponential kernel.
 
     Overrides `compute`. Inherits `hyperparameter_count` and
-    `hyperparameter_info` from `AbstractIsotropicKernel`. Inherits other
-    methods from `SquaredExponential`.
+    `hyperparameter_info` from :class:`AbstractIsotropicKernel`. Inherits other
+    methods from :class:`SquaredExponential`.
     """
 
     # Overriding abstract method
@@ -202,6 +204,8 @@ class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
         K = sf2 * np.exp(-tmp / 2)
 
         if compute_grad:
+            if X_star is not None:
+                raise ValueError("X_star should be None when compute_grad is True.")
             dK = np.zeros((cov_N, N, N))
             # Gradient of cov length scale
             dK[0, :, :] = K * squareform(pdist(X / ell, "sqeuclidean"))
