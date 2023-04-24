@@ -721,7 +721,7 @@ class GP:
             Raised when the Cholesky decomposition failed multiple times even
             by adding numerical stability values to the matrix.
         """
-
+        X_new, y_new, s2_new = self._convert_shapes(X_new, y_new, s2_new)
         # Create local copies so we won't get trouble
         # with references later.
         if X_new is not None:
@@ -730,6 +730,7 @@ class GP:
             y_new = y_new.copy()
         if s2_new is not None:
             s2_new = s2_new.copy()
+
         if hyp is not None:
             hyp = hyp.copy()
 
@@ -2524,6 +2525,9 @@ class GP:
         s2: Union[np.ndarray, float, int, None],
     ):
         """Convert input data to correct shapes."""
+        if X is None and y is None and s2 is None:
+            return X, y, s2
+
         if X is not None:
             if X.ndim == 1:
                 X = X[None, :]
@@ -2546,11 +2550,11 @@ class GP:
         if y is not None:
             y = y.reshape(N, 1)
         if isinstance(s2, float) or isinstance(s2, int):
-            s2 = s2
+            s2 = s2 * np.ones((N, 1))
         elif isinstance(s2, np.ndarray):
             s2 = s2.reshape(N, 1)
         elif s2 is None:
-            s2 = 0
+            s2 = np.zeros((N, 1))
         else:
             raise TypeError(
                 "s2 type need to be \
