@@ -1,8 +1,8 @@
 """Lightweight Gaussian process regression package."""
 
 import gpyreg.covariance_functions
-import gpyreg.isotropic_covariance_functions
 import gpyreg.f_min_fill
+import gpyreg.isotropic_covariance_functions
 import gpyreg.mean_functions
 import gpyreg.noise_functions
 import gpyreg.slice_sample

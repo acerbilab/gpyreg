@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from gpyreg.covariance_functions import AbstractKernel, Matern, SquaredExponential
+from gpyreg.covariance_functions import (
+    AbstractKernel,
+    Matern,
+    SquaredExponential,
+)
 from gpyreg.isotropic_covariance_functions import (
     AbstractIsotropicKernel,
     MaternIsotropic,
@@ -103,6 +107,7 @@ def test_matern_isotropic_kernel_gradient():
 
     _test_kernel_gradient_(matern_fun, hyp, X)
 
+
 def _test_kernel_gradient_(
     kernel_fun: AbstractKernel,
     hyp,
@@ -155,6 +160,7 @@ def _test_kernel_gradient_(
 
     assert np.all(np.abs(finite_diff - dK) <= eps)
 
+
 def test_matern_isotropic_against_anisotropic():
     N = 10
     M = 5
@@ -183,7 +189,9 @@ def test_matern_isotropic_against_anisotropic():
 
         K2_iso, dK2_iso = matern_iso.compute(hyp_iso, X, compute_grad=True)
         K2, dK2 = matern.compute(hyp, X, compute_grad=True)
-        dK2 = np.dstack([dK2[:, :, 0:-1].sum(axis=2, keepdims=True), dK2[:, :, [-1]]])
+        dK2 = np.dstack(
+            [dK2[:, :, 0:-1].sum(axis=2, keepdims=True), dK2[:, :, [-1]]]
+        )
         assert np.allclose(K2_iso, K2), f"degree {degree}"
         assert np.allclose(dK2_iso, dK2, equal_nan=True), f"degree {degree}"
         assert np.allclose(K2_iso, K1_iso), f"degree {degree}"
@@ -191,6 +199,7 @@ def test_matern_isotropic_against_anisotropic():
         K3_iso = matern_iso.compute(hyp_iso, X, X_star)
         K3 = matern.compute(hyp, X, X_star)
         assert np.allclose(K3_iso, K3), f"degree {degree}"
+
 
 def test_squared_exponential_isotropic_against_anisotropic():
     N = 10
@@ -219,7 +228,9 @@ def test_squared_exponential_isotropic_against_anisotropic():
 
     K2_iso, dK2_iso = sqexp_iso.compute(hyp_iso, X, compute_grad=True)
     K2, dK2 = sqexp.compute(hyp, X, compute_grad=True)
-    dK2 = np.dstack([dK2[:, :, 0:-1].sum(axis=2, keepdims=True), dK2[:, :, [-1]]])
+    dK2 = np.dstack(
+        [dK2[:, :, 0:-1].sum(axis=2, keepdims=True), dK2[:, :, [-1]]]
+    )
     assert np.allclose(K2_iso, K2)
     assert np.allclose(dK2_iso, dK2)
     assert np.allclose(K2_iso, K1_iso)
@@ -227,4 +238,3 @@ def test_squared_exponential_isotropic_against_anisotropic():
     K3_iso = sqexp_iso.compute(hyp_iso, X, X_star)
     K3 = sqexp.compute(hyp, X, X_star)
     assert np.allclose(K3_iso, K3)
-

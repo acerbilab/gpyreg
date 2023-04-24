@@ -8,7 +8,10 @@ from scipy.integrate import quad
 from scipy.misc import derivative
 
 import gpyreg as gpr
-from gpyreg.isotropic_covariance_functions import MaternIsotropic, SquaredExponentialIsotropic
+from gpyreg.isotropic_covariance_functions import (
+    MaternIsotropic,
+    SquaredExponentialIsotropic,
+)
 
 
 @pytest.mark.filterwarnings(
@@ -205,9 +208,7 @@ def test_getters_setters():
     with pytest.raises(ValueError):
         gp.set_bounds(gp_bounds_mistaken)
 
-    hyp_arr = np.array(
-        [[-0.4630094, -0.2209450, -7.2947503, 0.03713608]]
-    )
+    hyp_arr = np.array([[-0.4630094, -0.2209450, -7.2947503, 0.03713608]])
     hyp = gp.hyperparameters_to_dict(hyp_arr)
     gp.set_hyperparameters(hyp)
     assert np.all(gp.get_hyperparameters(as_array=True) == hyp_arr)
@@ -686,7 +687,7 @@ def test_setting_bounds():
     N = 20
     D = 2
     X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
-    y = 1 + np.sin(X)
+    y = 1 + np.sum(np.sin(X), 1)
 
     gp = gpr.GP(
         D=D,
@@ -1099,7 +1100,7 @@ def test__str__and__repr__():
     N = 20
     D = 2
     X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
-    y = 1 + np.sin(X)
+    y = 1 + np.sum(np.sin(X), 1)
 
     gp = gpr.GP(
         D=D,

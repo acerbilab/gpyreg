@@ -390,7 +390,7 @@ class NegativeQuadratic:
         if compute_grad:
             dm = np.zeros((N, mean_N))
             dm[:, 0] = np.ones((N,))
-            dm[:, 1 : D + 1] = (X - x_m) / omega ** 2
+            dm[:, 1 : D + 1] = (X - x_m) / omega**2
             dm[:, D + 1 :] = z_2
             return m, dm
 
