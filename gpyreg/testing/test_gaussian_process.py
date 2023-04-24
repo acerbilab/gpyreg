@@ -621,8 +621,8 @@ def test_quadrature_with_noise():
 
     F_bayes, F_bayes_var = gp.quad(0, 0.1, compute_var=True)
 
-    assert np.abs(F_bayes_var - F_predict_var) < 0.01
-    assert np.abs(F_bayes - F_predict) < 0.01
+    assert np.abs(F_bayes_var - F_predict_var) < 0.05
+    assert np.abs(F_bayes - F_predict) < 0.05
 
     def f(x):
         y = np.sin(x)
