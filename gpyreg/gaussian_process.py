@@ -4,6 +4,7 @@ import math
 import time
 import warnings
 from textwrap import indent
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -720,7 +721,7 @@ class GP:
             Raised when the Cholesky decomposition failed multiple times even
             by adding numerical stability values to the matrix.
         """
-
+        X_new, y_new, s2_new = self._convert_shapes(X_new, y_new, s2_new)
         # Create local copies so we won't get trouble
         # with references later.
         if X_new is not None:
@@ -729,6 +730,7 @@ class GP:
             y_new = y_new.copy()
         if s2_new is not None:
             s2_new = s2_new.copy()
+
         if hyp is not None:
             hyp = hyp.copy()
 
@@ -780,7 +782,7 @@ class GP:
                     # If rank-1 update is not numerically stable, perform a
                     # full update for this posterior instead:
                     sqrt_arg = (
-                        sn2_eff ** 2
+                        sn2_eff**2
                         + K * sn2_eff
                         - np.dot(new_L_column.T, new_L_column)
                     )
@@ -987,7 +989,7 @@ class GP:
         if options is None:
             options = {}
         opts_N = options.get("opts_N", 3)
-        init_N = options.get("init_N", 2 ** 10)
+        init_N = options.get("init_N", 2**10)
         init_method = options.get("init_method", "sobol")
         thin = options.get("thin", 5)
         df_base = options.get("df_base", 7)
@@ -1003,6 +1005,7 @@ class GP:
         lower_bounds = options.get("lower_bounds", "current")
         upper_bounds = options.get("upper_bounds", "current")
 
+        X, y, s2 = self._convert_shapes(X, y, s2)
         # Initialize GP if requested.
         if X is not None:
             self.X = X
@@ -1343,7 +1346,7 @@ class GP:
             if np.any(sb_idx_b | sb_idx_a):
                 lp -= 0.5 * np.sum(
                     np.log(
-                        C ** 2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
+                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
                     )
                     + z2_tmp[sb_idx_b | sb_idx_a]
                 )
@@ -1559,7 +1562,7 @@ class GP:
         self,
         x_star: np.ndarray,
         y_star: np.ndarray = None,
-        s2_star: np.ndarray = 0,
+        s2_star: np.ndarray = None,
         add_noise: bool = False,
     ):
         """
@@ -1585,7 +1588,7 @@ class GP:
         cov : ndarray, shape (M, M, sample_N)
             Covariance matrix for each hyperparameter sample.
         """
-
+        x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
         s_N = self.posteriors.size
         N_star, _ = x_star.shape
 
@@ -1661,7 +1664,7 @@ class GP:
         self,
         x_star: np.ndarray,
         y_star: np.ndarray = None,
-        s2_star: np.ndarray = 0,
+        s2_star: np.ndarray = None,
         add_noise: bool = False,
         separate_samples: bool = False,
         return_lpd: bool = False,
@@ -1699,6 +1702,7 @@ class GP:
             separate samples the shape is ``(M, sample_N)`` while
             otherwise it is ``(M,)``.
         """
+        x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
 
         s_N = self.posteriors.size
         N_star, D = x_star.shape
@@ -1918,7 +1922,7 @@ class GP:
             sn2_eff = sn2 * self.posteriors[s].sn2_mult
 
             # Compute posterior mean of the integral
-            tau = np.sqrt(sigma ** 2 + ell ** 2)
+            tau = np.sqrt(sigma**2 + ell**2)
             lnnf = (
                 ln_sf2 + sum_lnell - np.sum(np.log(tau), 1)
             )  # Covariance normalization factor
@@ -1935,15 +1939,15 @@ class GP:
             if quadratic_mean_fun:
                 nu_k = -0.5 * np.sum(
                     1
-                    / omega ** 2
-                    * (mu ** 2 + sigma ** 2 - 2 * mu * xm + xm ** 2),
+                    / omega**2
+                    * (mu**2 + sigma**2 - 2 * mu * xm + xm**2),
                     1,
                 )
                 F[:, s] += nu_k
 
             # Compute posterior variance of the integral
             if compute_var:
-                tau_kk = np.sqrt(2 * sigma ** 2 + ell ** 2)
+                tau_kk = np.sqrt(2 * sigma**2 + ell**2)
                 nf_kk = np.exp(ln_sf2 + sum_lnell - np.sum(np.log(tau_kk), 1))
                 if L_chol:
                     tmp_result = sp.linalg.solve_triangular(
@@ -2026,7 +2030,7 @@ class GP:
             ell[:, s] = np.exp(
                 self.posteriors[s].hyp[0 : self.D]
             )  # Extract length scale from HYP
-        ellbar = np.sqrt(np.mean(ell ** 2, 1)).T
+        ellbar = np.sqrt(np.mean(ell**2, 1)).T
 
         if lb is None:
             if self.X is not None:
@@ -2060,7 +2064,7 @@ class GP:
             )
 
             xx_vec = np.reshape(
-                np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
+                np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)),
                 (-1, 1),
             )
             if self.D > 1:
@@ -2093,7 +2097,7 @@ class GP:
                     ub[i] = x0[i] + 0.5 * dx
 
                 xx_vec = np.reshape(
-                    np.linspace(lb[i], ub[i], np.ceil(x_N ** 1.5).astype(int)),
+                    np.linspace(lb[i], ub[i], np.ceil(x_N**1.5).astype(int)),
                     (-1, 1),
                 )
                 if self.D > 1:
@@ -2149,9 +2153,9 @@ class GP:
                 )
 
                 if x0 is not None:
-                    xx = np.tile(x0, (x_N ** 2, 1))
+                    xx = np.tile(x0, (x_N**2, 1))
                 else:
-                    xx = np.tile(np.full((self.D,), 0.0), (x_N ** 2, 1))
+                    xx = np.tile(np.full((self.D,), 0.0), (x_N**2, 1))
                 xx[:, i] = xx_vec[:, 0]
                 xx[:, j] = xx_vec[:, 1]
 
@@ -2470,18 +2474,14 @@ class GP:
 
             if compute_nlZ_grad:
                 dnlZ = np.zeros(hyp.shape)
-                Q = (
+                Q = sp.linalg.solve_triangular(
+                    L,
                     sp.linalg.solve_triangular(
-                        L,
-                        sp.linalg.solve_triangular(
-                            L, np.eye(N), trans=1, check_finite=False
-                        ),
-                        trans=0,
-                        check_finite=False,
-                    )
-                    / sl
-                    - np.dot(alpha, alpha.T)
-                )
+                        L, np.eye(N), trans=1, check_finite=False
+                    ),
+                    trans=0,
+                    check_finite=False,
+                ) / sl - np.dot(alpha, alpha.T)
 
                 # Gradient of covariance hyperparameters.
                 for i in range(0, cov_N):
@@ -2517,6 +2517,50 @@ class GP:
             sn2_mult,
             L_chol,
         )
+
+    def _convert_shapes(
+        self,
+        X: Union[np.ndarray, None],
+        y: Union[np.ndarray, None],
+        s2: Union[np.ndarray, float, int, None],
+    ):
+        """Convert input data to correct shapes."""
+        if X is None and y is None and s2 is None:
+            return X, y, s2
+
+        if X is not None:
+            if X.ndim == 1:
+                X = X[None, :]
+            if X.ndim != 2:
+                raise AssertionError("X need to be an array of shape (N, D)")
+            N, D = X.shape
+            if D != self.D:
+                raise AssertionError(
+                    f"The dimension of input data {D}"
+                    f"doesn't match GP's input dimension {self.D}."
+                )
+        else:
+            try:
+                N, D = self.X.shape
+            except AttributeError as e:
+                raise AttributeError(
+                    "self.X is not a numpy array, " f"self.X = {self.X}"
+                )
+
+        if y is not None:
+            y = y.reshape(N, 1)
+        if isinstance(s2, float) or isinstance(s2, int):
+            s2 = s2 * np.ones((N, 1))
+        elif isinstance(s2, np.ndarray):
+            s2 = s2.reshape(N, 1)
+        elif s2 is None:
+            s2 = np.zeros((N, 1))
+        else:
+            raise TypeError(
+                "s2 type need to be \
+                            Union[np.ndarray, float, int, None]."
+            )
+        return X, y, s2
 
 
 class Posterior:

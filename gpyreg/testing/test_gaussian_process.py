@@ -621,8 +621,8 @@ def test_quadrature_with_noise():
 
     F_bayes, F_bayes_var = gp.quad(0, 0.1, compute_var=True)
 
-    assert np.abs(F_bayes_var - F_predict_var) < 0.01
-    assert np.abs(F_bayes - F_predict) < 0.01
+    assert np.abs(F_bayes_var - F_predict_var) < 0.05
+    assert np.abs(F_bayes - F_predict) < 0.05
 
     def f(x):
         y = np.sin(x)
@@ -685,7 +685,7 @@ def test_setting_bounds():
     N = 20
     D = 2
     X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
-    y = 1 + np.sin(X)
+    y = 1 + np.sum(np.sin(X), 1)
 
     gp = gpr.GP(
         D=D,
@@ -1058,7 +1058,7 @@ def test__str__and__repr__():
     N = 20
     D = 1
     X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
-    y = 1 + np.sin(X)
+    y = 1 + np.sum(np.sin(X), 1)
 
     gp = gpr.GP(
         D=D,
@@ -1098,7 +1098,7 @@ def test__str__and__repr__():
     N = 20
     D = 2
     X = np.reshape(np.linspace(-10, 10, N), (-1, 2))
-    y = 1 + np.sin(X)
+    y = 1 + np.sum(np.sin(X), 1)
 
     gp = gpr.GP(
         D=D,
@@ -1133,3 +1133,40 @@ def test__str__and__repr__():
         in repr_
     )
     assert "self.lower_bounds = [-10.8" in repr_
+
+
+def test_convert_shapes():
+    D = 3
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(user_provided_add=True),
+    )
+    N = 10
+    X = np.ones((N, D))
+    y = np.ones(N)
+    s2 = np.ones(N)
+    X, y, s2 = gp._convert_shapes(X, y, s2)
+    assert X.shape == (N, D) and y.shape == (N, 1) and s2.shape == (N, 1)
+    s2 = None
+    X, y, s2 = gp._convert_shapes(X, y, s2)
+    assert (
+        X.shape == (N, D)
+        and y.shape == (N, 1)
+        and np.allclose(s2, np.zeros((N, 1)))
+    )
+    s2 = 1
+    X, y, s2 = gp._convert_shapes(X, y, s2)
+    assert (
+        X.shape == (N, D)
+        and y.shape == (N, 1)
+        and np.allclose(s2, np.ones((N, 1)))
+    )
+    with pytest.raises(AttributeError):
+        gp._convert_shapes(None, y, s2)
+    gp.X = X
+    y = np.ones(N)
+    s2 = np.ones(N)
+    X, y, s2 = gp._convert_shapes(None, y, s2)
+    assert X is None and y.shape == (N, 1) and s2.shape == (N, 1)

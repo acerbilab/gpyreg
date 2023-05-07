@@ -1,9 +1,8 @@
-from abc import ABC, abstractmethod
-
 import numpy as np
 from scipy.spatial.distance import cdist, pdist, squareform
 
 from .covariance_functions import AbstractKernel, Matern, SquaredExponential
+
 
 class AbstractIsotropicKernel(AbstractKernel):
     """Abstract base class for isotropic kernel functions.
@@ -83,6 +82,7 @@ class AbstractIsotropicKernel(AbstractKernel):
         cov_N = self.hyperparameter_count(X.shape[1])
         return _isotropic_bounds_info_helper(cov_N, X, y)
 
+
 class MaternIsotropic(AbstractIsotropicKernel, Matern):
     """
     Isotropic Matern kernel.
@@ -131,9 +131,7 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
             if compute_diag:
                 tmp = np.zeros((N, 1))
             else:
-                tmp = squareform(
-                    pdist(X * np.sqrt(self.degree) / ell)
-                )
+                tmp = squareform(pdist(X * np.sqrt(self.degree) / ell))
         else:
             a = X * np.sqrt(self.degree) / ell
             b = X_star * np.sqrt(self.degree) / ell
@@ -143,10 +141,14 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
 
         if compute_grad:
             if X_star is not None:
-                raise ValueError("X_star should be None when compute_grad is True.")
+                raise ValueError(
+                    "X_star should be None when compute_grad is True."
+                )
             dK = np.zeros((cov_N, N, N))
             # Gradient of cov length scale
-            K_ls = squareform(pdist(np.sqrt(self.degree) / ell * X, "sqeuclidean"))
+            K_ls = squareform(
+                pdist(np.sqrt(self.degree) / ell * X, "sqeuclidean")
+            )
             # With d=1 kernel there will be issues caused by zero
             # divisions. This is OK, the kernel is just not
             # differentiable there.
@@ -157,6 +159,7 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
             return K, dK.transpose(1, 2, 0)
 
         return K
+
 
 class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
     """Isotropic squared exponential kernel.
@@ -205,7 +208,9 @@ class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
 
         if compute_grad:
             if X_star is not None:
-                raise ValueError("X_star should be None when compute_grad is True.")
+                raise ValueError(
+                    "X_star should be None when compute_grad is True."
+                )
             dK = np.zeros((cov_N, N, N))
             # Gradient of cov length scale
             dK[0, :, :] = K * squareform(pdist(X / ell, "sqeuclidean"))
@@ -214,6 +219,7 @@ class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
             return K, dK.transpose(1, 2, 0)
 
         return K
+
 
 def _isotropic_bounds_info_helper(cov_N, X, y):
     _, D = X.shape
@@ -231,11 +237,13 @@ def _isotropic_bounds_info_helper(cov_N, X, y):
         y = np.array([0, 1])
     height = np.max(y) - np.min(y)
 
-    lower_bounds[0:cov_N - 1] = np.log(min_width) + np.log(tol)
-    upper_bounds[0:cov_N - 1] = np.log(max_width * 10)
-    plausible_lower_bounds[0:cov_N - 1] = np.log(min_width) + 0.5 * np.log(tol)
-    plausible_upper_bounds[0:cov_N - 1] = np.log(max_width)
-    plausible_x0[0:cov_N - 1] = np.log(np.std(X, ddof=1))
+    lower_bounds[0 : cov_N - 1] = np.log(min_width) + np.log(tol)
+    upper_bounds[0 : cov_N - 1] = np.log(max_width * 10)
+    plausible_lower_bounds[0 : cov_N - 1] = np.log(min_width) + 0.5 * np.log(
+        tol
+    )
+    plausible_upper_bounds[0 : cov_N - 1] = np.log(max_width)
+    plausible_x0[0 : cov_N - 1] = np.log(np.std(X, ddof=1))
 
     lower_bounds[cov_N - 1] = np.log(height) + np.log(tol)
     upper_bounds[cov_N - 1] = np.log(height * 10)
