@@ -834,7 +834,7 @@ def test_fitting_options():
 
 
 def test_fitting():
-    N = 1000
+    N = 500
     D = 1
     X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
 
