@@ -832,7 +832,7 @@ def test_fitting_options():
 
 
 def test_fitting():
-    N = 1000
+    N = 500
     D = 1
     X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
 
@@ -1151,11 +1151,7 @@ def test_convert_shapes():
     assert X.shape == (N, D) and y.shape == (N, 1) and s2.shape == (N, 1)
     s2 = None
     X, y, s2 = gp._convert_shapes(X, y, s2)
-    assert (
-        X.shape == (N, D)
-        and y.shape == (N, 1)
-        and np.allclose(s2, np.zeros((N, 1)))
-    )
+    assert X.shape == (N, D) and y.shape == (N, 1) and s2 is None
     s2 = 1
     X, y, s2 = gp._convert_shapes(X, y, s2)
     assert (

@@ -2554,7 +2554,7 @@ class GP:
         elif isinstance(s2, np.ndarray):
             s2 = s2.reshape(N, 1)
         elif s2 is None:
-            s2 = np.zeros((N, 1))
+            s2 = None  # noiseless case
         else:
             raise TypeError(
                 "s2 type need to be \

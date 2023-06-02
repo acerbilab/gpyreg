@@ -255,6 +255,8 @@ class GaussianNoise:
                 dsn2[:, i] = 2 * sn2
             i += 1
 
+        if s2 is None:
+            s2 = 0
         if self.parameters[1] == 1:
             sn2 += s2
         elif self.parameters[1] == 2:
