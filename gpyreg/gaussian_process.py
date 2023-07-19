@@ -2491,9 +2491,11 @@ class GP:
                 if np.isscalar(sn2):
                     tr_Q = np.trace(Q)
                     for i in range(0, noise_N):
+                        # Casting to a scalar suppress deprecation warnings in pytest runs.
+                        # "(Numpy) Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future."
                         dnlZ[cov_N + i] = (
                             0.5 * sn2_mult * np.dot(dsn2[i], tr_Q)
-                        )
+                        ).item()
                 else:
                     dg_Q = np.diag(Q)
                     for i in range(0, noise_N):
