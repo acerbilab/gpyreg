@@ -401,9 +401,9 @@ class SliceSampler:
                 x_l[dd] -= rr * self.widths[dd]
                 x_r[dd] += (1 - rr) * self.widths[dd]
 
-                # Adjust interval to outside bounds for bounded problems.
-                x_l[dd] = np.fmax(x_l[dd], self.LB_out[dd])
-                x_r[dd] = np.fmin(x_r[dd], self.UB_out[dd])
+                # Adjust interval to bounds for bounded problems.
+                x_l[dd] = np.fmax(x_l[dd], self.LB[dd])
+                x_r[dd] = np.fmin(x_r[dd], self.UB[dd])
 
                 if self.step_out:
                     steps = 0
@@ -441,7 +441,7 @@ class SliceSampler:
                     )
                     log_Px, f_val, log_prior = logdist_vec(xprime)
                     if log_Px > log_uprime:
-                        break  # this is the only way to leave the while loop
+                        break  # this is the proper way to leave the while loop
 
                     # Shrink in
                     if xprime[dd] > xx[dd]:
@@ -450,7 +450,7 @@ class SliceSampler:
                         x_l[dd] = xprime[dd]
                     else:
                         # Maybe even raise an exception?
-                        self.logger.warning(
+                        self.logger.warn(
                             "WARNING: Shrunk to current position and still "
                             " not acceptable!"
                         )
