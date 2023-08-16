@@ -450,7 +450,7 @@ class SliceSampler:
                         x_l[dd] = xprime[dd]
                     else:
                         # Maybe even raise an exception?
-                        self.logger.warn(
+                        self.logger.warning(
                             "WARNING: Shrunk to current position and still "
                             " not acceptable!"
                         )
