@@ -138,7 +138,7 @@ class SliceSampler:
             else:
                 self.LB = LB.copy()
         # np.spacing could return negative numbers so use nextafter
-        self.LB_out = np.nextafter(self.LB, np.inf)
+        self.LB_out = np.nextafter(self.LB, -np.inf)
 
         if UB is None:
             self.UB = np.tile(np.inf, D)
@@ -149,7 +149,7 @@ class SliceSampler:
             else:
                 self.UB = UB.copy()
         # np.spacing could return negative numbers so use nextafter
-        self.UB_out = np.nextafter(self.UB, -np.inf)
+        self.UB_out = np.nextafter(self.UB, np.inf)
 
         if widths is None:
             self.widths = ((self.UB - self.LB) / 2).copy()
@@ -401,9 +401,9 @@ class SliceSampler:
                 x_l[dd] -= rr * self.widths[dd]
                 x_r[dd] += (1 - rr) * self.widths[dd]
 
-                # Adjust interval to bounds for bounded problems.
-                x_l[dd] = np.fmax(x_l[dd], self.LB[dd])
-                x_r[dd] = np.fmin(x_r[dd], self.UB[dd])
+                # Adjust interval to outside bounds for bounded problems.
+                x_l[dd] = np.fmax(x_l[dd], self.LB_out[dd])
+                x_r[dd] = np.fmin(x_r[dd], self.UB_out[dd])
 
                 if self.step_out:
                     steps = 0
