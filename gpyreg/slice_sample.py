@@ -138,7 +138,7 @@ class SliceSampler:
             else:
                 self.LB = LB.copy()
         # np.spacing could return negative numbers so use nextafter
-        self.LB_out = np.nextafter(self.LB, np.inf)
+        self.LB_out = np.nextafter(self.LB, -np.inf)
 
         if UB is None:
             self.UB = np.tile(np.inf, D)
@@ -149,7 +149,7 @@ class SliceSampler:
             else:
                 self.UB = UB.copy()
         # np.spacing could return negative numbers so use nextafter
-        self.UB_out = np.nextafter(self.UB, -np.inf)
+        self.UB_out = np.nextafter(self.UB, np.inf)
 
         if widths is None:
             self.widths = ((self.UB - self.LB) / 2).copy()
@@ -441,7 +441,7 @@ class SliceSampler:
                     )
                     log_Px, f_val, log_prior = logdist_vec(xprime)
                     if log_Px > log_uprime:
-                        break  # this is the only way to leave the while loop
+                        break  # this is the proper way to leave the while loop
 
                     # Shrink in
                     if xprime[dd] > xx[dd]:
