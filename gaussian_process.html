@@ -1,13 +1,12 @@
 
-
 <!DOCTYPE html>
 
 
-<html lang="en" >
+<html lang="en" data-content_root="./" >
 
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>Gaussian processes &#8212; GPyReg</title>
   
@@ -15,31 +14,32 @@
   
   <script data-cfasync="false">
     document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
-    document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
   </script>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="_static/styles/theme.css?digest=e353d410970836974a52" rel="stylesheet" />
-<link href="_static/styles/bootstrap.css?digest=e353d410970836974a52" rel="stylesheet" />
-<link href="_static/styles/pydata-sphinx-theme.css?digest=e353d410970836974a52" rel="stylesheet" />
+  <link href="_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
 
   
-  <link href="_static/vendor/fontawesome/6.1.2/css/all.min.css?digest=e353d410970836974a52" rel="stylesheet" />
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.1.2/webfonts/fa-solid-900.woff2" />
-<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2" />
-<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2" />
+  <link href="_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
 
-    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
-    <link rel="stylesheet" href="_static/styles/sphinx-book-theme.css?digest=14f4ca6b54d191a8c7657f6c759bf11a5fb86285" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=a3416100" />
   
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=e353d410970836974a52" />
-<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=e353d410970836974a52" />
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/sphinx_highlight.js"></script>
-    <script src="_static/scripts/sphinx-book-theme.js?digest=5a5c038af52cf7bc1a1ec88eea08e6366ee68824"></script>
+    <script src="_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'gaussian_process';</script>
     <link rel="canonical" href="https://acerbilab.github.io/gpyreg/gaussian_process.html" />
     <link rel="index" title="Index" href="genindex.html" />
@@ -55,19 +55,23 @@
 
   
   
-  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
   
   <input type="checkbox"
           class="sidebar-toggle"
-          name="__primary"
-          id="__primary"/>
-  <label class="overlay overlay-primary" for="__primary"></label>
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
   
   <input type="checkbox"
           class="sidebar-toggle"
-          name="__secondary"
-          id="__secondary"/>
-  <label class="overlay overlay-secondary" for="__secondary"></label>
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
   
   <div class="search-button__wrapper">
     <div class="search-button__overlay"></div>
@@ -89,12 +93,20 @@
   <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
 </form></div>
   </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
   
-    <nav class="bd-header navbar navbar-expand-lg bd-navbar">
-    </nav>
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
   
+
   <div class="bd-container">
     <div class="bd-container__inner bd-page-width">
+      
+      
       
       <div class="bd-sidebar-primary bd-sidebar">
         
@@ -109,6 +121,9 @@
   
     <div class="sidebar-primary-items__start sidebar-primary__section">
         <div class="sidebar-primary-item">
+
+  
+    
   
 
 <a class="navbar-brand logo" href="index.html">
@@ -117,10 +132,22 @@
   
   
   
+  
     <p class="title logo__title">GPyReg</p>
   
 </a></div>
-        <div class="sidebar-primary-item"><nav class="bd-links" id="bd-docs-nav" aria-label="Main">
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current nav bd-sidenav">
@@ -144,7 +171,7 @@
 
       </div>
       
-      <main id="main-content" class="bd-main">
+      <main id="main-content" class="bd-main" role="main">
         
         
 
@@ -153,14 +180,14 @@
           <div class="bd-content">
             <div class="bd-article-container">
               
-              <div class="bd-header-article">
+              <div class="bd-header-article d-print-none">
 <div class="header-article-items header-article__inner">
   
     <div class="header-article-items__start">
       
-        <div class="header-article-item"><label class="sidebar-toggle primary-toggle btn btn-sm" for="__primary" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
   <span class="fa-solid fa-bars"></span>
-</label></div>
+</button></div>
       
     </div>
   
@@ -299,26 +326,28 @@
 </button>
 
 
+
 <script>
 document.write(`
-  <button class="theme-switch-button btn btn-sm btn-outline-primary navbar-btn rounded-circle" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
-    <span class="theme-switch" data-mode="light"><i class="fa-solid fa-sun"></i></span>
-    <span class="theme-switch" data-mode="dark"><i class="fa-solid fa-moon"></i></span>
-    <span class="theme-switch" data-mode="auto"><i class="fa-solid fa-circle-half-stroke"></i></span>
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
   </button>
 `);
 </script>
 
+
 <script>
 document.write(`
-  <button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
-    <i class="fa-solid fa-magnifying-glass"></i>
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
   </button>
 `);
 </script>
-<label class="sidebar-toggle secondary-toggle btn btn-sm" for="__secondary"title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
     <span class="fa-solid fa-list"></span>
-</label>
+</button>
 </div></div>
       
     </div>
@@ -381,18 +410,18 @@ document.write(`
               
                 
 <div id="searchbox"></div>
-                <article class="bd-article" role="main">
+                <article class="bd-article">
                   
   <section id="gaussian-processes">
-<h1>Gaussian processes<a class="headerlink" href="#gaussian-processes" title="Permalink to this heading">#</a></h1>
+<h1>Gaussian processes<a class="headerlink" href="#gaussian-processes" title="Link to this heading">#</a></h1>
 <section id="gpyreg-gaussian-process">
-<h2><code class="docutils literal notranslate"><span class="pre">gpyreg.gaussian_process</span></code><a class="headerlink" href="#gpyreg-gaussian-process" title="Permalink to this heading">#</a></h2>
+<h2><code class="docutils literal notranslate"><span class="pre">gpyreg.gaussian_process</span></code><a class="headerlink" href="#gpyreg-gaussian-process" title="Link to this heading">#</a></h2>
 <p>This module contains the <code class="docutils literal notranslate"><span class="pre">GP</span></code> class, which is the main entry point for working with Gaussian processes. A class instance is initialized with specified dimension and covariance/mean/noise functions. Then, its various methods can be used to fit data, make predictions, plot the GP, etc.</p>
 <section id="gp">
-<h3><code class="docutils literal notranslate"><span class="pre">GP</span></code><a class="headerlink" href="#gp" title="Permalink to this heading">#</a></h3>
+<h3><code class="docutils literal notranslate"><span class="pre">GP</span></code><a class="headerlink" href="#gp" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.GP">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gpyreg.</span></span><span class="sig-name descname"><span class="pre">GP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covariance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP" title="Permalink to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gpyreg.</span></span><span class="sig-name descname"><span class="pre">GP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covariance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mean</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP" title="Link to this definition">#</a></dt>
 <dd><p>A single Gaussian Process (GP).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -413,7 +442,7 @@ following module: <code class="xref py py-mod docutils literal notranslate"><spa
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.bounds_to_dict">
-<span class="sig-name descname"><span class="pre">bounds_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lower_bounds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_bounds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.bounds_to_dict" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">bounds_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lower_bounds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_bounds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.bounds_to_dict" title="Link to this definition">#</a></dt>
 <dd><p>Convert the given hyperparameter lower and upper bounds to a dict.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -436,7 +465,7 @@ of their lower and upper bounds.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.clean">
-<span class="sig-name descname"><span class="pre">clean</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.clean" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">clean</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.clean" title="Link to this definition">#</a></dt>
 <dd><p>Clean auxiliary computational structures from the Gaussian Process,
 thus reducing memory usage. These can be reconstructed with a call to
 <a class="reference internal" href="#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-func docutils literal notranslate"><span class="pre">update()</span></code></a> with <code class="docutils literal notranslate"><span class="pre">compute_posterior=True</span></code>.</p>
@@ -445,7 +474,7 @@ thus reducing memory usage. These can be reconstructed with a call to
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.fit">
-<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.fit" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.fit" title="Link to this definition">#</a></dt>
 <dd><p>Train the hyperparameters of the Gaussian Process.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -526,7 +555,7 @@ sampling run, and None otherwise.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.get_bounds">
-<span class="sig-name descname"><span class="pre">get_bounds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_bounds" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">get_bounds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_bounds" title="Link to this definition">#</a></dt>
 <dd><p>Gets a dictionary with the current lower and upper bounds of the
 hyperparameters.</p>
 <dl class="field-list simple">
@@ -541,7 +570,7 @@ hyperparameters.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.get_hyperparameters">
-<span class="sig-name descname"><span class="pre">get_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">as_array</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_hyperparameters" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">get_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">as_array</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_hyperparameters" title="Link to this definition">#</a></dt>
 <dd><p>Get the current hyperparameters of the GP.</p>
 <p>If hyperparameters have not been set yet, the result will
 be filled with <code class="docutils literal notranslate"><span class="pre">NaN</span></code>.</p>
@@ -565,7 +594,7 @@ sample.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.get_priors">
-<span class="sig-name descname"><span class="pre">get_priors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_priors" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">get_priors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_priors" title="Link to this definition">#</a></dt>
 <dd><p>Return the current hyperparameter priors as a dict.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -579,7 +608,7 @@ sample.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.get_recommended_bounds">
-<span class="sig-name descname"><span class="pre">get_recommended_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lower_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_recommended_bounds" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">get_recommended_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lower_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">upper_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.get_recommended_bounds" title="Link to this definition">#</a></dt>
 <dd><p>Return the recommended hyperparameter lower and upper bounds as a dict.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -614,7 +643,7 @@ array_like.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.hyperparameters_from_dict">
-<span class="sig-name descname"><span class="pre">hyperparameters_from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_dict_list</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.hyperparameters_from_dict" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">hyperparameters_from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_dict_list</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.hyperparameters_from_dict" title="Link to this definition">#</a></dt>
 <dd><p>Convert a list of hyperparameter dictionaries to a hyperparameter
 array.</p>
 <dl class="field-list simple">
@@ -638,7 +667,7 @@ the list <code class="docutils literal notranslate"><span class="pre">hyp_dict_l
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.hyperparameters_to_dict">
-<span class="sig-name descname"><span class="pre">hyperparameters_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_arr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.hyperparameters_to_dict" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">hyperparameters_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_arr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.hyperparameters_to_dict" title="Link to this definition">#</a></dt>
 <dd><p>Convert a hyperparameter array to a list which contains a
 dictionary with hyperparameter names and values for each
 hyperparameter sample.</p>
@@ -669,7 +698,7 @@ values for each sample.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.log_likelihood">
-<span class="sig-name descname"><span class="pre">log_likelihood</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.log_likelihood" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">log_likelihood</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.log_likelihood" title="Link to this definition">#</a></dt>
 <dd><p>Compute the (positive) log marginal likelihood of the GP for given
 hyperparameters.</p>
 <dl class="field-list simple">
@@ -694,7 +723,7 @@ hyperparameters.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.log_posterior">
-<span class="sig-name descname"><span class="pre">log_posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.log_posterior" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">log_posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.log_posterior" title="Link to this definition">#</a></dt>
 <dd><p>Compute the (positive) log marginal likelihood of the GP with added
 log prior for given hyperparameters (that is, the unnormalized log
 posterior).</p>
@@ -727,7 +756,7 @@ by adding numerical stability values to the matrix.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.plot">
-<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lb</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ub</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_min_flag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.plot" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lb</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ub</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_min_flag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.plot" title="Link to this definition">#</a></dt>
 <dd><p>Plot the Gaussian Process profile centered around a given point.</p>
 <p>The plot is a D-by-D panel matrix, in which panels on the diagonal
 show the profile of the Gaussian Process prediction (mean and +/- 1 SD)
@@ -760,7 +789,7 @@ point.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.predict">
-<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_lpd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_lpd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict" title="Link to this definition">#</a></dt>
 <dd><p>Compute the GP posterior mean and noise variance at given points.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -800,7 +829,7 @@ otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.predict_full">
-<span class="sig-name descname"><span class="pre">predict_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict_full" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">predict_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict_full" title="Link to this definition">#</a></dt>
 <dd><p>Compute the GP posterior mean and full covariance matrix for each
 hyperparameter sample.</p>
 <dl class="field-list simple">
@@ -830,7 +859,7 @@ sample.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.quad">
-<span class="sig-name descname"><span class="pre">quad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_var</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.quad" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">quad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_var</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.quad" title="Link to this definition">#</a></dt>
 <dd><p>Bayesian quadrature for a Gaussian Process.</p>
 <p>Compute the integral of a function represented by a Gaussian
 Process with respect to a given Gaussian measure.</p>
@@ -876,7 +905,7 @@ not squared exponential.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.random_function">
-<span class="sig-name descname"><span class="pre">random_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.random_function" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">random_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.random_function" title="Link to this definition">#</a></dt>
 <dd><p>Draw a random function from the Gaussian Process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -898,7 +927,7 @@ not squared exponential.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.set_bounds">
-<span class="sig-name descname"><span class="pre">set_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bounds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.set_bounds" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">set_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bounds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.set_bounds" title="Link to this definition">#</a></dt>
 <dd><p>Set the hyperparameter lower and upper bounds.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -924,7 +953,7 @@ hyperparameter.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.set_hyperparameters">
-<span class="sig-name descname"><span class="pre">set_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.set_hyperparameters" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">set_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.set_hyperparameters" title="Link to this definition">#</a></dt>
 <dd><p>Set new hyperparameters for the Gaussian Process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -952,7 +981,7 @@ is equivalent.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.set_priors">
-<span class="sig-name descname"><span class="pre">set_priors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">priors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.set_priors" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">set_priors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">priors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.set_priors" title="Link to this definition">#</a></dt>
 <dd><p>Set the hyperparameter priors.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -979,7 +1008,7 @@ hyperparameter is unknown.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.update">
-<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.update" title="Permalink to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.update" title="Link to this definition">#</a></dt>
 <dd><p>Add new data to the Gaussian Process.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1013,10 +1042,10 @@ by adding numerical stability values to the matrix.</p>
 
 </section>
 <section id="posterior">
-<h3><code class="docutils literal notranslate"><span class="pre">Posterior</span></code><a class="headerlink" href="#posterior" title="Permalink to this heading">#</a></h3>
+<h3><code class="docutils literal notranslate"><span class="pre">Posterior</span></code><a class="headerlink" href="#posterior" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.Posterior">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">Posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.Posterior" title="Permalink to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">Posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.Posterior" title="Link to this definition">#</a></dt>
 <dd><p>This object represents the posterior.</p>
 </dd></dl>
 
@@ -1030,11 +1059,10 @@ by adding numerical stability values to the matrix.</p>
 
               
               
-                <footer class="bd-footer-article">
+              
+              
+                <footer class="prev-next-footer d-print-none">
                   
-<div class="footer-article-items footer-article__inner">
-  
-    <div class="footer-article-item"><!-- Previous / next buttons -->
 <div class="prev-next-area">
     <a class="left-prev"
        href="index.html"
@@ -1054,10 +1082,7 @@ by adding numerical stability values to the matrix.</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
-</div></div>
-  
 </div>
-
                 </footer>
               
             </div>
@@ -1065,6 +1090,7 @@ by adding numerical stability values to the matrix.</p>
             
               
                 <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
 
   <div class="sidebar-secondary-item">
   <div class="page-toc tocsection onthispage">
@@ -1126,6 +1152,7 @@ By Machine and Human Intelligence research group (PI: Luigi Acerbi, University o
   
   <div class="footer-item">
     
+
   <p class="copyright">
     
       © Copyright 2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
@@ -1152,8 +1179,8 @@ By Machine and Human Intelligence research group (PI: Luigi Acerbi, University o
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script src="_static/scripts/bootstrap.js?digest=e353d410970836974a52"></script>
-<script src="_static/scripts/pydata-sphinx-theme.js?digest=e353d410970836974a52"></script>
+  <script src="_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
 
   <footer class="bd-footer">
   </footer>
