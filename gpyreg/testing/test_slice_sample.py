@@ -230,7 +230,7 @@ def test_sample_sanity_checks():
         "burn-in samples option needs to be a non-negative"
         in execinfo.value.args[0]
     )
-    slicer.x0 = slicer.x0 * np.NaN
+    slicer.x0 = slicer.x0 * np.nan
     with pytest.raises(ValueError) as execinfo:
         slicer.sample(3)
     assert (
