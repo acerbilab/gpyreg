@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 import scipy.stats
 from scipy.integrate import quad
-from scipy.misc import derivative
 
 import gpyreg as gpr
+from gpyreg.testing.test_utils import check_grad
 
 
 @pytest.mark.filterwarnings(
@@ -299,31 +299,6 @@ def test_cleaning():
     # gp.plot()
 
 
-def partial(f, x0_orig, x0_i, i):
-    x0 = x0_orig.copy()
-    x0[i] = x0_i
-    return f(x0)
-
-
-def compute_gradient(f, x0):
-    num_grad = np.zeros(x0.shape)
-
-    for i in range(0, np.size(x0)):
-        f_i = lambda x0_i: partial(f, x0, x0_i, i)
-        tmp = scipy.misc.derivative(
-            f_i, x0[i], dx=np.finfo(float).eps ** (1 / 5.0), order=5
-        )
-        num_grad[i] = tmp
-
-    return num_grad
-
-
-def check_grad(f, grad, x0):
-    analytical_grad = grad(x0)
-    numerical_grad = compute_gradient(f, x0)
-    return np.abs(analytical_grad - numerical_grad)
-
-
 @pytest.mark.filterwarnings(
     """ignore:Matplotlib is currently using agg:UserWarning"""
 )
@@ -592,7 +567,7 @@ def test_quadrature_with_noise():
     y = np.sin(X) + np.sqrt(s2) * scipy.stats.norm.ppf(
         np.random.random_sample(X.shape)
     )
-    y[y < 0] = -np.abs(3 * y[y < 0]) ** 2
+    y[y < 0] = -(np.abs(3 * y[y < 0]) ** 2)
 
     gp = gpr.GP(
         D=D,
@@ -627,7 +602,7 @@ def test_quadrature_with_noise():
     def f(x):
         y = np.sin(x)
         if y < 0:
-            return -np.abs(3 * y) ** 2
+            return -(np.abs(3 * y) ** 2)
         return y
 
     f_p = lambda x: f(x) * scipy.stats.norm.pdf(x, scale=0.1)
