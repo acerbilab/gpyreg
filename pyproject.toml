@@ -2,7 +2,7 @@
 
 [project]
 name = "GPyReg"
-dynamic = ["version"]  # use git tags for version, via setuptools_scm
+dynamic = ["version"] # use git tags for version, via setuptools_scm
 description = "Lightweight package for Gaussian process regression."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -19,7 +19,7 @@ requires-python = ">=3.9"
 include-package-data = true
 # Include examples in binary/wheel distribution:
 packages = ["gpyreg", "gpyreg.examples"]
-package-dir = {"gpyreg.examples" = "examples"}
+package-dir = { "gpyreg.examples" = "examples" }
 
 [project.optional-dependencies]
 dev = [
@@ -30,10 +30,7 @@ dev = [
 ]
 
 [build-system]
-requires = [
-    "setuptools >= 45",
-    "setuptools_scm[toml] >= 6.2",
-]
+requires = ["setuptools >= 45", "setuptools_scm[toml] >= 6.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
@@ -52,3 +49,4 @@ profile = "black"
 all = true
 
 [tool.setuptools_scm]
+write_to = "gpyreg/_version.py"
