@@ -1,4 +1,5 @@
 """Module for helper functions for GP training."""
+
 import operator
 import re
 import warnings
@@ -195,7 +196,7 @@ def uuinv(p, B, w):
         1D array or list containing [LB, PLB, PUB, UB].
     w : float
         The coefficient for mixture of uniform distributions.
-        :math: `0 \leq w \leq 1`.
+        :math: `0 \\leq w \\leq 1`.
 
     Returns
     -------
