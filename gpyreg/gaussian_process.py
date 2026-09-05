@@ -111,6 +111,7 @@ class GP:
                 "upper_bounds",
                 "posteriors",
             ],
+            exclude=["_prior_cache"],
         )
 
     def __str__(self):
@@ -1130,12 +1131,14 @@ class GP:
             hyp0 = self.hyperparameters_from_dict(hyp0)
 
         ## Hyperparameter optimization
-        # The no-gradient objectives share a factorization cache each (the
-        # design points and the sampler's proposals that move only mean
-        # hyperparameters reuse the Cholesky factor); the gradient objective
-        # of the optimizer gets none, it needs the kernel derivatives.
+        # Each no-gradient objective owns one factorization cache for the
+        # whole fit (consecutive evaluations that move only mean-function
+        # hyperparameters reuse the Cholesky factor, see
+        # __core_computation); the gradient objective of the optimizer gets
+        # none, it needs the kernel derivatives.
+        design_cache = {}
         objective_f_1 = lambda hyp_: self.__gp_obj_fun(
-            hyp_, False, False, cache={}
+            hyp_, False, False, cache=design_cache
         )
         if s_N > 0 and sampler_name != "laplace":
             tol = tol_opt_mcmc
@@ -2561,7 +2564,9 @@ class GP:
             # a copy gives the entries of `K / sl + diag(...)` exactly
             # (adding 0.0 off the diagonal leaves an entry unchanged)
             # without forming and adding an N x N identity on every
-            # evaluation.
+            # evaluation. The copy is made C-contiguous, the layout the
+            # old sum with a C-ordered identity produced (the factorization
+            # scipy computes depends on the layout at rounding level).
             if L_chol:
                 if np.isscalar(sn2):
                     sn2_div = sn2
@@ -2571,7 +2576,7 @@ class GP:
                     sn2_diag = sn2.ravel() / sn2_div
                 for i in range(0, 10):
                     try:  # Cholesky decomposition until it works
-                        A = K / (sn2_div * sn2_mult)
+                        A = np.ascontiguousarray(K / (sn2_div * sn2_mult))
                         A.flat[:: N + 1] += sn2_diag
                         L = sp.linalg.cholesky(A, check_finite=False)
                     except sp.linalg.LinAlgError:
@@ -2585,7 +2590,7 @@ class GP:
 
                 for i in range(0, 10):
                     try:
-                        A = K.copy()
+                        A = np.array(K, order="C")
                         A.flat[:: N + 1] += sn2_mult * sn2_diag
                         L = sp.linalg.cholesky(A, check_finite=False)
                     except sp.linalg.LinAlgError:

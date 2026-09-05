@@ -3,6 +3,7 @@ import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import scipy.linalg
 import scipy.stats
 from scipy.integrate import quad
 
@@ -1143,7 +1144,7 @@ def test_convert_shapes():
     assert X is None and y.shape == (N, 1) and s2.shape == (N, 1)
 
 
-@pytest.mark.parametrize("trans", [0, 1])
+@pytest.mark.parametrize("trans", [0, 1, 2])
 @pytest.mark.parametrize("order", ["C", "F"])
 def test_solve_triangular_matches_scipy(order, trans):
     """The direct LAPACK call is bit-identical to scipy's wrapper for both
@@ -1324,7 +1325,6 @@ def test_fit_cholesky_reuse_is_exact(monkeypatch):
     for reuse in (True, False):
         monkeypatch.setattr(gpmod, "_REUSE_CHOLESKY", reuse)
         gp, _ = _small_gp_with_priors(seed=11)
-        np.random.seed(2026)
         hyp, _, res = gp.fit(
             options={
                 "n_samples": 6,
@@ -1333,7 +1333,8 @@ def test_fit_cholesky_reuse_is_exact(monkeypatch):
                 "init_N": 24,
                 "opts_N": 1,
                 "init_method": "rand",
-            }
+            },
+            rng=np.random.default_rng(2026),
         )
         results.append((hyp, res["samples"], np.asarray(res["f_vals"])))
     for a, b in zip(results[0], results[1]):
@@ -1394,23 +1395,25 @@ def test_fit_and_random_function_with_generator():
         "opts_N": 1,
         "init_method": "rand",
     }
-    results = []
-    for global_seed in (3, 4):
-        gp, _ = _small_gp_with_priors(seed=21)
-        np.random.seed(global_seed)
-        hyp, _, res = gp.fit(options=options, rng=np.random.default_rng(5))
-        f = gp.random_function(
-            gp.X[:3], add_noise=True, rng=np.random.default_rng(6)
-        )
-        results.append((hyp, res["samples"], f))
-    for a, b in zip(results[0], results[1]):
-        assert np.array_equal(a, b)
-    legacy = []
-    for _ in range(2):
-        gp, _ = _small_gp_with_priors(seed=21)
-        np.random.seed(8)
-        hyp, _, _ = gp.fit(options=options)
-        legacy.append((hyp, gp.random_function(gp.X[:3])))
-    assert np.array_equal(legacy[0][0], legacy[1][0])
-    assert np.array_equal(legacy[0][1], legacy[1][1])
-    np.random.set_state(state)
+    try:
+        results = []
+        for global_seed in (3, 4):
+            gp, _ = _small_gp_with_priors(seed=21)
+            np.random.seed(global_seed)
+            hyp, _, res = gp.fit(options=options, rng=np.random.default_rng(5))
+            f = gp.random_function(
+                gp.X[:3], add_noise=True, rng=np.random.default_rng(6)
+            )
+            results.append((hyp, res["samples"], f))
+        for a, b in zip(results[0], results[1]):
+            assert np.array_equal(a, b)
+        legacy = []
+        for _ in range(2):
+            gp, _ = _small_gp_with_priors(seed=21)
+            np.random.seed(8)
+            hyp, _, _ = gp.fit(options=options)
+            legacy.append((hyp, gp.random_function(gp.X[:3])))
+        assert np.array_equal(legacy[0][0], legacy[1][0])
+        assert np.array_equal(legacy[0][1], legacy[1][1])
+    finally:
+        np.random.set_state(state)
