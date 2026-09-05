@@ -56,3 +56,27 @@ def test_zero_mean_compute_sanity_checks():
     assert (
         "Mean function output is available only for" in execinfo.value.args[0]
     )
+
+
+@pytest.mark.parametrize("D", [1, 3, 8, 12])
+@pytest.mark.parametrize(
+    "mean_cls", [ZeroMean, ConstantMean, NegativeQuadratic]
+)
+def test_compute_batched_matches_compute(mean_cls, D):
+    """Column ``s`` of ``compute_batched`` is bit-identical to
+    ``compute(hyp[s], X)`` (the batched form reduces the same contiguous
+    last axis; ``predict`` relies on this)."""
+    rng = np.random.default_rng(D)
+    mean = mean_cls()
+    mean_N = mean.hyperparameter_count(D)
+    N, Ns = 13, 5
+    X = rng.standard_normal((N, D))
+    hyp = rng.standard_normal((Ns, mean_N))
+    batched = mean.compute_batched(hyp, X)
+    assert batched.shape == (N, Ns)
+    for s in range(Ns):
+        assert np.array_equal(batched[:, s], mean.compute(hyp[s], X))
+    with pytest.raises(ValueError):
+        mean.compute_batched(hyp[0], X)
+    with pytest.raises(ValueError):
+        mean.compute_batched(np.zeros((Ns, mean_N + 1)), X)

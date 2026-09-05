@@ -6,6 +6,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+/gpyreg/_version.py
 cov_html/
 bin/
 build/

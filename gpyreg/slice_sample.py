@@ -5,6 +5,8 @@ import math
 
 import numpy as np
 
+from gpyreg.rng import resolve_rng
+
 
 class SliceSampler:
     """Class for drawing random samples from a target distribution with a
@@ -79,6 +81,13 @@ class SliceSampler:
             **diagnostics** : bool, defaults to True
                 Specifies whether convergence diagnostics are performed at
                 the end of the run. The diagnostic tests are from [4]_.
+    rng : None, numpy.random.Generator or seed, optional
+        Where the sampler's random draws come from. ``None`` (default)
+        keeps NumPy's global legacy stream, as before generators were
+        supported, so ``np.random.seed`` still fixes a run; a
+        ``numpy.random.Generator`` is used as is (and shared with the
+        caller); an integer or ``SeedSequence`` seeds a new generator. See
+        :func:`gpyreg.rng.resolve_rng`.
 
     Raises
     ------
@@ -124,10 +133,12 @@ class SliceSampler:
         LB=None,
         UB=None,
         options: dict = None,
+        rng=None,
     ):
         D = x0.size
         self.log_f = log_f
         self.x0 = x0.copy()
+        self.rng = resolve_rng(rng)
 
         if LB is None:
             self.LB = np.tile(-np.inf, D)
@@ -299,6 +310,10 @@ class SliceSampler:
             real number (e.g. Inf or NaN).
         """
 
+        # Samplers pickled before rng was introduced use the legacy stream.
+        # Restore the attribute before either slice or Metropolis draws.
+        self.rng = resolve_rng(getattr(self, "rng", None))
+
         # Reference to x0 so it is updated as we go along, allowing us to
         # use this function multiple times.
         xx = self.x0
@@ -389,15 +404,15 @@ class SliceSampler:
             xprime = xx.copy()
 
             # Random scan through axes
-            np.random.shuffle(perm)
+            self.rng.shuffle(perm)
             for dd in perm:
                 # Skip fixed dimensions.
                 if self.LB[dd] == self.UB[dd]:
                     continue
 
-                log_uprime = log_Px + np.log(np.random.rand())
+                log_uprime = log_Px + np.log(self.rng.random())
                 # Create a horizontal interval (x_l, x_r) enclosing xx
-                rr = np.random.rand()
+                rr = self.rng.random()
                 x_l[dd] -= rr * self.widths[dd]
                 x_r[dd] += (1 - rr) * self.widths[dd]
 
@@ -437,7 +452,7 @@ class SliceSampler:
                 while True:
                     shrink += 1
                     xprime[dd] = (
-                        np.random.rand() * (x_r[dd] - x_l[dd]) + x_l[dd]
+                        self.rng.random() * (x_r[dd] - x_l[dd]) + x_l[dd]
                     )
                     log_Px, f_val, log_prior = logdist_vec(xprime)
                     if log_Px > log_uprime:
@@ -693,7 +708,7 @@ class SliceSampler:
         )
 
         # Accept proposal?
-        if np.random.rand() < a:
+        if self.rng.random() < a:
             return xx_new, log_Px_new, f_val_new, log_prior_new
 
         return x, log_Px, f_val, log_prior

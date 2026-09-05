@@ -7,6 +7,8 @@ import warnings
 import numpy as np
 import scipy as sp
 
+from gpyreg.rng import resolve_rng
+
 
 def f_min_fill(
     f,
@@ -18,6 +20,7 @@ def f_min_fill(
     hprior: dict,
     N: int,
     design: str = None,
+    rng=None,
 ):
     """
     Create a space-filling design, evaluates the function ``f``
@@ -46,6 +49,11 @@ def f_min_fill(
     init_method : {'sobol', 'rand'}, defaults to 'sobol'
         Specify what kind of method to use to construct the space-filling
         design.
+    rng : None, numpy.random.Generator or seed, optional
+        Where the random draws come from (the permutation of the Sobol
+        columns, or the uniform design). ``None`` keeps NumPy's global
+        legacy stream, as before generators were supported; see
+        :func:`gpyreg.rng.resolve_rng`.
 
     Returns
     =======
@@ -57,6 +65,7 @@ def f_min_fill(
     """
     if design is None:
         design = "sobol"
+    rng = resolve_rng(rng)
 
     # Helper for comparing version numbers.
     def ge_versions(version1, version2):
@@ -89,9 +98,9 @@ def f_min_fill(
                 # Get rid of first zero.
                 S = sampler.random(n=N - N0 + 1)[1:, :]
             # Randomly permute columns
-            np.random.shuffle(S.T)
+            rng.shuffle(S.T)
         elif design == "rand":
-            S = np.random.uniform(size=(N - N0, n_vars))
+            S = rng.uniform(size=(N - N0, n_vars))
         else:
             raise ValueError(
                 "Unknown design: got "

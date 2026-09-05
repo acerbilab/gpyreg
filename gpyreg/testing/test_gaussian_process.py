@@ -3,6 +3,7 @@ import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import scipy.linalg
 import scipy.stats
 from scipy.integrate import quad
 
@@ -1141,3 +1142,461 @@ def test_convert_shapes():
     s2 = np.ones(N)
     X, y, s2 = gp._convert_shapes(None, y, s2)
     assert X is None and y.shape == (N, 1) and s2.shape == (N, 1)
+
+
+@pytest.mark.parametrize("trans", [0, 1, 2])
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_solve_triangular_matches_scipy(order, trans):
+    """The direct LAPACK call is bit-identical to scipy's wrapper for both
+    memory layouts of the factor (scipy solves the transposed system for a
+    C-ordered factor; the helper applies the same rule)."""
+    from gpyreg.gaussian_process import _solve_triangular
+
+    rng = np.random.default_rng(0)
+    for N, k in [(5, 1), (60, 8), (200, 3)]:
+        A = rng.standard_normal((N, N))
+        A = A @ A.T + N * np.eye(N)
+        L = np.array(scipy.linalg.cholesky(A), order=order)
+        B = rng.standard_normal((N, k))
+        expected = scipy.linalg.solve_triangular(
+            L, B, trans=trans, check_finite=False
+        )
+        assert np.array_equal(_solve_triangular(L, B, trans=trans), expected)
+    with pytest.raises(scipy.linalg.LinAlgError):
+        _solve_triangular(np.zeros((3, 3)), np.ones((3, 1)))
+
+
+def test_predict_mean_fallback_without_batched_method():
+    """A mean function without ``compute_batched`` (a user-defined or an
+    unpickled old one) takes the per-sample loop and gives the same
+    prediction as the batched form."""
+
+    class PlainNegativeQuadratic(gpr.mean_functions.NegativeQuadratic):
+        compute_batched = None
+
+    N, D, N_s = 30, 3, 4
+    rng = np.random.default_rng(1)
+    X = rng.standard_normal((N, D))
+    y = rng.standard_normal((N, 1))
+    hyp_N = D + 1 + 1 + (1 + 2 * D)  # SE + constant noise + quadratic mean
+    hyp = rng.standard_normal((N_s, hyp_N))
+    outputs = []
+    for mean in (
+        gpr.mean_functions.NegativeQuadratic(),
+        PlainNegativeQuadratic(),
+    ):
+        gp = gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=mean,
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+        gp.update(X_new=X, y_new=y, compute_posterior=False)
+        gp.set_hyperparameters(hyp, compute_posterior=True)
+        outputs.append(gp.predict(X[:7], separate_samples=True))
+    assert np.array_equal(outputs[0][0], outputs[1][0])
+    assert np.array_equal(outputs[0][1], outputs[1][1])
+
+
+@pytest.mark.parametrize("trained", [False, True])
+@pytest.mark.parametrize(
+    "mean_cls",
+    [
+        gpr.mean_functions.ZeroMean,
+        gpr.mean_functions.ConstantMean,
+        gpr.mean_functions.NegativeQuadratic,
+    ],
+)
+def test_predict_preserves_overridden_mean_compute(mean_cls, trained):
+    """An inherited batched method must not hide a custom scalar mean."""
+
+    class OffsetMean(mean_cls):
+        def compute(self, hyp, X, compute_grad=False):
+            result = super().compute(hyp, X, compute_grad)
+            offset = 3 * X[:, 0]
+            if compute_grad:
+                return result[0] + offset, result[1]
+            return result + offset
+
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=OffsetMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    X = np.array([[-1.0], [0.0], [1.0]])
+    hyp = np.zeros((2, 3 + gp.mean.hyperparameter_count(1)))
+    hyp[:, 2] = -1
+    hyp[1] += 0.2
+    if trained:
+        gp.update(X, np.array([[1.0], [2.0], [3.0]]), hyp=hyp)
+    else:
+        gp.set_hyperparameters(hyp)
+    actual = gp.predict(X, separate_samples=True)[0]
+    expected = gp.predict_full(X)[0]
+    assert np.array_equal(actual, expected)
+
+
+def test_predict_custom_batched_mean_inheritance():
+    """Compatible batched overrides work through inheritance and mixins."""
+
+    class OffsetMean(gpr.mean_functions.ConstantMean):
+        def compute(self, hyp, X, compute_grad=False):
+            result = super().compute(hyp, X, compute_grad)
+            if compute_grad:
+                return result[0] + X[:, 0], result[1]
+            return result + X[:, 0]
+
+    class BatchedOffsetMean(OffsetMean):
+        def compute_batched(self, hyp, X):
+            self.batched_calls += 1
+            return hyp[:, 0] + X[:, :1]
+
+    class BothMethodsMean(OffsetMean):
+        compute = OffsetMean.compute
+        compute_batched = BatchedOffsetMean.compute_batched
+
+    class InheritedBatchedMean(BatchedOffsetMean):
+        pass
+
+    class OverrideAgainMean(BatchedOffsetMean):
+        def compute(self, hyp, X, compute_grad=False):
+            result = super().compute(hyp, X, compute_grad)
+            if compute_grad:
+                return result[0] + 2, result[1]
+            # The original per-sample path also accepted column vectors.
+            return (result + 2)[:, None]
+
+    class UnrelatedMixin:
+        def compute_batched(self, hyp, X):
+            raise AssertionError("Unrelated batched mean must not be used")
+
+    class MixinMean(UnrelatedMixin, OffsetMean):
+        pass
+
+    for mean_cls, calls in (
+        (BatchedOffsetMean, 1),
+        (BothMethodsMean, 1),
+        (InheritedBatchedMean, 1),
+        (OverrideAgainMean, 0),
+        (MixinMean, 0),
+    ):
+        mean = mean_cls()
+        mean.batched_calls = 0
+        gp = gpr.GP(
+            D=1,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=mean,
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+        gp.set_hyperparameters(np.array([[0, 0, -1, 2], [0, 0, -1, 3]]))
+        X = np.array([[-1.0], [0.0], [1.0]])
+        assert np.array_equal(
+            gp.predict(X, separate_samples=True)[0], gp.predict_full(X)[0]
+        )
+        assert mean.batched_calls == calls
+
+
+@pytest.mark.parametrize("noise_variance", [1e-8, 1e-4])
+@pytest.mark.parametrize("per_point_noise", [False, True])
+def test_float32_kernel_preserves_diagonal_noise(
+    noise_variance, per_point_noise
+):
+    """Small diagonal noise survives both Cholesky parametrizations."""
+
+    class Float32Kernel(gpr.covariance_functions.SquaredExponential):
+        def compute(self, *args, **kwargs):
+            result = super().compute(*args, **kwargs)
+            if isinstance(result, tuple):
+                return tuple(value.astype(np.float32) for value in result)
+            return result.astype(np.float32)
+
+    gp = gpr.GP(
+        D=1,
+        covariance=Float32Kernel(),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(
+            constant_add=True, user_provided_add=per_point_noise
+        ),
+    )
+    X = np.array([[0.0], [0.0], [1.0]])
+    y = np.array([[1.0], [1.0], [0.0]])
+    hyp = np.array([0, 0, 0.5 * np.log(noise_variance)], dtype=np.float32)
+    s2 = noise_variance * np.array([[0.0], [0.5], [1.0]])
+    if not per_point_noise:
+        s2 = None
+
+    # Reference the original matrix expression, including dtype promotion.
+    K = gp.covariance.compute(hyp[:2], X)
+    sn2 = gp.noise.compute(hyp[2:], X, y, s2)
+    if np.min(sn2) >= 1e-6:
+        sl = np.min(sn2)
+        diagonal = np.eye(3) if np.isscalar(sn2) else np.diag(sn2.ravel() / sl)
+        A = K / sl + diagonal
+    else:
+        sl = 1
+        A = K + (sn2 * np.eye(3) if np.isscalar(sn2) else np.diag(sn2.ravel()))
+    L = scipy.linalg.cholesky(A, check_finite=False)
+    alpha = (
+        scipy.linalg.solve_triangular(
+            L,
+            scipy.linalg.solve_triangular(L, y, trans=1, check_finite=False),
+            check_finite=False,
+        )
+        / sl
+    )
+    expected_nlz = (
+        (y.T @ (alpha / 2))[0, 0]
+        + np.sum(np.log(np.diag(L)))
+        + 3 * np.log(2 * np.pi * sl) / 2
+    )
+
+    gp.update(X, y, s2, hyp=hyp[None, :])
+    assert gp.posteriors[0].sn2_mult == 1
+    assert gp.posteriors[0].L.dtype == np.float64
+    assert gp.log_likelihood(hyp) == -expected_nlz
+
+
+def _small_gp_with_priors(seed=3):
+    rng = np.random.default_rng(seed)
+    N, D = 25, 2
+    X = rng.standard_normal((N, D))
+    y = np.sin(X).sum(1, keepdims=True) + 0.1 * rng.standard_normal((N, 1))
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    hyp = 0.3 * rng.standard_normal((1, 3 * D + 3))
+    gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
+    names = list(gp.get_bounds().keys())
+    priors = {
+        names[0]: (
+            "student_t",
+            (np.zeros(D), np.full(D, 1.0), np.full(D, 3.0)),
+        ),
+        names[1]: ("gaussian", (np.zeros(1), np.ones(1))),
+        names[2]: (
+            "smoothbox",
+            (np.array([-3.0]), np.array([-1.0]), np.array([0.5])),
+        ),
+        names[3]: (
+            "smoothbox_student_t",
+            (
+                np.array([-1.0]),
+                np.array([1.0]),
+                np.array([0.5]),
+                np.array([4.0]),
+            ),
+        ),
+        names[4]: ("gaussian", (np.zeros(D), np.full(D, 2.0))),
+        names[5]: None,
+    }
+    bounds = {
+        n: (np.full(np.size(v[0]), -6.0), np.full(np.size(v[0]), 6.0))
+        for n, v in gp.get_bounds().items()
+    }
+    gp.set_bounds(bounds)
+    gp.set_priors(priors)
+    return gp, hyp[0]
+
+
+def test_log_likelihood_and_posterior_gradients():
+    """``compute_grad=True`` returns ``(value, gradient)`` with the gradient
+    of the value returned without it (the two public wrappers used to apply
+    the unary minus to the returned tuple and raise)."""
+    gp, hyp = _small_gp_with_priors()
+    for value_fn in (gp.log_likelihood, gp.log_posterior):
+        value, grad = value_fn(hyp, compute_grad=True)
+        assert value == value_fn(hyp)
+        assert grad.shape == hyp.shape
+        assert np.all(
+            check_grad(value_fn, lambda h: value_fn(h, True)[1], hyp) < 1e-5
+        )
+
+
+def test_prior_mask_cache_follows_priors_and_bounds():
+    """The cached hyperprior masks are dropped whenever the priors, the
+    bounds or the prior's ``df`` change, so ``log_posterior`` always
+    matches a GP that never cached (and an object without the attribute,
+    as an old pickle, builds it on first use)."""
+    gp, hyp = _small_gp_with_priors()
+    lp0 = gp.log_posterior(hyp)
+    fresh, _ = _small_gp_with_priors()
+    assert lp0 == fresh.log_posterior(hyp)
+    if hasattr(gp, "_prior_cache"):
+        del gp._prior_cache
+    assert gp.log_posterior(hyp) == lp0
+    # priors change
+    priors = gp.get_priors()
+    names = list(priors)
+    priors[names[1]] = ("gaussian", (np.array([0.5]), np.array([0.2])))
+    gp.set_priors(priors)
+    lp1 = gp.log_posterior(hyp)
+    fresh.set_priors(priors)
+    assert lp1 != lp0 and lp1 == fresh.log_posterior(hyp)
+    # bounds change (normalization constants)
+    bounds = gp.get_bounds()
+    bounds[names[1]] = (np.array([-1.0]), np.array([1.0]))
+    gp.set_bounds(bounds)
+    lp2 = gp.log_posterior(hyp)
+    fresh.set_bounds(bounds)
+    assert lp2 != lp1 and lp2 == fresh.log_posterior(hyp)
+    # the df fill at the top of fit (NaN -> df_base) changes the masks
+    gp.hyper_priors["df"][:] = np.nan
+    gp._prior_cache = None
+    fresh.hyper_priors["df"][:] = np.nan
+    fresh._prior_cache = None
+    gp.fit(options={"n_samples": 0, "init_N": 0, "opts_N": 0})
+    fresh.fit(options={"n_samples": 0, "init_N": 0, "opts_N": 0})
+    assert gp.log_posterior(hyp) == fresh.log_posterior(hyp)
+
+
+def test_squared_exponential_symmetric_kernel_matrix():
+    """``compute(X)`` equals ``squareform(pdist(X / ell))`` bit for bit,
+    is exactly symmetric and has ``sf2`` on the diagonal."""
+    from scipy.spatial.distance import pdist, squareform
+
+    rng = np.random.default_rng(5)
+    cov = gpr.covariance_functions.SquaredExponential()
+    for N, D in [(1, 2), (7, 1), (40, 3), (120, 9)]:
+        X = rng.standard_normal((N, D))
+        hyp = 0.3 * rng.standard_normal(D + 1)
+        K = cov.compute(hyp, X)
+        ell, sf2 = np.exp(hyp[:D]), np.exp(2 * hyp[D])
+        expected = sf2 * np.exp(-squareform(pdist(X / ell, "sqeuclidean")) / 2)
+        assert np.array_equal(K, expected)
+        assert np.array_equal(K, K.T)
+        assert np.array_equal(np.diag(K), np.full(N, sf2))
+        assert np.array_equal(
+            cov.compute(hyp, X, compute_diag=True), np.full((N, 1), sf2)
+        )
+
+
+def test_fit_cholesky_reuse_is_exact(monkeypatch):
+    """The sampler's objective reuses the Cholesky factor when only a
+    mean-function hyperparameter moved; a fit with the reuse on reproduces
+    a fit with it off bit for bit under the same seed."""
+    import gpyreg.gaussian_process as gpmod
+
+    results = []
+    for reuse in (True, False):
+        monkeypatch.setattr(gpmod, "_REUSE_CHOLESKY", reuse)
+        gp, _ = _small_gp_with_priors(seed=11)
+        hyp, _, res = gp.fit(
+            options={
+                "n_samples": 6,
+                "thin": 2,
+                "burn": 6,
+                "init_N": 24,
+                "opts_N": 1,
+                "init_method": "rand",
+            },
+            rng=np.random.default_rng(2026),
+        )
+        results.append((hyp, res["samples"], np.asarray(res["f_vals"])))
+    for a, b in zip(results[0], results[1]):
+        assert np.array_equal(a, b)
+
+
+def test_gradient_path_never_uses_the_cache():
+    """A cache whose key matches but whose factor is wrong must not reach
+    the gradient objective (it needs the kernel derivatives the reused
+    block would skip)."""
+    gp, hyp = _small_gp_with_priors(seed=12)
+    cov_N = gp.covariance.hyperparameter_count(gp.D)
+    noise_N = gp.noise.hyperparameter_count()
+    N = gp.X.shape[0]
+    reference = gp._GP__compute_nlZ(hyp, True, True)
+    poisoned = {
+        "key": hyp[: cov_N + noise_N].copy(),
+        "sn2": 1.0,
+        "L": np.eye(N),
+        "sl": 1.0,
+        "sn2_mult": 1,
+        "L_chol": True,
+        "pL": np.eye(N),
+        "logdet": 0.0,
+    }
+    nlZ, dnlZ = gp._GP__compute_nlZ(hyp, True, True, poisoned)
+    assert nlZ == reference[0] and np.array_equal(dnlZ, reference[1])
+    # ... while the no-gradient objective does take a valid hit
+    cache = {}
+    v0 = gp._GP__compute_nlZ(hyp, False, True, cache)
+    assert "key" in cache
+    v1 = gp._GP__compute_nlZ(hyp, False, True, cache)
+    assert v1 == v0 == gp._GP__compute_nlZ(hyp, False, True)
+    hyp2 = hyp.copy()
+    hyp2[cov_N + noise_N] += 0.3  # a mean hyperparameter: a hit
+    assert gp._GP__compute_nlZ(
+        hyp2, False, True, cache
+    ) == gp._GP__compute_nlZ(hyp2, False, True)
+    hyp3 = hyp.copy()
+    hyp3[0] += 0.3  # a covariance hyperparameter: a miss, cache refreshed
+    assert gp._GP__compute_nlZ(
+        hyp3, False, True, cache
+    ) == gp._GP__compute_nlZ(hyp3, False, True)
+    assert np.array_equal(cache["key"], hyp3[: cov_N + noise_N])
+
+
+def test_fit_and_random_function_with_generator():
+    """``fit(rng=)`` and ``random_function(rng=)`` draw from the given
+    generator: two fits seeded alike agree bit for bit whatever the global
+    legacy state does, while ``rng=None`` still follows ``np.random.seed``
+    as before generators were supported."""
+    state = np.random.get_state()
+    options = {
+        "n_samples": 4,
+        "thin": 2,
+        "burn": 4,
+        "init_N": 16,
+        "opts_N": 1,
+        "init_method": "rand",
+    }
+    try:
+        results = []
+        for global_seed in (3, 4):
+            gp, _ = _small_gp_with_priors(seed=21)
+            np.random.seed(global_seed)
+            hyp, _, res = gp.fit(options=options, rng=np.random.default_rng(5))
+            f = gp.random_function(
+                gp.X[:3], add_noise=True, rng=np.random.default_rng(6)
+            )
+            results.append((hyp, res["samples"], f))
+        for a, b in zip(results[0], results[1]):
+            assert np.array_equal(a, b)
+        legacy = []
+        for _ in range(2):
+            gp, _ = _small_gp_with_priors(seed=21)
+            np.random.seed(8)
+            hyp, _, _ = gp.fit(options=options)
+            legacy.append((hyp, gp.random_function(gp.X[:3])))
+        assert np.array_equal(legacy[0][0], legacy[1][0])
+        assert np.array_equal(legacy[0][1], legacy[1][1])
+    finally:
+        np.random.set_state(state)
+
+
+@pytest.mark.parametrize("init_method", ["rand", "sobol"])
+@pytest.mark.parametrize("seed_kind", ["integer", "seed_sequence"])
+def test_fit_seed_continues_design_stream(init_method, seed_kind):
+    """Seeding a fit is equivalent to passing the corresponding generator."""
+    seed = 5 if seed_kind == "integer" else np.random.SeedSequence(5)
+    results = []
+    for rng in (seed, np.random.default_rng(5)):
+        gp, _ = _small_gp_with_priors(seed=21)
+        hyp, _, sampling = gp.fit(
+            options={
+                "n_samples": 4,
+                "thin": 2,
+                "burn": 4,
+                "init_N": 16,
+                "opts_N": 0,
+                "init_method": init_method,
+            },
+            rng=rng,
+        )
+        results.append((hyp, sampling["samples"], sampling["f_vals"]))
+    for seeded, generated in zip(*results):
+        assert np.array_equal(seeded, generated)

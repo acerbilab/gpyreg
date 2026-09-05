@@ -43,15 +43,17 @@ def test_squared_exponential_isotropic_compute_sanity_checks():
     )
 
 
-def test_sqr_exp_iso_kernel_gradient():
+@pytest.mark.parametrize("seed", [0, 3, 42])
+def test_sqr_exp_iso_kernel_gradient(seed):
+    rng = np.random.RandomState(seed)
     sqr_exp = SquaredExponentialIsotropic()
     D = 3
     N = 20
     diag_cov = np.eye(N) * (0.2)
-    X = (np.random.multivariate_normal(np.zeros(N), diag_cov, D)).T
+    X = (rng.multivariate_normal(np.zeros(N), diag_cov, D)).T
     hyp_D = 2
     diag_cov = np.eye(hyp_D) * (0.2)
-    hyp = np.random.multivariate_normal(np.zeros(hyp_D), diag_cov)
+    hyp = rng.multivariate_normal(np.zeros(hyp_D), diag_cov)
     _test_kernel_gradient_(sqr_exp, hyp, X)
 
 
@@ -95,15 +97,17 @@ def test_matern_isotropic_invalid_degree():
         )
 
 
-def test_matern_isotropic_kernel_gradient():
+@pytest.mark.parametrize("seed", [0, 3, 42])
+def test_matern_isotropic_kernel_gradient(seed):
+    rng = np.random.RandomState(seed)
     matern_fun = MaternIsotropic(3)
     D = 3
     N = 20
     diag_cov = np.eye(N) * (0.2)
-    X = (np.random.multivariate_normal(np.zeros(N), diag_cov, D)).T
+    X = (rng.multivariate_normal(np.zeros(N), diag_cov, D)).T
     hyp_D = 2
     diag_cov = np.eye(hyp_D) * (0.2)
-    hyp = np.random.multivariate_normal(np.zeros(hyp_D), diag_cov)
+    hyp = rng.multivariate_normal(np.zeros(hyp_D), diag_cov)
 
     _test_kernel_gradient_(matern_fun, hyp, X)
 
@@ -136,10 +140,12 @@ def _test_kernel_gradient_(
 
     K, dK = kernel_fun.compute(hyp, X, X_star, compute_grad=True)
 
-    hyp_new = hyp.copy()
     finite_diff = np.zeros((K.shape[0], K.shape[1], len(hyp)))
 
     for idx, h_p in enumerate(hyp.squeeze()):
+        # Differentiate at the original point, not the previous stencil's
+        # final -2*h perturbation of another hyperparameter.
+        hyp_new = hyp.copy()
         hyp_new[idx] = h_p + 2.0 * h
         f_2h = kernel_fun.compute(hyp_new, X, X_star)
         hyp_new[idx] = h_p

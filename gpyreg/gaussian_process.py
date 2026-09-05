@@ -18,7 +18,41 @@ from gpyreg.f_min_fill import (
     smoothbox_student_t_cdf,
 )
 from gpyreg.formatting import full_repr
+from gpyreg.rng import random_integer, resolve_rng
 from gpyreg.slice_sample import SliceSampler
+
+# Reuse the Cholesky factor across consecutive log-posterior evaluations of
+# one fit when only mean-function hyperparameters moved (see
+# GP.__core_computation). Module-level so a test can switch it off.
+_REUSE_CHOLESKY = True
+
+
+def _solve_triangular(a, b, trans=0, lower=False):
+    """``scipy.linalg.solve_triangular(a, b, trans, lower,
+    check_finite=False)`` without scipy's Python layers.
+
+    Calls the same LAPACK routine (``?trtrs``) with scipy's layout rule (a
+    Fortran-contiguous ``a`` is passed as is; otherwise ``a.T`` with
+    ``lower`` and ``trans`` flipped, which avoids a copy), so the result is
+    bit-identical to scipy's; the per-call cost drops from about 30 us to
+    5 us, which matters where the solve is one of thousands of small ones
+    (``predict`` per hyperparameter sample, the log-posterior evaluations
+    of the slice sampler). ``a`` and ``b`` are float arrays, ``b`` 2-D.
+    """
+    (trtrs,) = sp.linalg.get_lapack_funcs(("trtrs",), (a, b))
+    if a.flags.f_contiguous or trans == 2:
+        x, info = trtrs(a, b, lower=lower, trans=trans, unitdiag=False)
+    else:
+        x, info = trtrs(
+            a.T, b, lower=not lower, trans=1 - trans, unitdiag=False
+        )
+    if info == 0:
+        return x
+    if info > 0:
+        raise sp.linalg.LinAlgError(
+            f"singular matrix: resolution failed at diagonal {info - 1}"
+        )
+    raise ValueError(f"illegal value in {-info}-th argument of internal trtrs")
 
 
 class GP:
@@ -77,6 +111,7 @@ class GP:
                 "upper_bounds",
                 "posteriors",
             ],
+            exclude=["_prior_cache"],
         )
 
     def __str__(self):
@@ -203,6 +238,7 @@ class GP:
         # so that we don't only update say half of the bounds.
         self.lower_bounds = lower_bounds
         self.upper_bounds = upper_bounds
+        self._prior_cache = None  # see __prior_masks
 
         # Make sure set_priors has been called so we can
         # recompute these.
@@ -511,6 +547,7 @@ class GP:
 
         self.hyper_priors = hyper_priors
         self.no_prior = non_trivial_flag is not True
+        self._prior_cache = None  # see __prior_masks
         self.__recompute_normalization_constants()
 
     def get_hyperparameters(self, as_array: bool = False):
@@ -914,6 +951,7 @@ class GP:
         s2: np.ndarray = None,
         hyp0=None,
         options: dict = None,
+        rng=None,
     ):
         """
         Train the hyperparameters of the Gaussian Process.
@@ -968,6 +1006,14 @@ class GP:
                 **widths** : ndarray, shape (hyp_n,), optional
                     Default widths to use for sampling. If not provided
                     appropriate ones will be computed.
+        rng : None, numpy.random.Generator or seed, optional
+            Where the fit's random draws come from (the space-filling
+            initial design and the slice sampler). ``None`` (default) keeps
+            NumPy's global legacy stream, as before generators were
+            supported, so ``np.random.seed`` still fixes a fit; a
+            ``numpy.random.Generator`` is used as is (and shared with the
+            caller); an integer or ``SeedSequence`` seeds a new generator.
+            See :func:`gpyreg.rng.resolve_rng`.
 
         Returns
         =======
@@ -985,6 +1031,10 @@ class GP:
         ValueError
             Raised when the `sampler_name` is not slicesample.
         """
+        # Share one stream between the initial design and the sampler,
+        # including when the caller supplies a seed rather than a generator.
+        rng = resolve_rng(rng)
+
         ## Default options
         if options is None:
             options = {}
@@ -1027,6 +1077,7 @@ class GP:
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
+        self._prior_cache = None  # the prior's type masks depend on df
 
         # Set any unset bounds:
         use_current_bounds = (
@@ -1084,7 +1135,15 @@ class GP:
             hyp0 = self.hyperparameters_from_dict(hyp0)
 
         ## Hyperparameter optimization
-        objective_f_1 = lambda hyp_: self.__gp_obj_fun(hyp_, False, False)
+        # Each no-gradient objective owns one factorization cache for the
+        # whole fit (consecutive evaluations that move only mean-function
+        # hyperparameters reuse the Cholesky factor, see
+        # __core_computation); the gradient objective of the optimizer gets
+        # none, it needs the kernel derivatives.
+        design_cache = {}
+        objective_f_1 = lambda hyp_: self.__gp_obj_fun(
+            hyp_, False, False, cache=design_cache
+        )
         if s_N > 0 and sampler_name != "laplace":
             tol = tol_opt_mcmc
         else:
@@ -1104,6 +1163,7 @@ class GP:
                 self.hyper_priors,
                 init_N,
                 init_method,
+                rng=rng,
             )
             # Make sure we have at least one hyperparameter to use later.
             hyp = X0[0 : np.maximum(opts_N, 1), :]
@@ -1211,13 +1271,18 @@ class GP:
         if sampler_name != "slicesample":
             raise ValueError("Unknown sampler!")
 
-        sample_f = lambda hyp_: self.__gp_obj_fun(hyp_, False, True)
+        sample_cache = {}
+        sample_f = lambda hyp_: self.__gp_obj_fun(
+            hyp_, False, True, cache=sample_cache
+        )
         options = {"display": "off", "diagnostics": False}
         if widths is None:
             widths = widths_default
         else:
             widths = np.minimum(widths, widths_default)
-        slicer = SliceSampler(sample_f, hyp_start, widths, LB, UB, options)
+        slicer = SliceSampler(
+            sample_f, hyp_start, widths, LB, UB, options, rng=rng
+        )
         sampling_result = slicer.sample(eff_s_N, burn=burn_in)
 
         # Thin samples
@@ -1272,11 +1337,20 @@ class GP:
 
             self.normalization_constants[i] = cdf_ub - cdf_lb
 
-    def __compute_log_priors(self, hyp: np.ndarray, compute_grad: bool):
-        lp = 0
-        dlp = None
-        if compute_grad:
-            dlp = np.zeros(hyp.shape)
+    def __prior_masks(self):
+        """The hyperprior's type masks and normalization constants, which
+        depend only on ``hyper_priors`` and the bounds.
+
+        Built on first use and dropped by ``set_priors``, ``set_bounds`` and
+        the ``df`` fill in ``fit`` (the only writers); read through
+        ``getattr`` because GP objects pickled before this cache existed
+        have no such attribute. ``__compute_log_priors`` is evaluated tens
+        of thousands of times per fit by the slice sampler, and rebuilding
+        the masks was a fifth of each evaluation.
+        """
+        cache = getattr(self, "_prior_cache", None)
+        if cache is not None:
+            return cache
 
         mu = self.hyper_priors["mu"]
         sigma = np.abs(self.hyper_priors["sigma"])
@@ -1311,25 +1385,72 @@ class GP:
         )
         t_idx = ~u_idx & ~sb_t_idx & (df > 0) & np.isfinite(df)
 
+        cache = {
+            "sigma": sigma,
+            "f_idx": f_idx,
+            "sb_idx": sb_idx,
+            "sb_t_idx": sb_t_idx,
+            "g_idx": g_idx,
+            "t_idx": t_idx,
+            "gt_idx": g_idx | t_idx,
+            "any_f": bool(np.any(f_idx)),
+            "any_sb": bool(np.any(sb_idx)),
+            "any_sb_t": bool(np.any(sb_t_idx)),
+            "any_g": bool(np.any(g_idx)),
+            "any_t": bool(np.any(t_idx)),
+            "log_norm": np.sum(np.log(self.normalization_constants)),
+        }
+        # Normalization constants so that the integrals over the pdfs are 1.
+        if cache["any_sb"]:
+            cache["C_sb"] = 1.0 + (b[sb_idx] - a[sb_idx]) / (
+                sigma[sb_idx] * np.sqrt(2 * np.pi)
+            )
+        if cache["any_sb_t"]:
+            cache["C_sb_t"] = 1.0 + (
+                b[sb_t_idx] - a[sb_t_idx]
+            ) * sp.special.gamma(0.5 * (df[sb_t_idx] + 1)) / (
+                sp.special.gamma(0.5 * df[sb_t_idx])
+                * sigma[sb_t_idx]
+                * np.sqrt(df[sb_t_idx] * np.pi)
+            )
+        self._prior_cache = cache
+        return cache
+
+    def __compute_log_priors(self, hyp: np.ndarray, compute_grad: bool):
+        lp = 0
+        dlp = None
+        if compute_grad:
+            dlp = np.zeros(hyp.shape)
+
+        mu = self.hyper_priors["mu"]
+        df = self.hyper_priors["df"]
+        a = self.hyper_priors["a"]
+        b = self.hyper_priors["b"]
+        lb = self.lower_bounds
+
+        masks = self.__prior_masks()
+        sigma = masks["sigma"]
+        f_idx = masks["f_idx"]
+        sb_idx = masks["sb_idx"]
+        sb_t_idx = masks["sb_t_idx"]
+        g_idx = masks["g_idx"]
+        t_idx = masks["t_idx"]
+        gt_idx = masks["gt_idx"]
+
         # Quadratic form
         z2 = np.zeros(hyp.shape)
-        z2[g_idx | t_idx] = (
-            (hyp[g_idx | t_idx] - mu[g_idx | t_idx]) / sigma[g_idx | t_idx]
-        ) ** 2
+        z2[gt_idx] = ((hyp[gt_idx] - mu[gt_idx]) / sigma[gt_idx]) ** 2
 
         # Fixed prior
-        if np.any(f_idx):
+        if masks["any_f"]:
             if np.any(hyp[f_idx] != lb[f_idx]):
                 lp = -np.inf
             if compute_grad:
                 dlp[f_idx] = np.nan
 
         # Smooth box prior
-        if np.any(sb_idx):
-            # Normalization constant so that integral over pdf is 1.
-            C = 1.0 + (b[sb_idx] - a[sb_idx]) / (
-                sigma[sb_idx] * np.sqrt(2 * np.pi)
-            )
+        if masks["any_sb"]:
+            C = masks["C_sb"]
 
             sb_idx_b = (hyp < a) & sb_idx
             sb_idx_a = (hyp > b) & sb_idx
@@ -1345,9 +1466,7 @@ class GP:
 
             if np.any(sb_idx_b | sb_idx_a):
                 lp -= 0.5 * np.sum(
-                    np.log(
-                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
-                    )
+                    np.log(C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2)
                     + z2_tmp[sb_idx_b | sb_idx_a]
                 )
             if np.any(sb_idx_btw):
@@ -1366,15 +1485,8 @@ class GP:
                     )
 
         # Smooth box Student's t prior
-        if np.any(sb_t_idx):
-            # Normalization constant so that integral over pdf is 1.
-            C = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * sp.special.gamma(
-                0.5 * (df[sb_t_idx] + 1)
-            ) / (
-                sp.special.gamma(0.5 * df[sb_t_idx])
-                * sigma[sb_t_idx]
-                * np.sqrt(df[sb_t_idx] * np.pi)
-            )
+        if masks["any_sb_t"]:
+            C = masks["C_sb_t"]
 
             sb_t_idx_b = (hyp < a) & sb_t_idx
             sb_t_idx_a = (hyp > b) & sb_t_idx
@@ -1431,7 +1543,7 @@ class GP:
                     )
 
         # Gaussian prior
-        if np.any(g_idx):
+        if masks["any_g"]:
             lp -= 0.5 * np.sum(
                 np.log(2 * np.pi * sigma[g_idx] ** 2) + z2[g_idx]
             )
@@ -1439,7 +1551,7 @@ class GP:
                 dlp[g_idx] = -(hyp[g_idx] - mu[g_idx]) / sigma[g_idx] ** 2
 
         # Student's t prior
-        if np.any(t_idx):
+        if masks["any_t"]:
             lp += np.sum(
                 sp.special.gammaln(0.5 * (df[t_idx] + 1))
                 - sp.special.gammaln(0.5 * df[t_idx])
@@ -1458,7 +1570,7 @@ class GP:
                     / sigma[t_idx] ** 2
                 )
 
-        lp -= np.sum(np.log(self.normalization_constants))
+        lp -= masks["log_norm"]
 
         if compute_grad:
             return lp, dlp
@@ -1485,7 +1597,10 @@ class GP:
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
-        return -self.__compute_nlZ(hyp, compute_grad, False)
+        if compute_grad:
+            nlZ, dnlZ = self.__compute_nlZ(hyp, True, False)
+            return -nlZ, -dnlZ
+        return -self.__compute_nlZ(hyp, False, False)
 
     def log_posterior(self, hyp: object, compute_grad: bool = False):
         """Compute the (positive) log marginal likelihood of the GP with added
@@ -1514,14 +1629,16 @@ class GP:
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
-
-        return -self.__compute_nlZ(hyp, compute_grad, True)
-
-    def __compute_nlZ(self, hyp, compute_grad, compute_prior):
         if compute_grad:
-            nlZ, dnlZ = self.__core_computation(hyp, 1, compute_grad)
+            nlZ, dnlZ = self.__compute_nlZ(hyp, True, True)
+            return -nlZ, -dnlZ
+        return -self.__compute_nlZ(hyp, False, True)
+
+    def __compute_nlZ(self, hyp, compute_grad, compute_prior, cache=None):
+        if compute_grad:
+            nlZ, dnlZ = self.__core_computation(hyp, 1, compute_grad, cache)
         else:
-            nlZ = self.__core_computation(hyp, 1, compute_grad)
+            nlZ = self.__core_computation(hyp, 1, compute_grad, cache)
 
         if compute_prior:
             if compute_grad:
@@ -1537,14 +1654,14 @@ class GP:
 
         return nlZ
 
-    def __gp_obj_fun(self, hyp, compute_grad, swap_sign):
+    def __gp_obj_fun(self, hyp, compute_grad, swap_sign, cache=None):
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(
-                hyp, compute_grad, self.no_prior is not True
+                hyp, compute_grad, self.no_prior is not True, cache
             )
         else:
             nlZ = self.__compute_nlZ(
-                hyp, compute_grad, self.no_prior is not True
+                hyp, compute_grad, self.no_prior is not True, cache
             )
 
         # Swap sign of negative log marginal likelihood (e.g. for sampling)
@@ -1724,6 +1841,46 @@ class GP:
         mean_N = self.mean.hyperparameter_count(D)
         noise_N = self.noise.hyperparameter_count()
 
+        # Mean function at the test points for every hyperparameter sample
+        # at once, (N_star, s_N); the per-sample values are those of
+        # `mean.compute` (a loop over the samples when the mean function
+        # has no batched form).
+        mean_hyp = np.stack(
+            [
+                p.hyp[cov_N + noise_N : cov_N + noise_N + mean_N]
+                for p in self.posteriors
+            ]
+        )
+        compute_batched = getattr(self.mean, "compute_batched", None)
+        if compute_batched is not None:
+            # An inherited batched implementation must not bypass a more
+            # specific compute override. Only its defining class or a
+            # subclass can supply a compatible batched implementation.
+            mro = type(self.mean).__mro__
+            compute_owner = next(
+                (cls for cls in mro if "compute" in cls.__dict__), None
+            )
+            batched_owner = next(
+                (cls for cls in mro if "compute_batched" in cls.__dict__),
+                None,
+            )
+            if (
+                compute_owner is None
+                or batched_owner is None
+                or not issubclass(batched_owner, compute_owner)
+            ):
+                compute_batched = None
+        if compute_batched is not None:
+            m_star_all = compute_batched(mean_hyp, x_star)
+        else:
+            m_star_all = np.stack(
+                [
+                    np.reshape(self.mean.compute(h, x_star), (-1,))
+                    for h in mean_hyp
+                ],
+                axis=1,
+            )
+
         for s in range(0, s_N):
             hyp = self.posteriors[s].hyp
             alpha = self.posteriors[s].alpha
@@ -1731,40 +1888,28 @@ class GP:
             L_chol = self.posteriors[s].L_chol
             sW = self.posteriors[s].sW
 
-            m_star = np.reshape(
-                self.mean.compute(
-                    hyp[cov_N + noise_N : cov_N + noise_N + mean_N], x_star
-                ),
-                (-1, 1),
-            )
+            m_star = m_star_all[:, s]
 
             kss = self.covariance.compute(
                 hyp[0:cov_N], x_star, compute_diag=True
-            )
+            )[:, 0]
 
             if self.y is not None:
                 Ks = self.covariance.compute(hyp[0:cov_N], self.X, x_star)
-                mu[:, s : s + 1] = m_star + np.dot(
-                    Ks.T, alpha
+                mu[:, s] = (
+                    m_star + np.dot(Ks.T, alpha)[:, 0]
                 )  # Conditional mean
 
                 if L_chol:
-                    V = sp.linalg.solve_triangular(
-                        L,
-                        np.tile(sW, (1, N_star)) * Ks,
-                        trans=1,
-                        check_finite=False,
-                    )
-                    s2[:, s : s + 1] = kss - np.reshape(
-                        np.sum(V * V, 0), (-1, 1)
-                    )  # predictive variance
+                    # sW is (N, 1): broadcasting over the columns of Ks
+                    # gives the products a tiled sW gives, without the copy.
+                    V = _solve_triangular(L, sW * Ks, trans=1)
+                    s2[:, s] = kss - np.sum(V * V, 0)  # predictive variance
                 else:
-                    s2[:, s : s + 1] = kss + np.reshape(
-                        np.sum(Ks * np.dot(L, Ks), 0), (-1, 1)
-                    )
+                    s2[:, s] = kss + np.sum(Ks * np.dot(L, Ks), 0)
             else:
-                mu[:, s : s + 1] = m_star
-                s2[:, s : s + 1] = kss
+                mu[:, s] = m_star
+                s2[:, s] = kss
 
             # remove numerical noise, i.e. negative variances
             s2[:, s] = np.maximum(s2[:, s], 0)
@@ -2238,7 +2383,9 @@ class GP:
 
         return pos_vec
 
-    def random_function(self, X_star: np.ndarray, add_noise: bool = False):
+    def random_function(
+        self, X_star: np.ndarray, add_noise: bool = False, rng=None
+    ):
         """
         Draw a random function from the Gaussian Process.
 
@@ -2248,12 +2395,18 @@ class GP:
             The points at which to evaluate the drawn function.
         add_noise : bool, defaults to False
             Whether to add noise to the values of the drawn function.
+        rng : None, numpy.random.Generator or seed, optional
+            Where the draws come from (the hyperparameter sample and the
+            function values). ``None`` (default) keeps NumPy's global legacy
+            stream, as before generators were supported. See
+            :func:`gpyreg.rng.resolve_rng`.
 
         Returns
         =======
         f_star : ndarray, shape (M, 1)
             The values of the drawn function at the requested points.
         """
+        rng = resolve_rng(rng)
         N_star = X_star.shape[0]
         N_s = np.size(self.posteriors)
 
@@ -2262,7 +2415,7 @@ class GP:
         noise_N = self.noise.hyperparameter_count()
 
         # Draw from hyperparameter samples.
-        s = np.random.randint(0, N_s)
+        s = random_integer(rng, N_s)
 
         hyp = self.posteriors[s].hyp
         alpha = self.posteriors[s].alpha
@@ -2309,7 +2462,7 @@ class GP:
 
         # Draw random function
         T = self.__robust_cholesky(C)
-        f_star = np.dot(T.T, np.random.standard_normal((T.shape[0], 1))) + f_mu
+        f_star = np.dot(T.T, rng.standard_normal((T.shape[0], 1))) + f_mu
 
         # Add observation noise.
         if add_noise:
@@ -2321,9 +2474,9 @@ class GP:
             sn2_mult = self.posteriors[s].sn2_mult
             if sn2_mult is None:
                 sn2_mult = 1
-            y_star = f_star + np.sqrt(
-                sn2 * sn2_mult
-            ) * np.random.standard_normal(size=f_mu.shape)
+            y_star = f_star + np.sqrt(sn2 * sn2_mult) * rng.standard_normal(
+                size=f_mu.shape
+            )
             return y_star
 
         return f_star
@@ -2354,8 +2507,22 @@ class GP:
 
         return T
 
-    def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
+    def __core_computation(
+        self, hyp, compute_nlZ, compute_nlZ_grad, cache=None
+    ):
         """Compute the Posterior.
+
+        ``cache``, a dict owned by the caller, makes consecutive
+        no-gradient log-likelihood evaluations reuse the Cholesky factor
+        when only the mean-function hyperparameters changed: the kernel
+        and the noise, and with them ``K + sn2 I``, its factor and its log
+        determinant, depend on the covariance and noise blocks of ``hyp``
+        alone. The slice sampler moves one coordinate per evaluation, so
+        with a quadratic mean about two thirds of its evaluations qualify.
+        A hit recomputes only the mean, ``alpha`` and the quadratic form,
+        on the very factor a fresh computation would produce, so the result
+        is bit-identical. The gradient path never uses the cache (it needs
+        the kernel derivatives); neither does the ``Posterior`` path.
 
             Raises
             ------
@@ -2367,6 +2534,17 @@ class GP:
         cov_N = self.covariance.hyperparameter_count(d)
         mean_N = self.mean.hyperparameter_count(d)
         noise_N = self.noise.hyperparameter_count()
+
+        use_cache = (
+            _REUSE_CHOLESKY
+            and cache is not None
+            and compute_nlZ
+            and not compute_nlZ_grad
+        )
+        key = hyp[: cov_N + noise_N]
+        hit = (
+            use_cache and "key" in cache and np.array_equal(cache["key"], key)
+        )
 
         if compute_nlZ_grad:
             sn2, dsn2 = self.noise.compute(
@@ -2389,86 +2567,100 @@ class GP:
                 hyp[0:cov_N], self.X, compute_grad=True
             )
         else:
-            sn2 = self.noise.compute(
-                hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
-            )
             m = np.reshape(
                 self.mean.compute(
                     hyp[cov_N + noise_N : cov_N + noise_N + mean_N], self.X
                 ),
                 (-1, 1),
             )
-            K = self.covariance.compute(hyp[0:cov_N], self.X)
-        sn2_mult = 1  # Effective noise variance multiplier
-
-        L_chol = np.min(sn2) >= 1e-6
-        L = None
-        if L_chol:
-            if np.isscalar(sn2):
-                sn2_div = sn2
-                sn2_mat = np.eye(N)
-            else:
-                sn2_div = np.min(sn2)
-                sn2_mat = np.diag(sn2.ravel() / sn2_div)
-            for i in range(0, 10):
-                try:  # Cholesky decomposition until it works
-                    L = sp.linalg.cholesky(
-                        K / (sn2_div * sn2_mult) + sn2_mat, check_finite=False
-                    )
-                except sp.linalg.LinAlgError:
-                    sn2_mult *= 10
-                    continue
-                break
-            sl = sn2_div * sn2_mult
-            pL = L
-        else:
-            if np.isscalar(sn2):
-                sn2_mat = sn2 * np.eye(N)
-            else:
-                sn2_mat = np.diag(sn2.ravel())
-
-            for i in range(0, 10):
-                try:
-                    L = sp.linalg.cholesky(
-                        K + sn2_mult * sn2_mat, check_finite=False
-                    )
-                except sp.linalg.LinAlgError:
-                    sn2_mult *= 10
-                    continue
-                break
-            sl = 1
-            if not compute_nlZ:
-                pL = sp.linalg.solve_triangular(
-                    -L,
-                    sp.linalg.solve_triangular(
-                        L, np.eye(N), trans=1.0, check_finite=False
-                    ),
-                    trans=0,
-                    check_finite=False,
+            if not hit:
+                sn2 = self.noise.compute(
+                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
                 )
+                K = self.covariance.compute(hyp[0:cov_N], self.X)
 
-        if L is None:
-            raise sp.linalg.LinAlgError(
-                "Singular matrix for L Cholesky decomposition"
-            )
+        if hit:
+            L, sl, logdet = cache["L"], cache["sl"], cache["logdet"]
+        else:
+            sn2_mult = 1  # Effective noise variance multiplier
 
+            L_chol = np.min(sn2) >= 1e-6
+            L = None
+            # The noise enters on the diagonal only: adding it in place to
+            # a copy gives the entries of `K / sl + diag(...)` exactly
+            # (adding 0.0 off the diagonal leaves an entry unchanged)
+            # without forming and adding an N x N identity on every
+            # evaluation. The copy is made C-contiguous, the layout the
+            # old sum with a C-ordered identity produced (the factorization
+            # scipy computes depends on the layout at rounding level).
+            # Use float64 so custom float32 kernels do not lose small
+            # diagonal noise that the old sum with an identity preserved.
+            if L_chol:
+                if np.isscalar(sn2):
+                    sn2_div = sn2
+                    sn2_diag = 1.0
+                else:
+                    sn2_div = np.min(sn2)
+                    sn2_diag = sn2.ravel() / sn2_div
+                for i in range(0, 10):
+                    try:  # Cholesky decomposition until it works
+                        A = np.ascontiguousarray(
+                            K / (sn2_div * sn2_mult), dtype=np.float64
+                        )
+                        A.flat[:: N + 1] += sn2_diag
+                        L = sp.linalg.cholesky(A, check_finite=False)
+                    except sp.linalg.LinAlgError:
+                        sn2_mult *= 10
+                        continue
+                    break
+                sl = sn2_div * sn2_mult
+                pL = L
+            else:
+                sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
+
+                for i in range(0, 10):
+                    try:
+                        A = np.array(K, dtype=np.float64, order="C")
+                        A.flat[:: N + 1] += sn2_mult * sn2_diag
+                        L = sp.linalg.cholesky(A, check_finite=False)
+                    except sp.linalg.LinAlgError:
+                        sn2_mult *= 10
+                        continue
+                    break
+                sl = 1
+                if not compute_nlZ:
+                    pL = sp.linalg.solve_triangular(
+                        -L,
+                        sp.linalg.solve_triangular(
+                            L, np.eye(N), trans=1.0, check_finite=False
+                        ),
+                        trans=0,
+                        check_finite=False,
+                    )
+
+            if L is None:
+                raise sp.linalg.LinAlgError(
+                    "Singular matrix for L Cholesky decomposition"
+                )
+            logdet = None
+
+        # The same two triangular solves as scipy's, without its wrappers.
         alpha = (
-            sp.linalg.solve_triangular(
-                L,
-                sp.linalg.solve_triangular(
-                    L, self.y - m, trans=1, check_finite=False
-                ),
-                trans=0,
-                check_finite=False,
+            _solve_triangular(
+                L, _solve_triangular(L, self.y - m, trans=1), trans=0
             )
             / sl
         )
 
         # Negative log marginal likelihood computation
         if compute_nlZ:
+            if logdet is None:
+                logdet = np.sum(np.log(np.diag(L)))
+                if use_cache:
+                    cache.update(key=key.copy(), L=L, sl=sl, logdet=logdet)
             nlZ = (
                 np.dot((self.y - m).T, alpha / 2)
-                + np.sum(np.log(np.diag(L)))
+                + logdet
                 + N * np.log(2 * np.pi * sl) / 2
             )
 
