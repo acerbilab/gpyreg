@@ -1198,6 +1198,165 @@ def test_predict_mean_fallback_without_batched_method():
     assert np.array_equal(outputs[0][1], outputs[1][1])
 
 
+@pytest.mark.parametrize("trained", [False, True])
+@pytest.mark.parametrize(
+    "mean_cls",
+    [
+        gpr.mean_functions.ZeroMean,
+        gpr.mean_functions.ConstantMean,
+        gpr.mean_functions.NegativeQuadratic,
+    ],
+)
+def test_predict_preserves_overridden_mean_compute(mean_cls, trained):
+    """An inherited batched method must not hide a custom scalar mean."""
+
+    class OffsetMean(mean_cls):
+        def compute(self, hyp, X, compute_grad=False):
+            result = super().compute(hyp, X, compute_grad)
+            offset = 3 * X[:, 0]
+            if compute_grad:
+                return result[0] + offset, result[1]
+            return result + offset
+
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=OffsetMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    X = np.array([[-1.0], [0.0], [1.0]])
+    hyp = np.zeros((2, 3 + gp.mean.hyperparameter_count(1)))
+    hyp[:, 2] = -1
+    hyp[1] += 0.2
+    if trained:
+        gp.update(X, np.array([[1.0], [2.0], [3.0]]), hyp=hyp)
+    else:
+        gp.set_hyperparameters(hyp)
+    actual = gp.predict(X, separate_samples=True)[0]
+    expected = gp.predict_full(X)[0]
+    assert np.array_equal(actual, expected)
+
+
+def test_predict_custom_batched_mean_inheritance():
+    """Compatible batched overrides work through inheritance and mixins."""
+
+    class OffsetMean(gpr.mean_functions.ConstantMean):
+        def compute(self, hyp, X, compute_grad=False):
+            result = super().compute(hyp, X, compute_grad)
+            if compute_grad:
+                return result[0] + X[:, 0], result[1]
+            return result + X[:, 0]
+
+    class BatchedOffsetMean(OffsetMean):
+        def compute_batched(self, hyp, X):
+            self.batched_calls += 1
+            return hyp[:, 0] + X[:, :1]
+
+    class BothMethodsMean(OffsetMean):
+        compute = OffsetMean.compute
+        compute_batched = BatchedOffsetMean.compute_batched
+
+    class InheritedBatchedMean(BatchedOffsetMean):
+        pass
+
+    class OverrideAgainMean(BatchedOffsetMean):
+        def compute(self, hyp, X, compute_grad=False):
+            result = super().compute(hyp, X, compute_grad)
+            if compute_grad:
+                return result[0] + 2, result[1]
+            # The original per-sample path also accepted column vectors.
+            return (result + 2)[:, None]
+
+    class UnrelatedMixin:
+        def compute_batched(self, hyp, X):
+            raise AssertionError("Unrelated batched mean must not be used")
+
+    class MixinMean(UnrelatedMixin, OffsetMean):
+        pass
+
+    for mean_cls, calls in (
+        (BatchedOffsetMean, 1),
+        (BothMethodsMean, 1),
+        (InheritedBatchedMean, 1),
+        (OverrideAgainMean, 0),
+        (MixinMean, 0),
+    ):
+        mean = mean_cls()
+        mean.batched_calls = 0
+        gp = gpr.GP(
+            D=1,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=mean,
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+        gp.set_hyperparameters(np.array([[0, 0, -1, 2], [0, 0, -1, 3]]))
+        X = np.array([[-1.0], [0.0], [1.0]])
+        assert np.array_equal(
+            gp.predict(X, separate_samples=True)[0], gp.predict_full(X)[0]
+        )
+        assert mean.batched_calls == calls
+
+
+@pytest.mark.parametrize("noise_variance", [1e-8, 1e-4])
+@pytest.mark.parametrize("per_point_noise", [False, True])
+def test_float32_kernel_preserves_diagonal_noise(
+    noise_variance, per_point_noise
+):
+    """Small diagonal noise survives both Cholesky parametrizations."""
+
+    class Float32Kernel(gpr.covariance_functions.SquaredExponential):
+        def compute(self, *args, **kwargs):
+            result = super().compute(*args, **kwargs)
+            if isinstance(result, tuple):
+                return tuple(value.astype(np.float32) for value in result)
+            return result.astype(np.float32)
+
+    gp = gpr.GP(
+        D=1,
+        covariance=Float32Kernel(),
+        mean=gpr.mean_functions.ZeroMean(),
+        noise=gpr.noise_functions.GaussianNoise(
+            constant_add=True, user_provided_add=per_point_noise
+        ),
+    )
+    X = np.array([[0.0], [0.0], [1.0]])
+    y = np.array([[1.0], [1.0], [0.0]])
+    hyp = np.array([0, 0, 0.5 * np.log(noise_variance)], dtype=np.float32)
+    s2 = noise_variance * np.array([[0.0], [0.5], [1.0]])
+    if not per_point_noise:
+        s2 = None
+
+    # Reference the original matrix expression, including dtype promotion.
+    K = gp.covariance.compute(hyp[:2], X)
+    sn2 = gp.noise.compute(hyp[2:], X, y, s2)
+    if np.min(sn2) >= 1e-6:
+        sl = np.min(sn2)
+        diagonal = np.eye(3) if np.isscalar(sn2) else np.diag(sn2.ravel() / sl)
+        A = K / sl + diagonal
+    else:
+        sl = 1
+        A = K + (sn2 * np.eye(3) if np.isscalar(sn2) else np.diag(sn2.ravel()))
+    L = scipy.linalg.cholesky(A, check_finite=False)
+    alpha = (
+        scipy.linalg.solve_triangular(
+            L,
+            scipy.linalg.solve_triangular(L, y, trans=1, check_finite=False),
+            check_finite=False,
+        )
+        / sl
+    )
+    expected_nlz = (
+        (y.T @ (alpha / 2))[0, 0]
+        + np.sum(np.log(np.diag(L)))
+        + 3 * np.log(2 * np.pi * sl) / 2
+    )
+
+    gp.update(X, y, s2, hyp=hyp[None, :])
+    assert gp.posteriors[0].sn2_mult == 1
+    assert gp.posteriors[0].L.dtype == np.float64
+    assert gp.log_likelihood(hyp) == -expected_nlz
+
+
 def _small_gp_with_priors(seed=3):
     rng = np.random.default_rng(seed)
     N, D = 25, 2
@@ -1417,3 +1576,27 @@ def test_fit_and_random_function_with_generator():
         assert np.array_equal(legacy[0][1], legacy[1][1])
     finally:
         np.random.set_state(state)
+
+
+@pytest.mark.parametrize("init_method", ["rand", "sobol"])
+@pytest.mark.parametrize("seed_kind", ["integer", "seed_sequence"])
+def test_fit_seed_continues_design_stream(init_method, seed_kind):
+    """Seeding a fit is equivalent to passing the corresponding generator."""
+    seed = 5 if seed_kind == "integer" else np.random.SeedSequence(5)
+    results = []
+    for rng in (seed, np.random.default_rng(5)):
+        gp, _ = _small_gp_with_priors(seed=21)
+        hyp, _, sampling = gp.fit(
+            options={
+                "n_samples": 4,
+                "thin": 2,
+                "burn": 4,
+                "init_N": 16,
+                "opts_N": 0,
+                "init_method": init_method,
+            },
+            rng=rng,
+        )
+        results.append((hyp, sampling["samples"], sampling["f_vals"]))
+    for seeded, generated in zip(*results):
+        assert np.array_equal(seeded, generated)

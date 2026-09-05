@@ -1031,6 +1031,10 @@ class GP:
         ValueError
             Raised when the `sampler_name` is not slicesample.
         """
+        # Share one stream between the initial design and the sampler,
+        # including when the caller supplies a seed rather than a generator.
+        rng = resolve_rng(rng)
+
         ## Default options
         if options is None:
             options = {}
@@ -1849,10 +1853,32 @@ class GP:
         )
         compute_batched = getattr(self.mean, "compute_batched", None)
         if compute_batched is not None:
+            # An inherited batched implementation must not bypass a more
+            # specific compute override. Only its defining class or a
+            # subclass can supply a compatible batched implementation.
+            mro = type(self.mean).__mro__
+            compute_owner = next(
+                (cls for cls in mro if "compute" in cls.__dict__), None
+            )
+            batched_owner = next(
+                (cls for cls in mro if "compute_batched" in cls.__dict__),
+                None,
+            )
+            if (
+                compute_owner is None
+                or batched_owner is None
+                or not issubclass(batched_owner, compute_owner)
+            ):
+                compute_batched = None
+        if compute_batched is not None:
             m_star_all = compute_batched(mean_hyp, x_star)
         else:
             m_star_all = np.stack(
-                [self.mean.compute(h, x_star) for h in mean_hyp], axis=1
+                [
+                    np.reshape(self.mean.compute(h, x_star), (-1,))
+                    for h in mean_hyp
+                ],
+                axis=1,
             )
 
         for s in range(0, s_N):
@@ -2567,6 +2593,8 @@ class GP:
             # evaluation. The copy is made C-contiguous, the layout the
             # old sum with a C-ordered identity produced (the factorization
             # scipy computes depends on the layout at rounding level).
+            # Use float64 so custom float32 kernels do not lose small
+            # diagonal noise that the old sum with an identity preserved.
             if L_chol:
                 if np.isscalar(sn2):
                     sn2_div = sn2
@@ -2576,7 +2604,9 @@ class GP:
                     sn2_diag = sn2.ravel() / sn2_div
                 for i in range(0, 10):
                     try:  # Cholesky decomposition until it works
-                        A = np.ascontiguousarray(K / (sn2_div * sn2_mult))
+                        A = np.ascontiguousarray(
+                            K / (sn2_div * sn2_mult), dtype=np.float64
+                        )
                         A.flat[:: N + 1] += sn2_diag
                         L = sp.linalg.cholesky(A, check_finite=False)
                     except sp.linalg.LinAlgError:
@@ -2590,7 +2620,7 @@ class GP:
 
                 for i in range(0, 10):
                     try:
-                        A = np.array(K, order="C")
+                        A = np.array(K, dtype=np.float64, order="C")
                         A.flat[:: N + 1] += sn2_mult * sn2_diag
                         L = sp.linalg.cholesky(A, check_finite=False)
                     except sp.linalg.LinAlgError:

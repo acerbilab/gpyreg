@@ -1,3 +1,6 @@
+import copy
+import pickle
+
 import numpy as np
 import pytest
 from scipy.stats import (
@@ -13,6 +16,10 @@ from gpyreg.slice_sample import SliceSampler
 
 options = {"display": "off", "diagnostics": True}
 threshold = 0.1
+
+
+def _normal_metropolis_proposal():
+    return np.random.normal(size=1)
 
 
 def test_multiple_runs():
@@ -277,5 +284,56 @@ def test_generator_runs_are_reproducible_and_independent_of_global_state():
             norm.logpdf, np.array([0.5]), options=options, rng=None
         )
         assert np.array_equal(a, explicit.sample(50)["samples"])
+    finally:
+        np.random.set_state(state)
+
+
+@pytest.mark.parametrize("serialization", ["pickle", "deepcopy"])
+@pytest.mark.parametrize("rng_kind", ["legacy", "generator", "old_pickle"])
+@pytest.mark.parametrize("metropolis", [False, True])
+def test_serialized_sampler_continues_stream(
+    serialization, rng_kind, metropolis
+):
+    """Copied samplers resume with generator state or the current global stream.
+
+    Old pickle state has no rng attribute, including when Metropolis steps
+    are enabled. Serializing a legacy sampler must not capture global state.
+    """
+    state = np.random.get_state()
+    try:
+        np.random.seed(718)
+        sampler = SliceSampler(
+            norm.logpdf,
+            np.array([0.5]),
+            widths=1.0,
+            options={"display": "off", "diagnostics": False},
+            rng=7 if rng_kind == "generator" else None,
+        )
+        if metropolis:
+            sampler.metropolis_pdf = norm.pdf
+            sampler.metropolis_rnd = _normal_metropolis_proposal
+            sampler.metropolis_flag = True
+        sampler.sample(5, burn=5)
+        if rng_kind == "old_pickle":
+            del sampler.rng
+        if serialization == "pickle":
+            restored = pickle.loads(pickle.dumps(sampler))
+        else:
+            restored = copy.deepcopy(sampler)
+        if rng_kind == "old_pickle":
+            from gpyreg.rng import resolve_rng
+
+            sampler.rng = resolve_rng()
+        # Reseeding after serialization proves the legacy stream stays live.
+        np.random.seed(919)
+        expected = sampler.sample(12, burn=0)["samples"]
+        expected_state = np.random.get_state()
+        np.random.seed(919)
+        actual = restored.sample(12, burn=0)["samples"]
+        assert np.array_equal(actual, expected)
+        actual_state = np.random.get_state()
+        assert all(
+            np.array_equal(a, b) for a, b in zip(actual_state, expected_state)
+        )
     finally:
         np.random.set_state(state)

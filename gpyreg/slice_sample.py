@@ -310,6 +310,10 @@ class SliceSampler:
             real number (e.g. Inf or NaN).
         """
 
+        # Samplers pickled before rng was introduced use the legacy stream.
+        # Restore the attribute before either slice or Metropolis draws.
+        self.rng = resolve_rng(getattr(self, "rng", None))
+
         # Reference to x0 so it is updated as we go along, allowing us to
         # use this function multiple times.
         xx = self.x0
