@@ -1141,3 +1141,57 @@ def test_convert_shapes():
     s2 = np.ones(N)
     X, y, s2 = gp._convert_shapes(None, y, s2)
     assert X is None and y.shape == (N, 1) and s2.shape == (N, 1)
+
+
+@pytest.mark.parametrize("trans", [0, 1])
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_solve_triangular_matches_scipy(order, trans):
+    """The direct LAPACK call is bit-identical to scipy's wrapper for both
+    memory layouts of the factor (scipy solves the transposed system for a
+    C-ordered factor; the helper applies the same rule)."""
+    from gpyreg.gaussian_process import _solve_triangular
+
+    rng = np.random.default_rng(0)
+    for N, k in [(5, 1), (60, 8), (200, 3)]:
+        A = rng.standard_normal((N, N))
+        A = A @ A.T + N * np.eye(N)
+        L = np.array(scipy.linalg.cholesky(A), order=order)
+        B = rng.standard_normal((N, k))
+        expected = scipy.linalg.solve_triangular(
+            L, B, trans=trans, check_finite=False
+        )
+        assert np.array_equal(_solve_triangular(L, B, trans=trans), expected)
+    with pytest.raises(scipy.linalg.LinAlgError):
+        _solve_triangular(np.zeros((3, 3)), np.ones((3, 1)))
+
+
+def test_predict_mean_fallback_without_batched_method():
+    """A mean function without ``compute_batched`` (a user-defined or an
+    unpickled old one) takes the per-sample loop and gives the same
+    prediction as the batched form."""
+
+    class PlainNegativeQuadratic(gpr.mean_functions.NegativeQuadratic):
+        compute_batched = None
+
+    N, D, N_s = 30, 3, 4
+    rng = np.random.default_rng(1)
+    X = rng.standard_normal((N, D))
+    y = rng.standard_normal((N, 1))
+    hyp_N = D + 1 + 1 + (1 + 2 * D)  # SE + constant noise + quadratic mean
+    hyp = rng.standard_normal((N_s, hyp_N))
+    outputs = []
+    for mean in (
+        gpr.mean_functions.NegativeQuadratic(),
+        PlainNegativeQuadratic(),
+    ):
+        gp = gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=mean,
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+        gp.update(X_new=X, y_new=y, compute_posterior=False)
+        gp.set_hyperparameters(hyp, compute_posterior=True)
+        outputs.append(gp.predict(X[:7], separate_samples=True))
+    assert np.array_equal(outputs[0][0], outputs[1][0])
+    assert np.array_equal(outputs[0][1], outputs[1][1])

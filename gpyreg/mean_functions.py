@@ -130,6 +130,35 @@ class ZeroMean:
 
         return m
 
+    def compute_batched(self, hyp: np.ndarray, X: np.ndarray):
+        """
+        Compute the mean function at given test points for several
+        hyperparameter samples at once.
+
+        Parameters
+        ----------
+        hyp : ndarray, shape (hyp_samples, mean_N)
+            One row of hyperparameters per sample.
+        X : ndarray, shape (N, D)
+            A 2D array where each row is a test point.
+
+        Returns
+        -------
+        m : ndarray, shape (N, hyp_samples)
+            Column ``s`` is ``compute(hyp[s], X)``.
+        """
+        _check_batched_hyp(self, hyp, X)
+        return np.zeros((X.shape[0], hyp.shape[0]))
+
+
+def _check_batched_hyp(mean, hyp, X):
+    mean_N = mean.hyperparameter_count(X.shape[1])
+    if hyp.ndim != 2 or hyp.shape[1] != mean_N:
+        raise ValueError(
+            f"Expected a (hyp_samples, {mean_N}) array of mean function "
+            f"hyperparameters, got shape {hyp.shape}."
+        )
+
 
 class ConstantMean:
     """Constant mean function."""
@@ -258,6 +287,26 @@ class ConstantMean:
             return m, np.ones((N, 1))
 
         return m
+
+    def compute_batched(self, hyp: np.ndarray, X: np.ndarray):
+        """
+        Compute the mean function at given test points for several
+        hyperparameter samples at once.
+
+        Parameters
+        ----------
+        hyp : ndarray, shape (hyp_samples, mean_N)
+            One row of hyperparameters per sample.
+        X : ndarray, shape (N, D)
+            A 2D array where each row is a test point.
+
+        Returns
+        -------
+        m : ndarray, shape (N, hyp_samples)
+            Column ``s`` is ``compute(hyp[s], X)``.
+        """
+        _check_batched_hyp(self, hyp, X)
+        return hyp[:, 0] * np.ones((X.shape[0], 1))
 
 
 class NegativeQuadratic:
@@ -395,6 +444,35 @@ class NegativeQuadratic:
             return m, dm
 
         return m
+
+    def compute_batched(self, hyp: np.ndarray, X: np.ndarray):
+        """
+        Compute the mean function at given test points for several
+        hyperparameter samples at once.
+
+        The same scalar operations as :meth:`compute` per sample, on an
+        ``(hyp_samples, N, D)`` array whose last-axis sum is the per-sample
+        sum, so column ``s`` is bit-identical to ``compute(hyp[s], X)``.
+
+        Parameters
+        ----------
+        hyp : ndarray, shape (hyp_samples, mean_N)
+            One row of hyperparameters per sample.
+        X : ndarray, shape (N, D)
+            A 2D array where each row is a test point.
+
+        Returns
+        -------
+        m : ndarray, shape (N, hyp_samples)
+            Column ``s`` is ``compute(hyp[s], X)``.
+        """
+        _check_batched_hyp(self, hyp, X)
+        D = X.shape[1]
+        m_0 = hyp[:, 0]
+        x_m = hyp[:, 1 : (1 + D)]
+        omega = np.exp(hyp[:, (1 + D) : (1 + 2 * D)])
+        z_2 = ((X[None, :, :] - x_m[:, None, :]) / omega[:, None, :]) ** 2
+        return (m_0[:, None] - 0.5 * np.sum(z_2, 2)).T
 
 
 def _bounds_info_helper(mean_N, X, y, idx):

@@ -158,6 +158,10 @@ class SquaredExponential(AbstractKernel):
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
 
+        if X_star is None and compute_diag and not compute_grad:
+            # The diagonal is sf2 * exp(-0 / 2) = sf2 exactly.
+            return np.full((N, 1), sf2)
+
         if X_star is None:
             if compute_diag:
                 tmp = np.zeros((N, 1))
