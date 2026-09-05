@@ -166,7 +166,12 @@ class SquaredExponential(AbstractKernel):
             if compute_diag:
                 tmp = np.zeros((N, 1))
             else:
-                tmp = squareform(pdist(X / ell, "sqeuclidean"))
+                # cdist(Xs, Xs) equals squareform(pdist(Xs)) bit for bit
+                # (the same per-dimension differences summed in the same
+                # order, exactly symmetric, exact zeros on the diagonal)
+                # and skips pdist's wrapper and the squareform pass.
+                Xs = X / ell
+                tmp = cdist(Xs, Xs, "sqeuclidean")
         else:
             tmp = cdist(X / ell, X_star / ell, "sqeuclidean")
 

@@ -231,6 +231,7 @@ class GP:
         # so that we don't only update say half of the bounds.
         self.lower_bounds = lower_bounds
         self.upper_bounds = upper_bounds
+        self._prior_cache = None  # see __prior_masks
 
         # Make sure set_priors has been called so we can
         # recompute these.
@@ -539,6 +540,7 @@ class GP:
 
         self.hyper_priors = hyper_priors
         self.no_prior = non_trivial_flag is not True
+        self._prior_cache = None  # see __prior_masks
         self.__recompute_normalization_constants()
 
     def get_hyperparameters(self, as_array: bool = False):
@@ -1055,6 +1057,7 @@ class GP:
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
         self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
+        self._prior_cache = None  # the prior's type masks depend on df
 
         # Set any unset bounds:
         use_current_bounds = (
@@ -1300,11 +1303,20 @@ class GP:
 
             self.normalization_constants[i] = cdf_ub - cdf_lb
 
-    def __compute_log_priors(self, hyp: np.ndarray, compute_grad: bool):
-        lp = 0
-        dlp = None
-        if compute_grad:
-            dlp = np.zeros(hyp.shape)
+    def __prior_masks(self):
+        """The hyperprior's type masks and normalization constants, which
+        depend only on ``hyper_priors`` and the bounds.
+
+        Built on first use and dropped by ``set_priors``, ``set_bounds`` and
+        the ``df`` fill in ``fit`` (the only writers); read through
+        ``getattr`` because GP objects pickled before this cache existed
+        have no such attribute. ``__compute_log_priors`` is evaluated tens
+        of thousands of times per fit by the slice sampler, and rebuilding
+        the masks was a fifth of each evaluation.
+        """
+        cache = getattr(self, "_prior_cache", None)
+        if cache is not None:
+            return cache
 
         mu = self.hyper_priors["mu"]
         sigma = np.abs(self.hyper_priors["sigma"])
@@ -1339,25 +1351,72 @@ class GP:
         )
         t_idx = ~u_idx & ~sb_t_idx & (df > 0) & np.isfinite(df)
 
+        cache = {
+            "sigma": sigma,
+            "f_idx": f_idx,
+            "sb_idx": sb_idx,
+            "sb_t_idx": sb_t_idx,
+            "g_idx": g_idx,
+            "t_idx": t_idx,
+            "gt_idx": g_idx | t_idx,
+            "any_f": bool(np.any(f_idx)),
+            "any_sb": bool(np.any(sb_idx)),
+            "any_sb_t": bool(np.any(sb_t_idx)),
+            "any_g": bool(np.any(g_idx)),
+            "any_t": bool(np.any(t_idx)),
+            "log_norm": np.sum(np.log(self.normalization_constants)),
+        }
+        # Normalization constants so that the integrals over the pdfs are 1.
+        if cache["any_sb"]:
+            cache["C_sb"] = 1.0 + (b[sb_idx] - a[sb_idx]) / (
+                sigma[sb_idx] * np.sqrt(2 * np.pi)
+            )
+        if cache["any_sb_t"]:
+            cache["C_sb_t"] = 1.0 + (
+                b[sb_t_idx] - a[sb_t_idx]
+            ) * sp.special.gamma(0.5 * (df[sb_t_idx] + 1)) / (
+                sp.special.gamma(0.5 * df[sb_t_idx])
+                * sigma[sb_t_idx]
+                * np.sqrt(df[sb_t_idx] * np.pi)
+            )
+        self._prior_cache = cache
+        return cache
+
+    def __compute_log_priors(self, hyp: np.ndarray, compute_grad: bool):
+        lp = 0
+        dlp = None
+        if compute_grad:
+            dlp = np.zeros(hyp.shape)
+
+        mu = self.hyper_priors["mu"]
+        df = self.hyper_priors["df"]
+        a = self.hyper_priors["a"]
+        b = self.hyper_priors["b"]
+        lb = self.lower_bounds
+
+        masks = self.__prior_masks()
+        sigma = masks["sigma"]
+        f_idx = masks["f_idx"]
+        sb_idx = masks["sb_idx"]
+        sb_t_idx = masks["sb_t_idx"]
+        g_idx = masks["g_idx"]
+        t_idx = masks["t_idx"]
+        gt_idx = masks["gt_idx"]
+
         # Quadratic form
         z2 = np.zeros(hyp.shape)
-        z2[g_idx | t_idx] = (
-            (hyp[g_idx | t_idx] - mu[g_idx | t_idx]) / sigma[g_idx | t_idx]
-        ) ** 2
+        z2[gt_idx] = ((hyp[gt_idx] - mu[gt_idx]) / sigma[gt_idx]) ** 2
 
         # Fixed prior
-        if np.any(f_idx):
+        if masks["any_f"]:
             if np.any(hyp[f_idx] != lb[f_idx]):
                 lp = -np.inf
             if compute_grad:
                 dlp[f_idx] = np.nan
 
         # Smooth box prior
-        if np.any(sb_idx):
-            # Normalization constant so that integral over pdf is 1.
-            C = 1.0 + (b[sb_idx] - a[sb_idx]) / (
-                sigma[sb_idx] * np.sqrt(2 * np.pi)
-            )
+        if masks["any_sb"]:
+            C = masks["C_sb"]
 
             sb_idx_b = (hyp < a) & sb_idx
             sb_idx_a = (hyp > b) & sb_idx
@@ -1373,9 +1432,7 @@ class GP:
 
             if np.any(sb_idx_b | sb_idx_a):
                 lp -= 0.5 * np.sum(
-                    np.log(
-                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
-                    )
+                    np.log(C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2)
                     + z2_tmp[sb_idx_b | sb_idx_a]
                 )
             if np.any(sb_idx_btw):
@@ -1394,15 +1451,8 @@ class GP:
                     )
 
         # Smooth box Student's t prior
-        if np.any(sb_t_idx):
-            # Normalization constant so that integral over pdf is 1.
-            C = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * sp.special.gamma(
-                0.5 * (df[sb_t_idx] + 1)
-            ) / (
-                sp.special.gamma(0.5 * df[sb_t_idx])
-                * sigma[sb_t_idx]
-                * np.sqrt(df[sb_t_idx] * np.pi)
-            )
+        if masks["any_sb_t"]:
+            C = masks["C_sb_t"]
 
             sb_t_idx_b = (hyp < a) & sb_t_idx
             sb_t_idx_a = (hyp > b) & sb_t_idx
@@ -1459,7 +1509,7 @@ class GP:
                     )
 
         # Gaussian prior
-        if np.any(g_idx):
+        if masks["any_g"]:
             lp -= 0.5 * np.sum(
                 np.log(2 * np.pi * sigma[g_idx] ** 2) + z2[g_idx]
             )
@@ -1467,7 +1517,7 @@ class GP:
                 dlp[g_idx] = -(hyp[g_idx] - mu[g_idx]) / sigma[g_idx] ** 2
 
         # Student's t prior
-        if np.any(t_idx):
+        if masks["any_t"]:
             lp += np.sum(
                 sp.special.gammaln(0.5 * (df[t_idx] + 1))
                 - sp.special.gammaln(0.5 * df[t_idx])
@@ -1486,7 +1536,7 @@ class GP:
                     / sigma[t_idx] ** 2
                 )
 
-        lp -= np.sum(np.log(self.normalization_constants))
+        lp -= masks["log_norm"]
 
         if compute_grad:
             return lp, dlp
@@ -1513,7 +1563,10 @@ class GP:
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
-        return -self.__compute_nlZ(hyp, compute_grad, False)
+        if compute_grad:
+            nlZ, dnlZ = self.__compute_nlZ(hyp, True, False)
+            return -nlZ, -dnlZ
+        return -self.__compute_nlZ(hyp, False, False)
 
     def log_posterior(self, hyp: object, compute_grad: bool = False):
         """Compute the (positive) log marginal likelihood of the GP with added
@@ -1542,8 +1595,10 @@ class GP:
         """
         if isinstance(hyp, dict):
             hyp = self.hyperparameters_from_dict(hyp)
-
-        return -self.__compute_nlZ(hyp, compute_grad, True)
+        if compute_grad:
+            nlZ, dnlZ = self.__compute_nlZ(hyp, True, True)
+            return -nlZ, -dnlZ
+        return -self.__compute_nlZ(hyp, False, True)
 
     def __compute_nlZ(self, hyp, compute_grad, compute_prior):
         if compute_grad:
@@ -2437,18 +2492,22 @@ class GP:
 
         L_chol = np.min(sn2) >= 1e-6
         L = None
+        # The noise enters on the diagonal only: adding it in place to a
+        # copy gives the entries of `K / sl + diag(...)` exactly (adding 0.0
+        # off the diagonal leaves an entry unchanged) without forming and
+        # adding an N x N identity on every evaluation.
         if L_chol:
             if np.isscalar(sn2):
                 sn2_div = sn2
-                sn2_mat = np.eye(N)
+                sn2_diag = 1.0
             else:
                 sn2_div = np.min(sn2)
-                sn2_mat = np.diag(sn2.ravel() / sn2_div)
+                sn2_diag = sn2.ravel() / sn2_div
             for i in range(0, 10):
                 try:  # Cholesky decomposition until it works
-                    L = sp.linalg.cholesky(
-                        K / (sn2_div * sn2_mult) + sn2_mat, check_finite=False
-                    )
+                    A = K / (sn2_div * sn2_mult)
+                    A.flat[:: N + 1] += sn2_diag
+                    L = sp.linalg.cholesky(A, check_finite=False)
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
@@ -2456,16 +2515,13 @@ class GP:
             sl = sn2_div * sn2_mult
             pL = L
         else:
-            if np.isscalar(sn2):
-                sn2_mat = sn2 * np.eye(N)
-            else:
-                sn2_mat = np.diag(sn2.ravel())
+            sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
 
             for i in range(0, 10):
                 try:
-                    L = sp.linalg.cholesky(
-                        K + sn2_mult * sn2_mat, check_finite=False
-                    )
+                    A = K.copy()
+                    A.flat[:: N + 1] += sn2_mult * sn2_diag
+                    L = sp.linalg.cholesky(A, check_finite=False)
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
@@ -2486,14 +2542,10 @@ class GP:
                 "Singular matrix for L Cholesky decomposition"
             )
 
+        # The same two triangular solves as scipy's, without its wrappers.
         alpha = (
-            sp.linalg.solve_triangular(
-                L,
-                sp.linalg.solve_triangular(
-                    L, self.y - m, trans=1, check_finite=False
-                ),
-                trans=0,
-                check_finite=False,
+            _solve_triangular(
+                L, _solve_triangular(L, self.y - m, trans=1), trans=0
             )
             / sl
         )

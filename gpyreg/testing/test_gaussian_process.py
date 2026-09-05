@@ -1195,3 +1195,120 @@ def test_predict_mean_fallback_without_batched_method():
         outputs.append(gp.predict(X[:7], separate_samples=True))
     assert np.array_equal(outputs[0][0], outputs[1][0])
     assert np.array_equal(outputs[0][1], outputs[1][1])
+
+
+def _small_gp_with_priors(seed=3):
+    rng = np.random.default_rng(seed)
+    N, D = 25, 2
+    X = rng.standard_normal((N, D))
+    y = np.sin(X).sum(1, keepdims=True) + 0.1 * rng.standard_normal((N, 1))
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    hyp = 0.3 * rng.standard_normal((1, 3 * D + 3))
+    gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
+    names = list(gp.get_bounds().keys())
+    priors = {
+        names[0]: (
+            "student_t",
+            (np.zeros(D), np.full(D, 1.0), np.full(D, 3.0)),
+        ),
+        names[1]: ("gaussian", (np.zeros(1), np.ones(1))),
+        names[2]: (
+            "smoothbox",
+            (np.array([-3.0]), np.array([-1.0]), np.array([0.5])),
+        ),
+        names[3]: (
+            "smoothbox_student_t",
+            (
+                np.array([-1.0]),
+                np.array([1.0]),
+                np.array([0.5]),
+                np.array([4.0]),
+            ),
+        ),
+        names[4]: ("gaussian", (np.zeros(D), np.full(D, 2.0))),
+        names[5]: None,
+    }
+    bounds = {
+        n: (np.full(np.size(v[0]), -6.0), np.full(np.size(v[0]), 6.0))
+        for n, v in gp.get_bounds().items()
+    }
+    gp.set_bounds(bounds)
+    gp.set_priors(priors)
+    return gp, hyp[0]
+
+
+def test_log_likelihood_and_posterior_gradients():
+    """``compute_grad=True`` returns ``(value, gradient)`` with the gradient
+    of the value returned without it (the two public wrappers used to apply
+    the unary minus to the returned tuple and raise)."""
+    gp, hyp = _small_gp_with_priors()
+    for value_fn in (gp.log_likelihood, gp.log_posterior):
+        value, grad = value_fn(hyp, compute_grad=True)
+        assert value == value_fn(hyp)
+        assert grad.shape == hyp.shape
+        assert np.all(
+            check_grad(value_fn, lambda h: value_fn(h, True)[1], hyp) < 1e-5
+        )
+
+
+def test_prior_mask_cache_follows_priors_and_bounds():
+    """The cached hyperprior masks are dropped whenever the priors, the
+    bounds or the prior's ``df`` change, so ``log_posterior`` always
+    matches a GP that never cached (and an object without the attribute,
+    as an old pickle, builds it on first use)."""
+    gp, hyp = _small_gp_with_priors()
+    lp0 = gp.log_posterior(hyp)
+    fresh, _ = _small_gp_with_priors()
+    assert lp0 == fresh.log_posterior(hyp)
+    if hasattr(gp, "_prior_cache"):
+        del gp._prior_cache
+    assert gp.log_posterior(hyp) == lp0
+    # priors change
+    priors = gp.get_priors()
+    names = list(priors)
+    priors[names[1]] = ("gaussian", (np.array([0.5]), np.array([0.2])))
+    gp.set_priors(priors)
+    lp1 = gp.log_posterior(hyp)
+    fresh.set_priors(priors)
+    assert lp1 != lp0 and lp1 == fresh.log_posterior(hyp)
+    # bounds change (normalization constants)
+    bounds = gp.get_bounds()
+    bounds[names[1]] = (np.array([-1.0]), np.array([1.0]))
+    gp.set_bounds(bounds)
+    lp2 = gp.log_posterior(hyp)
+    fresh.set_bounds(bounds)
+    assert lp2 != lp1 and lp2 == fresh.log_posterior(hyp)
+    # the df fill at the top of fit (NaN -> df_base) changes the masks
+    gp.hyper_priors["df"][:] = np.nan
+    gp._prior_cache = None
+    fresh.hyper_priors["df"][:] = np.nan
+    fresh._prior_cache = None
+    gp.fit(options={"n_samples": 0, "init_N": 0, "opts_N": 0})
+    fresh.fit(options={"n_samples": 0, "init_N": 0, "opts_N": 0})
+    assert gp.log_posterior(hyp) == fresh.log_posterior(hyp)
+
+
+def test_squared_exponential_symmetric_kernel_matrix():
+    """``compute(X)`` equals ``squareform(pdist(X / ell))`` bit for bit,
+    is exactly symmetric and has ``sf2`` on the diagonal."""
+    from scipy.spatial.distance import pdist, squareform
+
+    rng = np.random.default_rng(5)
+    cov = gpr.covariance_functions.SquaredExponential()
+    for N, D in [(1, 2), (7, 1), (40, 3), (120, 9)]:
+        X = rng.standard_normal((N, D))
+        hyp = 0.3 * rng.standard_normal(D + 1)
+        K = cov.compute(hyp, X)
+        ell, sf2 = np.exp(hyp[:D]), np.exp(2 * hyp[D])
+        expected = sf2 * np.exp(-squareform(pdist(X / ell, "sqeuclidean")) / 2)
+        assert np.array_equal(K, expected)
+        assert np.array_equal(K, K.T)
+        assert np.array_equal(np.diag(K), np.full(N, sf2))
+        assert np.array_equal(
+            cov.compute(hyp, X, compute_diag=True), np.full((N, 1), sf2)
+        )
