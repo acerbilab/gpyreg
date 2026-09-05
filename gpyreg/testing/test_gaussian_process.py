@@ -1312,3 +1312,69 @@ def test_squared_exponential_symmetric_kernel_matrix():
         assert np.array_equal(
             cov.compute(hyp, X, compute_diag=True), np.full((N, 1), sf2)
         )
+
+
+def test_fit_cholesky_reuse_is_exact(monkeypatch):
+    """The sampler's objective reuses the Cholesky factor when only a
+    mean-function hyperparameter moved; a fit with the reuse on reproduces
+    a fit with it off bit for bit under the same seed."""
+    import gpyreg.gaussian_process as gpmod
+
+    results = []
+    for reuse in (True, False):
+        monkeypatch.setattr(gpmod, "_REUSE_CHOLESKY", reuse)
+        gp, _ = _small_gp_with_priors(seed=11)
+        np.random.seed(2026)
+        hyp, _, res = gp.fit(
+            options={
+                "n_samples": 6,
+                "thin": 2,
+                "burn": 6,
+                "init_N": 24,
+                "opts_N": 1,
+                "init_method": "rand",
+            }
+        )
+        results.append((hyp, res["samples"], np.asarray(res["f_vals"])))
+    for a, b in zip(results[0], results[1]):
+        assert np.array_equal(a, b)
+
+
+def test_gradient_path_never_uses_the_cache():
+    """A cache whose key matches but whose factor is wrong must not reach
+    the gradient objective (it needs the kernel derivatives the reused
+    block would skip)."""
+    gp, hyp = _small_gp_with_priors(seed=12)
+    cov_N = gp.covariance.hyperparameter_count(gp.D)
+    noise_N = gp.noise.hyperparameter_count()
+    N = gp.X.shape[0]
+    reference = gp._GP__compute_nlZ(hyp, True, True)
+    poisoned = {
+        "key": hyp[: cov_N + noise_N].copy(),
+        "sn2": 1.0,
+        "L": np.eye(N),
+        "sl": 1.0,
+        "sn2_mult": 1,
+        "L_chol": True,
+        "pL": np.eye(N),
+        "logdet": 0.0,
+    }
+    nlZ, dnlZ = gp._GP__compute_nlZ(hyp, True, True, poisoned)
+    assert nlZ == reference[0] and np.array_equal(dnlZ, reference[1])
+    # ... while the no-gradient objective does take a valid hit
+    cache = {}
+    v0 = gp._GP__compute_nlZ(hyp, False, True, cache)
+    assert "key" in cache
+    v1 = gp._GP__compute_nlZ(hyp, False, True, cache)
+    assert v1 == v0 == gp._GP__compute_nlZ(hyp, False, True)
+    hyp2 = hyp.copy()
+    hyp2[cov_N + noise_N] += 0.3  # a mean hyperparameter: a hit
+    assert gp._GP__compute_nlZ(
+        hyp2, False, True, cache
+    ) == gp._GP__compute_nlZ(hyp2, False, True)
+    hyp3 = hyp.copy()
+    hyp3[0] += 0.3  # a covariance hyperparameter: a miss, cache refreshed
+    assert gp._GP__compute_nlZ(
+        hyp3, False, True, cache
+    ) == gp._GP__compute_nlZ(hyp3, False, True)
+    assert np.array_equal(cache["key"], hyp3[: cov_N + noise_N])

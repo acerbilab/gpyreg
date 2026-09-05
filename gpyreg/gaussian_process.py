@@ -20,6 +20,11 @@ from gpyreg.f_min_fill import (
 from gpyreg.formatting import full_repr
 from gpyreg.slice_sample import SliceSampler
 
+# Reuse the Cholesky factor across consecutive log-posterior evaluations of
+# one fit when only mean-function hyperparameters moved (see
+# GP.__core_computation). Module-level so a test can switch it off.
+_REUSE_CHOLESKY = True
+
 
 def _solve_triangular(a, b, trans=0, lower=False):
     """``scipy.linalg.solve_triangular(a, b, trans, lower,
@@ -1115,7 +1120,13 @@ class GP:
             hyp0 = self.hyperparameters_from_dict(hyp0)
 
         ## Hyperparameter optimization
-        objective_f_1 = lambda hyp_: self.__gp_obj_fun(hyp_, False, False)
+        # The no-gradient objectives share a factorization cache each (the
+        # design points and the sampler's proposals that move only mean
+        # hyperparameters reuse the Cholesky factor); the gradient objective
+        # of the optimizer gets none, it needs the kernel derivatives.
+        objective_f_1 = lambda hyp_: self.__gp_obj_fun(
+            hyp_, False, False, cache={}
+        )
         if s_N > 0 and sampler_name != "laplace":
             tol = tol_opt_mcmc
         else:
@@ -1242,7 +1253,10 @@ class GP:
         if sampler_name != "slicesample":
             raise ValueError("Unknown sampler!")
 
-        sample_f = lambda hyp_: self.__gp_obj_fun(hyp_, False, True)
+        sample_cache = {}
+        sample_f = lambda hyp_: self.__gp_obj_fun(
+            hyp_, False, True, cache=sample_cache
+        )
         options = {"display": "off", "diagnostics": False}
         if widths is None:
             widths = widths_default
@@ -1600,11 +1614,11 @@ class GP:
             return -nlZ, -dnlZ
         return -self.__compute_nlZ(hyp, False, True)
 
-    def __compute_nlZ(self, hyp, compute_grad, compute_prior):
+    def __compute_nlZ(self, hyp, compute_grad, compute_prior, cache=None):
         if compute_grad:
-            nlZ, dnlZ = self.__core_computation(hyp, 1, compute_grad)
+            nlZ, dnlZ = self.__core_computation(hyp, 1, compute_grad, cache)
         else:
-            nlZ = self.__core_computation(hyp, 1, compute_grad)
+            nlZ = self.__core_computation(hyp, 1, compute_grad, cache)
 
         if compute_prior:
             if compute_grad:
@@ -1620,14 +1634,14 @@ class GP:
 
         return nlZ
 
-    def __gp_obj_fun(self, hyp, compute_grad, swap_sign):
+    def __gp_obj_fun(self, hyp, compute_grad, swap_sign, cache=None):
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(
-                hyp, compute_grad, self.no_prior is not True
+                hyp, compute_grad, self.no_prior is not True, cache
             )
         else:
             nlZ = self.__compute_nlZ(
-                hyp, compute_grad, self.no_prior is not True
+                hyp, compute_grad, self.no_prior is not True, cache
             )
 
         # Swap sign of negative log marginal likelihood (e.g. for sampling)
@@ -2443,8 +2457,22 @@ class GP:
 
         return T
 
-    def __core_computation(self, hyp, compute_nlZ, compute_nlZ_grad):
+    def __core_computation(
+        self, hyp, compute_nlZ, compute_nlZ_grad, cache=None
+    ):
         """Compute the Posterior.
+
+        ``cache``, a dict owned by the caller, makes consecutive
+        no-gradient log-likelihood evaluations reuse the Cholesky factor
+        when only the mean-function hyperparameters changed: the kernel
+        and the noise, and with them ``K + sn2 I``, its factor and its log
+        determinant, depend on the covariance and noise blocks of ``hyp``
+        alone. The slice sampler moves one coordinate per evaluation, so
+        with a quadratic mean about two thirds of its evaluations qualify.
+        A hit recomputes only the mean, ``alpha`` and the quadratic form,
+        on the very factor a fresh computation would produce, so the result
+        is bit-identical. The gradient path never uses the cache (it needs
+        the kernel derivatives); neither does the ``Posterior`` path.
 
             Raises
             ------
@@ -2456,6 +2484,17 @@ class GP:
         cov_N = self.covariance.hyperparameter_count(d)
         mean_N = self.mean.hyperparameter_count(d)
         noise_N = self.noise.hyperparameter_count()
+
+        use_cache = (
+            _REUSE_CHOLESKY
+            and cache is not None
+            and compute_nlZ
+            and not compute_nlZ_grad
+        )
+        key = hyp[: cov_N + noise_N]
+        hit = (
+            use_cache and "key" in cache and np.array_equal(cache["key"], key)
+        )
 
         if compute_nlZ_grad:
             sn2, dsn2 = self.noise.compute(
@@ -2478,69 +2517,76 @@ class GP:
                 hyp[0:cov_N], self.X, compute_grad=True
             )
         else:
-            sn2 = self.noise.compute(
-                hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
-            )
             m = np.reshape(
                 self.mean.compute(
                     hyp[cov_N + noise_N : cov_N + noise_N + mean_N], self.X
                 ),
                 (-1, 1),
             )
-            K = self.covariance.compute(hyp[0:cov_N], self.X)
-        sn2_mult = 1  # Effective noise variance multiplier
-
-        L_chol = np.min(sn2) >= 1e-6
-        L = None
-        # The noise enters on the diagonal only: adding it in place to a
-        # copy gives the entries of `K / sl + diag(...)` exactly (adding 0.0
-        # off the diagonal leaves an entry unchanged) without forming and
-        # adding an N x N identity on every evaluation.
-        if L_chol:
-            if np.isscalar(sn2):
-                sn2_div = sn2
-                sn2_diag = 1.0
-            else:
-                sn2_div = np.min(sn2)
-                sn2_diag = sn2.ravel() / sn2_div
-            for i in range(0, 10):
-                try:  # Cholesky decomposition until it works
-                    A = K / (sn2_div * sn2_mult)
-                    A.flat[:: N + 1] += sn2_diag
-                    L = sp.linalg.cholesky(A, check_finite=False)
-                except sp.linalg.LinAlgError:
-                    sn2_mult *= 10
-                    continue
-                break
-            sl = sn2_div * sn2_mult
-            pL = L
-        else:
-            sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
-
-            for i in range(0, 10):
-                try:
-                    A = K.copy()
-                    A.flat[:: N + 1] += sn2_mult * sn2_diag
-                    L = sp.linalg.cholesky(A, check_finite=False)
-                except sp.linalg.LinAlgError:
-                    sn2_mult *= 10
-                    continue
-                break
-            sl = 1
-            if not compute_nlZ:
-                pL = sp.linalg.solve_triangular(
-                    -L,
-                    sp.linalg.solve_triangular(
-                        L, np.eye(N), trans=1.0, check_finite=False
-                    ),
-                    trans=0,
-                    check_finite=False,
+            if not hit:
+                sn2 = self.noise.compute(
+                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
                 )
+                K = self.covariance.compute(hyp[0:cov_N], self.X)
 
-        if L is None:
-            raise sp.linalg.LinAlgError(
-                "Singular matrix for L Cholesky decomposition"
-            )
+        if hit:
+            L, sl, logdet = cache["L"], cache["sl"], cache["logdet"]
+        else:
+            sn2_mult = 1  # Effective noise variance multiplier
+
+            L_chol = np.min(sn2) >= 1e-6
+            L = None
+            # The noise enters on the diagonal only: adding it in place to
+            # a copy gives the entries of `K / sl + diag(...)` exactly
+            # (adding 0.0 off the diagonal leaves an entry unchanged)
+            # without forming and adding an N x N identity on every
+            # evaluation.
+            if L_chol:
+                if np.isscalar(sn2):
+                    sn2_div = sn2
+                    sn2_diag = 1.0
+                else:
+                    sn2_div = np.min(sn2)
+                    sn2_diag = sn2.ravel() / sn2_div
+                for i in range(0, 10):
+                    try:  # Cholesky decomposition until it works
+                        A = K / (sn2_div * sn2_mult)
+                        A.flat[:: N + 1] += sn2_diag
+                        L = sp.linalg.cholesky(A, check_finite=False)
+                    except sp.linalg.LinAlgError:
+                        sn2_mult *= 10
+                        continue
+                    break
+                sl = sn2_div * sn2_mult
+                pL = L
+            else:
+                sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
+
+                for i in range(0, 10):
+                    try:
+                        A = K.copy()
+                        A.flat[:: N + 1] += sn2_mult * sn2_diag
+                        L = sp.linalg.cholesky(A, check_finite=False)
+                    except sp.linalg.LinAlgError:
+                        sn2_mult *= 10
+                        continue
+                    break
+                sl = 1
+                if not compute_nlZ:
+                    pL = sp.linalg.solve_triangular(
+                        -L,
+                        sp.linalg.solve_triangular(
+                            L, np.eye(N), trans=1.0, check_finite=False
+                        ),
+                        trans=0,
+                        check_finite=False,
+                    )
+
+            if L is None:
+                raise sp.linalg.LinAlgError(
+                    "Singular matrix for L Cholesky decomposition"
+                )
+            logdet = None
 
         # The same two triangular solves as scipy's, without its wrappers.
         alpha = (
@@ -2552,9 +2598,13 @@ class GP:
 
         # Negative log marginal likelihood computation
         if compute_nlZ:
+            if logdet is None:
+                logdet = np.sum(np.log(np.diag(L)))
+                if use_cache:
+                    cache.update(key=key.copy(), L=L, sl=sl, logdet=logdet)
             nlZ = (
                 np.dot((self.y - m).T, alpha / 2)
-                + np.sum(np.log(np.diag(L)))
+                + logdet
                 + N * np.log(2 * np.pi * sl) / 2
             )
 
