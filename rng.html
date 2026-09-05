@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>GPyReg Documentation &#8212; GPyReg</title>
+    <title>Random number generation &#8212; GPyReg</title>
   
   
   
@@ -43,12 +43,12 @@
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'rng';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
-    <link rel="canonical" href="https://acerbilab.github.io/gpyreg/index.html" />
+    <link rel="canonical" href="https://acerbilab.github.io/gpyreg/rng.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Gaussian processes" href="gaussian_process.html" />
+    <link rel="prev" title="Slice sampling" href="slice_sample.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="" />
@@ -150,8 +150,6 @@
       
       
       
-        
-      
       <dialog id="pst-primary-sidebar-modal"></dialog>
       <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
         
@@ -171,7 +169,7 @@
     
   
 
-<a class="navbar-brand logo" href="#">
+<a class="navbar-brand logo" href="index.html">
   
   
   
@@ -191,13 +189,13 @@
         <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="noise_functions.html">Noise functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a></li>
-<li class="toctree-l1"><a class="reference internal" href="rng.html">Random number generation</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Random number generation</a></li>
 </ul>
 
     </div>
@@ -274,7 +272,7 @@
       
       
       
-      <li><a href="https://github.com/acerbilab/gpyreg/edit/main/index.rst" target="_blank"
+      <li><a href="https://github.com/acerbilab/gpyreg/edit/main/rng.rst" target="_blank"
    class="btn btn-sm btn-source-edit-button dropdown-item"
    title="Suggest edit"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -291,7 +289,7 @@
       
       
       
-      <li><a href="https://github.com/acerbilab/gpyreg/issues/new?title=Issue%20on%20page%20%2Findex.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/acerbilab/gpyreg/issues/new?title=Issue%20on%20page%20%2Frng.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -321,7 +319,7 @@
       
       
       
-      <li><a href="_sources/index.rst" target="_blank"
+      <li><a href="_sources/rng.rst" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -404,7 +402,7 @@
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>GPyReg Documentation</h1>
+    <h1>Random number generation</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -414,12 +412,17 @@
             </div>
             <nav aria-label="Page">
                 <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-it">What is it?</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#documentation">Documentation</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#indices-and-tables">Indices and tables</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license-and-source">License and source</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#acknowledgments">Acknowledgments</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-rng"><code class="docutils literal notranslate"><span class="pre">gpyreg.rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#resolve-rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.resolve_rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#random-integer"><code class="docutils literal notranslate"><span class="pre">random_integer</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.random_integer"><code class="docutils literal notranslate"><span class="pre">random_integer()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
             </nav>
         </div>
@@ -431,73 +434,64 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="gpyreg-documentation">
-<h1>GPyReg Documentation<a class="headerlink" href="#gpyreg-documentation" title="Link to this heading">#</a></h1>
-<section id="what-is-it">
-<h2>What is it?<a class="headerlink" href="#what-is-it" title="Link to this heading">#</a></h2>
-<p>GPyReg is a lightweight package for Gaussian process regression in Python. It was developed for use with <a class="extlink-labrepos reference external" href="https://github.com/acerbilab/pyvbmc">PyVBMC</a>, a Python package for efficient black-box Bayesian inference, but is usable as a standalone package.</p>
+  <section id="random-number-generation">
+<h1>Random number generation<a class="headerlink" href="#random-number-generation" title="Link to this heading">#</a></h1>
+<section id="gpyreg-rng">
+<h2><code class="docutils literal notranslate"><span class="pre">gpyreg.rng</span></code><a class="headerlink" href="#gpyreg-rng" title="Link to this heading">#</a></h2>
+<p>The functions of gpyreg that draw random numbers (<code class="docutils literal notranslate"><span class="pre">GP.fit</span></code>,
+<code class="docutils literal notranslate"><span class="pre">GP.random_function</span></code>, <code class="docutils literal notranslate"><span class="pre">SliceSampler</span></code>, <code class="docutils literal notranslate"><span class="pre">f_min_fill</span></code>) take an <code class="docutils literal notranslate"><span class="pre">rng</span></code>
+argument resolved by the helpers below. <code class="docutils literal notranslate"><span class="pre">rng=None</span></code> (the default) keeps
+NumPy’s global legacy stream, as before generators were supported.
+The legacy stream uses a stateless proxy, so copying or pickling a sampler
+does not capture NumPy’s global state; <code class="docutils literal notranslate"><span class="pre">np.random.seed</span></code> continues to
+control its draws. Samplers pickled before the <code class="docutils literal notranslate"><span class="pre">rng</span></code> argument was added
+also resume using the global stream. A sampler with an explicit generator
+preserves that generator’s state when copied or pickled.</p>
+<p>Resolving a generator or an already resolved legacy proxy returns the same
+object. <code class="docutils literal notranslate"><span class="pre">GP.fit</span></code> resolves its argument once and shares the stream between
+the initial design and the sampler, including when given an integer seed.</p>
+<section id="resolve-rng">
+<h3><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code><a class="headerlink" href="#resolve-rng" title="Link to this heading">#</a></h3>
+<dl class="py function">
+<dt class="sig sig-object py" id="gpyreg.rng.resolve_rng">
+<span class="sig-prename descclassname"><span class="pre">gpyreg.rng.</span></span><span class="sig-name descname"><span class="pre">resolve_rng</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/rng.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.rng.resolve_rng" title="Link to this definition">#</a></dt>
+<dd><p>Return the object to draw random numbers from.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>rng</strong><span class="classifier">None, numpy.random.Generator, int, array_like[int], SeedSequence or BitGenerator, optional</span></dt><dd><p><code class="docutils literal notranslate"><span class="pre">None</span></code> (the default everywhere in gpyreg) returns a picklable,
+stateless proxy for NumPy’s global legacy stream, forwarding draws
+call for call. Copying or pickling the proxy does not capture the
+global random state. A <code class="docutils literal notranslate"><span class="pre">numpy.random.Generator</span></code> or an already
+resolved proxy is returned as is, so streams can be shared with
+the caller. Anything else is passed to <code class="docutils literal notranslate"><span class="pre">numpy.random.default_rng</span></code>
+and seeds a new generator.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>rng</strong><span class="classifier">numpy.random.Generator or legacy stream proxy</span></dt><dd><p>Both expose <code class="docutils literal notranslate"><span class="pre">random()</span></code>, <code class="docutils literal notranslate"><span class="pre">uniform(size=...)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">standard_normal(size)</span></code> and <code class="docutils literal notranslate"><span class="pre">shuffle(x)</span></code> with the same
+meaning; see <a class="reference internal" href="#gpyreg.rng.random_integer" title="gpyreg.rng.random_integer"><code class="xref py py-func docutils literal notranslate"><span class="pre">random_integer()</span></code></a> for the one method whose name
+differs.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
-<section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
-<p>GPyReg is available via <code class="docutils literal notranslate"><span class="pre">pip</span></code> and <code class="docutils literal notranslate"><span class="pre">conda-forge</span></code>:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">gpyreg</span>
-</pre></div>
-</div>
-<p>or:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="n">install</span> <span class="o">--</span><span class="n">channel</span><span class="o">=</span><span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">gpyreg</span>
-</pre></div>
-</div>
-<p>GPyReg requires Python version 3.9 or newer.</p>
+<section id="random-integer">
+<h3><code class="docutils literal notranslate"><span class="pre">random_integer</span></code><a class="headerlink" href="#random-integer" title="Link to this heading">#</a></h3>
+<dl class="py function">
+<dt class="sig sig-object py" id="gpyreg.rng.random_integer">
+<span class="sig-prename descclassname"><span class="pre">gpyreg.rng.</span></span><span class="sig-name descname"><span class="pre">random_integer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rng</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/rng.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.rng.random_integer" title="Link to this definition">#</a></dt>
+<dd><p>One integer drawn uniformly from <code class="docutils literal notranslate"><span class="pre">0,</span> <span class="pre">...,</span> <span class="pre">high</span> <span class="pre">-</span> <span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">randint</span></code> on
+the legacy proxy, <code class="docutils literal notranslate"><span class="pre">integers</span></code> on a <code class="docutils literal notranslate"><span class="pre">Generator</span></code>).</p>
+</dd></dl>
+
 </section>
-<section id="documentation">
-<h2>Documentation<a class="headerlink" href="#documentation" title="Link to this heading">#</a></h2>
-<p>The primary entry point for users is the <a class="reference internal" href="gaussian_process.html#gp"><span class="std std-ref">GP Class</span></a>, used to construct and fit Gaussian process models to data. More detailed information can be found in the links below:</p>
-<div class="toctree-wrapper compound">
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="gaussian_process.html#gpyreg-gaussian-process"><code class="docutils literal notranslate"><span class="pre">gpyreg.gaussian_process</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="covariance_functions.html#gpyreg-covariance-functions"><code class="docutils literal notranslate"><span class="pre">gpyreg.covariance_functions</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="mean_functions.html#gpyreg-mean-functions"><code class="docutils literal notranslate"><span class="pre">gpyreg.mean_functions</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="noise_functions.html">Noise functions</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="noise_functions.html#gpyreg-noise-functions"><code class="docutils literal notranslate"><span class="pre">gpyreg.noise_functions</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="slice_sample.html#gpyreg-slice-sample"><code class="docutils literal notranslate"><span class="pre">gpyreg.slice_sample</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="rng.html">Random number generation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="rng.html#gpyreg-rng"><code class="docutils literal notranslate"><span class="pre">gpyreg.rng</span></code></a></li>
-</ul>
-</li>
-</ul>
-</div>
-</section>
-<section id="indices-and-tables">
-<h2>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
-<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
-</ul>
-</section>
-<section id="license-and-source">
-<h2>License and source<a class="headerlink" href="#license-and-source" title="Link to this heading">#</a></h2>
-<p>GPyReg is released under the terms of the <a class="extlink-mainbranch reference external" href="https://github.com/acerbilab/gpyreg/blob/main/LICENSE">BSD 3-Clause License</a>.
-The source code is on <a class="extlink-labrepos reference external" href="https://github.com/acerbilab/gpyreg">GitHub</a>.</p>
-</section>
-<section id="acknowledgments">
-<h2>Acknowledgments<a class="headerlink" href="#acknowledgments" title="Link to this heading">#</a></h2>
-<p>GPyReg was developed by <a class="reference external" href="https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people">members</a> (past and current) of the <a class="reference external" href="https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/">Machine and Human Intelligence Lab</a> at the University of Helsinki. Development is being supported by the <a class="reference external" href="https://fcai.fi/">Finnish Center for Artificial Intelligence FCAI</a>.</p>
 </section>
 </section>
 
@@ -512,14 +506,14 @@ The source code is on <a class="extlink-labrepos reference external" href="https
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
-    <a class="right-next"
-       href="gaussian_process.html"
-       title="next page">
+    <a class="left-prev"
+       href="slice_sample.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
-        <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Gaussian processes</p>
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Slice sampling</p>
       </div>
-      <i class="fa-solid fa-angle-right"></i>
     </a>
 </div>
                 </footer>
@@ -539,12 +533,17 @@ The source code is on <a class="extlink-labrepos reference external" href="https
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-it">What is it?</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#documentation">Documentation</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#indices-and-tables">Indices and tables</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license-and-source">License and source</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#acknowledgments">Acknowledgments</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-rng"><code class="docutils literal notranslate"><span class="pre">gpyreg.rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#resolve-rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.resolve_rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#random-integer"><code class="docutils literal notranslate"><span class="pre">random_integer</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.random_integer"><code class="docutils literal notranslate"><span class="pre">random_integer()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
   </nav></div>
 

@@ -34,6 +34,7 @@ The primary entry point for users is the :ref:`GP Class<\`\`GP\`\`>`, used to co
    mean_functions
    noise_functions
    slice_sample
+   rng
 
 Indices and tables
 ==================
