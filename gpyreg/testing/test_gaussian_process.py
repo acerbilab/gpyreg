@@ -1378,3 +1378,39 @@ def test_gradient_path_never_uses_the_cache():
         hyp3, False, True, cache
     ) == gp._GP__compute_nlZ(hyp3, False, True)
     assert np.array_equal(cache["key"], hyp3[: cov_N + noise_N])
+
+
+def test_fit_and_random_function_with_generator():
+    """``fit(rng=)`` and ``random_function(rng=)`` draw from the given
+    generator: two fits seeded alike agree bit for bit whatever the global
+    legacy state does, while ``rng=None`` still follows ``np.random.seed``
+    as before generators were supported."""
+    state = np.random.get_state()
+    options = {
+        "n_samples": 4,
+        "thin": 2,
+        "burn": 4,
+        "init_N": 16,
+        "opts_N": 1,
+        "init_method": "rand",
+    }
+    results = []
+    for global_seed in (3, 4):
+        gp, _ = _small_gp_with_priors(seed=21)
+        np.random.seed(global_seed)
+        hyp, _, res = gp.fit(options=options, rng=np.random.default_rng(5))
+        f = gp.random_function(
+            gp.X[:3], add_noise=True, rng=np.random.default_rng(6)
+        )
+        results.append((hyp, res["samples"], f))
+    for a, b in zip(results[0], results[1]):
+        assert np.array_equal(a, b)
+    legacy = []
+    for _ in range(2):
+        gp, _ = _small_gp_with_priors(seed=21)
+        np.random.seed(8)
+        hyp, _, _ = gp.fit(options=options)
+        legacy.append((hyp, gp.random_function(gp.X[:3])))
+    assert np.array_equal(legacy[0][0], legacy[1][0])
+    assert np.array_equal(legacy[0][1], legacy[1][1])
+    np.random.set_state(state)

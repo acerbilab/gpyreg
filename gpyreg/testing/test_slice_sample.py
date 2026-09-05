@@ -237,3 +237,41 @@ def test_sample_sanity_checks():
         "The initial starting point X0 needs to evaluate to a"
         in execinfo.value.args[0]
     )
+
+
+def test_generator_runs_are_reproducible_and_independent_of_global_state():
+    """With ``rng`` a ``Generator``, two samplers seeded alike give the same
+    chain whatever the global legacy state does, one generator shared across
+    ``sample`` calls continues its stream, and ``rng=None`` still follows
+    ``np.random.seed`` exactly as before."""
+    state = np.random.get_state()
+    np.random.seed(99)
+    slicer1 = SliceSampler(
+        norm.logpdf,
+        np.array([0.5]),
+        options=options,
+        rng=np.random.default_rng(7),
+    )
+    res1 = slicer1.sample(300)
+    np.random.seed(1)  # a different global state must not matter
+    rng = np.random.default_rng(7)
+    slicer2 = SliceSampler(
+        norm.logpdf, np.array([0.5]), options=options, rng=rng
+    )
+    res2 = slicer2.sample(100, burn=100)
+    res3 = slicer2.sample(100)
+    res4 = slicer2.sample(100)
+    assert np.all(
+        res1["samples"]
+        == np.concatenate((res2["samples"], res3["samples"], res4["samples"]))
+    )
+    # the legacy path: rng=None draws from the global stream as always
+    np.random.seed(1234)
+    legacy = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    a = legacy.sample(50)["samples"]
+    np.random.seed(1234)
+    explicit = SliceSampler(
+        norm.logpdf, np.array([0.5]), options=options, rng=None
+    )
+    assert np.array_equal(a, explicit.sample(50)["samples"])
+    np.random.set_state(state)

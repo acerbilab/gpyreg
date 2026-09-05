@@ -18,6 +18,7 @@ from gpyreg.f_min_fill import (
     smoothbox_student_t_cdf,
 )
 from gpyreg.formatting import full_repr
+from gpyreg.rng import random_integer, resolve_rng
 from gpyreg.slice_sample import SliceSampler
 
 # Reuse the Cholesky factor across consecutive log-posterior evaluations of
@@ -949,6 +950,7 @@ class GP:
         s2: np.ndarray = None,
         hyp0=None,
         options: dict = None,
+        rng=None,
     ):
         """
         Train the hyperparameters of the Gaussian Process.
@@ -1003,6 +1005,14 @@ class GP:
                 **widths** : ndarray, shape (hyp_n,), optional
                     Default widths to use for sampling. If not provided
                     appropriate ones will be computed.
+        rng : None, numpy.random.Generator or seed, optional
+            Where the fit's random draws come from (the space-filling
+            initial design and the slice sampler). ``None`` (default) keeps
+            NumPy's global legacy stream, as before generators were
+            supported, so ``np.random.seed`` still fixes a fit; a
+            ``numpy.random.Generator`` is used as is (and shared with the
+            caller); an integer or ``SeedSequence`` seeds a new generator.
+            See :func:`gpyreg.rng.resolve_rng`.
 
         Returns
         =======
@@ -1146,6 +1156,7 @@ class GP:
                 self.hyper_priors,
                 init_N,
                 init_method,
+                rng=rng,
             )
             # Make sure we have at least one hyperparameter to use later.
             hyp = X0[0 : np.maximum(opts_N, 1), :]
@@ -1262,7 +1273,9 @@ class GP:
             widths = widths_default
         else:
             widths = np.minimum(widths, widths_default)
-        slicer = SliceSampler(sample_f, hyp_start, widths, LB, UB, options)
+        slicer = SliceSampler(
+            sample_f, hyp_start, widths, LB, UB, options, rng=rng
+        )
         sampling_result = slicer.sample(eff_s_N, burn=burn_in)
 
         # Thin samples
@@ -2341,7 +2354,9 @@ class GP:
 
         return pos_vec
 
-    def random_function(self, X_star: np.ndarray, add_noise: bool = False):
+    def random_function(
+        self, X_star: np.ndarray, add_noise: bool = False, rng=None
+    ):
         """
         Draw a random function from the Gaussian Process.
 
@@ -2351,12 +2366,18 @@ class GP:
             The points at which to evaluate the drawn function.
         add_noise : bool, defaults to False
             Whether to add noise to the values of the drawn function.
+        rng : None, numpy.random.Generator or seed, optional
+            Where the draws come from (the hyperparameter sample and the
+            function values). ``None`` (default) keeps NumPy's global legacy
+            stream, as before generators were supported. See
+            :func:`gpyreg.rng.resolve_rng`.
 
         Returns
         =======
         f_star : ndarray, shape (M, 1)
             The values of the drawn function at the requested points.
         """
+        rng = resolve_rng(rng)
         N_star = X_star.shape[0]
         N_s = np.size(self.posteriors)
 
@@ -2365,7 +2386,7 @@ class GP:
         noise_N = self.noise.hyperparameter_count()
 
         # Draw from hyperparameter samples.
-        s = np.random.randint(0, N_s)
+        s = random_integer(rng, N_s)
 
         hyp = self.posteriors[s].hyp
         alpha = self.posteriors[s].alpha
@@ -2412,7 +2433,7 @@ class GP:
 
         # Draw random function
         T = self.__robust_cholesky(C)
-        f_star = np.dot(T.T, np.random.standard_normal((T.shape[0], 1))) + f_mu
+        f_star = np.dot(T.T, rng.standard_normal((T.shape[0], 1))) + f_mu
 
         # Add observation noise.
         if add_noise:
@@ -2424,9 +2445,9 @@ class GP:
             sn2_mult = self.posteriors[s].sn2_mult
             if sn2_mult is None:
                 sn2_mult = 1
-            y_star = f_star + np.sqrt(
-                sn2 * sn2_mult
-            ) * np.random.standard_normal(size=f_mu.shape)
+            y_star = f_star + np.sqrt(sn2 * sn2_mult) * rng.standard_normal(
+                size=f_mu.shape
+            )
             return y_star
 
         return f_star
