@@ -8,7 +8,7 @@ if "%SPHINXBUILD%" == "" (
 	set SPHINXBUILD=sphinx-build
 )
 set SOURCEDIR=source
-set BUILDDIR=build
+set BUILDDIR=_build
 
 if "%1" == "" goto help
 
@@ -22,11 +22,30 @@ if errorlevel 9009 (
 	echo.
 	echo.If you don't have Sphinx installed, grab it from
 	echo.http://sphinx-doc.org/
+	popd
 	exit /b 1
 )
 
+if "%1" == "github" goto github
+
 %SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 goto end
+
+:github
+REM Build the HTML docs and copy them to ..\docs for the gh-pages branch,
+REM mirroring the "github" target of the Makefile.
+%SPHINXBUILD% -M html %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
+if errorlevel 1 goto fail
+if not exist ..\docs mkdir ..\docs
+xcopy /E /I /Y /Q %BUILDDIR%\html ..\docs >NUL
+if errorlevel 1 goto fail
+copy /Y .nojekyll ..\docs\.nojekyll >NUL
+if errorlevel 1 goto fail
+goto end
+
+:fail
+popd
+exit /b 1
 
 :help
 %SPHINXBUILD% -M help %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%

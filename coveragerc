@@ -1,2 +1,0 @@
-[run]
-omit = */examples/example_1.py,*/examples/example_2.py, */tests/test_gaussian_process.py, */tests/test_slice_sample.py, */tests/test_smoothbox.py, */tests/test_smoothbox_student_t.py, */setup.py

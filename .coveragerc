@@ -1,0 +1,6 @@
+[run]
+omit =
+    */gpyreg/testing/*
+    */gpyreg/_version.py
+    */examples/*
+    */setup.py
