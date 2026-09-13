@@ -842,7 +842,7 @@ point.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.predict">
-<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_lpd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_lpd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_cross_covariance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict" title="Link to this definition">#</a></dt>
 <dd><p>Compute the GP posterior mean and noise variance at given points.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -853,7 +853,7 @@ point.</p>
 </dd>
 <dt><strong>s2_star</strong><span class="classifier">ndarray, shape (M, 1), optional</span></dt><dd><p>Noise variance at the points.</p>
 </dd>
-<dt><strong>add_noise</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code></span></dt><dd><p>Whether to add noise to the prediction results.</p>
+<dt><strong>add_noise</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to add noise to the prediction results.</p>
 </dd>
 <dt><strong>separate_samples</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to return the results separately for each hyperparameter
 sample or averaged.</p>
@@ -862,18 +862,34 @@ sample or averaged.</p>
 If separate_samples is <code class="docutils literal notranslate"><span class="pre">False</span></code>, returns the lpd of the
 corresponding mean approximation.</p>
 </dd>
+<dt><strong>return_cross_covariance</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to append the latent training-to-prediction kernel
+matrices to the return values. The matrices are kept separate for
+each hyperparameter sample even when <code class="docutils literal notranslate"><span class="pre">separate_samples</span></code> is
+<code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
+</dd>
 </dl>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>mu</strong><span class="classifier">ndarray</span></dt><dd><p>Posterior mean at the requested points. If we requested
 separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">sample_N)</span></code> while
-otherwise it is  <code class="docutils literal notranslate"><span class="pre">(M,)</span></code>.
-sample.</p>
+otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">1)</span></code>.</p>
 </dd>
 <dt><strong>s2</strong><span class="classifier">ndarray</span></dt><dd><p>Noise variance at each point. If we requested
 separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">sample_N)</span></code> while
-otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,)</span></code>.</p>
+otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">1)</span></code>.</p>
+</dd>
+<dt><strong>lpd</strong><span class="classifier">ndarray, optional</span></dt><dd><p>Log predictive density at each point. Returned when
+<code class="docutils literal notranslate"><span class="pre">return_lpd</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code> and shaped like <code class="docutils literal notranslate"><span class="pre">mu</span></code>.</p>
+</dd>
+<dt><strong>cross_covariance</strong><span class="classifier">tuple of ndarray or None, optional</span></dt><dd><p>Returned when <code class="docutils literal notranslate"><span class="pre">return_cross_covariance</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>. Entry
+<code class="docutils literal notranslate"><span class="pre">s</span></code> is the latent, unconditioned kernel matrix
+<code class="docutils literal notranslate"><span class="pre">K(X,</span> <span class="pre">x_star)</span></code> with shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">M)</span></code> for hyperparameter sample
+<code class="docutils literal notranslate"><span class="pre">s</span></code>. Prior-only GPs, which have no training targets, return
+<code class="docutils literal notranslate"><span class="pre">None</span></code> for every sample. The matrices are call-local and should
+be treated as read-only; custom covariance results may be copied
+to give each tuple entry stable values. Observation-noise inputs
+and <code class="docutils literal notranslate"><span class="pre">add_noise</span></code> do not affect these latent kernel matrices.</p>
 </dd>
 </dl>
 </dd>
@@ -1098,6 +1114,13 @@ by adding numerical stability values to the matrix.</p>
 
 </dd></dl>
 
+<p><code class="docutils literal notranslate"><span class="pre">GP.predict</span></code> can optionally return the latent kernel matrices between the
+training and prediction inputs.  Passing
+<code class="docutils literal notranslate"><span class="pre">return_cross_covariance=True</span></code> appends a tuple in hyperparameter-sample
+order to the ordinary return values.  These matrices have shape
+<code class="docutils literal notranslate"><span class="pre">(N_training,</span> <span class="pre">N_prediction)</span></code> and are not averaged when prediction samples
+are averaged.  See the method documentation for the complete return
+contract, including prior-only Gaussian processes.</p>
 </section>
 <section id="posterior">
 <h3><code class="docutils literal notranslate"><span class="pre">Posterior</span></code><a class="headerlink" href="#posterior" title="Link to this heading">#</a></h3>
