@@ -1,9 +1,6 @@
 Release notes
 =============
 
-The multidimensional ``SliceSampler`` stepping-out issue remains open in
-both releases; see :doc:`slice_sample` for the affected option and scope.
-
 1.2.0 (2026-09-13)
 ------------------
 
