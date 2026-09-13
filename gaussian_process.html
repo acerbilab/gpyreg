@@ -49,7 +49,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Covariance functions" href="covariance_functions.html" />
-    <link rel="prev" title="GPyReg Documentation" href="index.html" />
+    <link rel="prev" title="Release notes" href="release_notes.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="" />
@@ -191,6 +191,7 @@
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="release_notes.html">Release notes</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Gaussian processes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
@@ -414,6 +415,8 @@
             <nav aria-label="Page">
                 <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-gaussian-process"><code class="docutils literal notranslate"><span class="pre">gpyreg.gaussian_process</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reproducible-fitting">Reproducible fitting</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reusing-prediction-kernels">Reusing prediction kernels</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gp"><code class="docutils literal notranslate"><span class="pre">GP</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.GP"><code class="docutils literal notranslate"><span class="pre">GP</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.GP.bounds_to_dict"><code class="docutils literal notranslate"><span class="pre">GP.bounds_to_dict()</span></code></a></li>
@@ -462,6 +465,51 @@
 <section id="gpyreg-gaussian-process">
 <h2><code class="docutils literal notranslate"><span class="pre">gpyreg.gaussian_process</span></code><a class="headerlink" href="#gpyreg-gaussian-process" title="Link to this heading">#</a></h2>
 <p>This module contains the <code class="docutils literal notranslate"><span class="pre">GP</span></code> class, which is the main entry point for working with Gaussian processes. A class instance is initialized with specified dimension and covariance/mean/noise functions. Then, its various methods can be used to fit data, make predictions, plot the GP, etc.</p>
+<section id="reproducible-fitting">
+<h3>Reproducible fitting<a class="headerlink" href="#reproducible-fitting" title="Link to this heading">#</a></h3>
+<p>Since version 1.1.0, fitting accepts an <code class="docutils literal notranslate"><span class="pre">rng</span></code> argument. Given a GP instance
+<code class="docutils literal notranslate"><span class="pre">gp</span></code> and training arrays <code class="docutils literal notranslate"><span class="pre">X</span></code> and <code class="docutils literal notranslate"><span class="pre">y</span></code>, an integer seed initializes the
+stream used for both the space-filling design and hyperparameter sampling:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">hyp</span><span class="p">,</span> <span class="n">optimization</span><span class="p">,</span> <span class="n">sampling</span> <span class="o">=</span> <span class="n">gp</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Pass a <code class="docutils literal notranslate"><span class="pre">numpy.random.Generator</span></code> to share a stream across calls. See
+<a class="reference internal" href="rng.html"><span class="doc">Random number generation</span></a> for stream ownership and the default behavior.</p>
+</section>
+<section id="reusing-prediction-kernels">
+<h3>Reusing prediction kernels<a class="headerlink" href="#reusing-prediction-kernels" title="Link to this heading">#</a></h3>
+<p>Since version 1.2.0, <a class="reference internal" href="#gpyreg.GP.predict" title="gpyreg.GP.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.predict()</span></code></a> can return the latent kernel
+matrices between training and prediction inputs. Given a fitted <code class="docutils literal notranslate"><span class="pre">gp</span></code>
+and an <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">D)</span></code> array <code class="docutils literal notranslate"><span class="pre">X_star</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mu</span><span class="p">,</span> <span class="n">variance</span> <span class="o">=</span> <span class="n">gp</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_star</span><span class="p">)</span>
+<span class="n">mu</span><span class="p">,</span> <span class="n">variance</span><span class="p">,</span> <span class="n">kernels</span> <span class="o">=</span> <span class="n">gp</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span>
+    <span class="n">X_star</span><span class="p">,</span> <span class="n">return_cross_covariance</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">mu</span></code> and <code class="docutils literal notranslate"><span class="pre">variance</span></code> have shape <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">1)</span></code> when predictions are averaged
+across hyperparameter samples, or <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">S)</span></code> with <code class="docutils literal notranslate"><span class="pre">separate_samples=True</span></code>.
+The extra <code class="docutils literal notranslate"><span class="pre">kernels</span></code> tuple always contains one entry for each of the <code class="docutils literal notranslate"><span class="pre">S</span></code>
+hyperparameter samples, independently of <code class="docutils literal notranslate"><span class="pre">separate_samples</span></code>. Each entry
+is <code class="docutils literal notranslate"><span class="pre">K(X,</span> <span class="pre">X_star)</span></code> with shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">M)</span></code>, where <code class="docutils literal notranslate"><span class="pre">N</span></code> is the training-set
+size. A GP without training targets returns <code class="docutils literal notranslate"><span class="pre">None</span></code> for each sample.</p>
+<p>These are unconditioned latent kernels. Observation noise is excluded even
+with <code class="docutils literal notranslate"><span class="pre">add_noise=True</span></code>. To obtain the posterior predictive covariance
+between prediction points, use <a class="reference internal" href="#gpyreg.GP.predict_full" title="gpyreg.GP.predict_full"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.predict_full()</span></code></a>.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">return_lpd=True</span></code>, the kernel tuple follows the log predictive density:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mu</span><span class="p">,</span> <span class="n">variance</span><span class="p">,</span> <span class="n">lpd</span><span class="p">,</span> <span class="n">kernels</span> <span class="o">=</span> <span class="n">gp</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span>
+    <span class="n">X_star</span><span class="p">,</span> <span class="n">y_star</span><span class="o">=</span><span class="n">y_star</span><span class="p">,</span> <span class="n">return_lpd</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_cross_covariance</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Here <code class="docutils literal notranslate"><span class="pre">y_star</span></code> contains the observed values at the prediction points.
+Treat returned kernels as read-only. Retaining all matrices requires
+approximately <code class="docutils literal notranslate"><span class="pre">8</span> <span class="pre">*</span> <span class="pre">N</span> <span class="pre">*</span> <span class="pre">M</span> <span class="pre">*</span> <span class="pre">S</span></code> bytes for float64 data, in addition to other
+prediction allocations. GPyReg imposes no retention cap; request these
+matrices only when needed and release them after use. The option defaults
+to <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
+</section>
 <section id="gp">
 <h3><code class="docutils literal notranslate"><span class="pre">GP</span></code><a class="headerlink" href="#gp" title="Link to this heading">#</a></h3>
 <dl class="py class">
@@ -1114,13 +1162,6 @@ by adding numerical stability values to the matrix.</p>
 
 </dd></dl>
 
-<p><code class="docutils literal notranslate"><span class="pre">GP.predict</span></code> can optionally return the latent kernel matrices between the
-training and prediction inputs.  Passing
-<code class="docutils literal notranslate"><span class="pre">return_cross_covariance=True</span></code> appends a tuple in hyperparameter-sample
-order to the ordinary return values.  These matrices have shape
-<code class="docutils literal notranslate"><span class="pre">(N_training,</span> <span class="pre">N_prediction)</span></code> and are not averaged when prediction samples
-are averaged.  See the method documentation for the complete return
-contract, including prior-only Gaussian processes.</p>
 </section>
 <section id="posterior">
 <h3><code class="docutils literal notranslate"><span class="pre">Posterior</span></code><a class="headerlink" href="#posterior" title="Link to this heading">#</a></h3>
@@ -1146,12 +1187,12 @@ contract, including prior-only Gaussian processes.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="index.html"
+       href="release_notes.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">GPyReg Documentation</p>
+        <p class="prev-next-title">Release notes</p>
       </div>
     </a>
     <a class="right-next"
@@ -1182,6 +1223,8 @@ contract, including prior-only Gaussian processes.</p>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-gaussian-process"><code class="docutils literal notranslate"><span class="pre">gpyreg.gaussian_process</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reproducible-fitting">Reproducible fitting</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reusing-prediction-kernels">Reusing prediction kernels</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gp"><code class="docutils literal notranslate"><span class="pre">GP</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.GP"><code class="docutils literal notranslate"><span class="pre">GP</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.GP.bounds_to_dict"><code class="docutils literal notranslate"><span class="pre">GP.bounds_to_dict()</span></code></a></li>

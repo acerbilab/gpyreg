@@ -190,6 +190,7 @@
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="release_notes.html">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
@@ -413,12 +414,15 @@
             <nav aria-label="Page">
                 <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-rng"><code class="docutils literal notranslate"><span class="pre">gpyreg.rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#resolve-rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.resolve_rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#choosing-a-stream">Choosing a stream</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#resolve-rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.resolve_rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#random-integer"><code class="docutils literal notranslate"><span class="pre">random_integer</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.random_integer"><code class="docutils literal notranslate"><span class="pre">random_integer()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#random-integer"><code class="docutils literal notranslate"><span class="pre">random_integer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.random_integer"><code class="docutils literal notranslate"><span class="pre">random_integer()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -438,10 +442,10 @@
 <h1>Random number generation<a class="headerlink" href="#random-number-generation" title="Link to this heading">#</a></h1>
 <section id="gpyreg-rng">
 <h2><code class="docutils literal notranslate"><span class="pre">gpyreg.rng</span></code><a class="headerlink" href="#gpyreg-rng" title="Link to this heading">#</a></h2>
-<p>The functions of gpyreg that draw random numbers (<code class="docutils literal notranslate"><span class="pre">GP.fit</span></code>,
+<p>Since version 1.1.0, the GPyReg functions that draw random numbers (<code class="docutils literal notranslate"><span class="pre">GP.fit</span></code>,
 <code class="docutils literal notranslate"><span class="pre">GP.random_function</span></code>, <code class="docutils literal notranslate"><span class="pre">SliceSampler</span></code>, <code class="docutils literal notranslate"><span class="pre">f_min_fill</span></code>) take an <code class="docutils literal notranslate"><span class="pre">rng</span></code>
 argument resolved by the helpers below. <code class="docutils literal notranslate"><span class="pre">rng=None</span></code> (the default) keeps
-NumPy’s global legacy stream, as before generators were supported.
+NumPy’s global legacy stream.
 The legacy stream uses a stateless proxy, so copying or pickling a sampler
 does not capture NumPy’s global state; <code class="docutils literal notranslate"><span class="pre">np.random.seed</span></code> continues to
 control its draws. Samplers pickled before the <code class="docutils literal notranslate"><span class="pre">rng</span></code> argument was added
@@ -450,8 +454,28 @@ preserves that generator’s state when copied or pickled.</p>
 <p>Resolving a generator or an already resolved legacy proxy returns the same
 object. <code class="docutils literal notranslate"><span class="pre">GP.fit</span></code> resolves its argument once and shares the stream between
 the initial design and the sampler, including when given an integer seed.</p>
+<section id="choosing-a-stream">
+<h3>Choosing a stream<a class="headerlink" href="#choosing-a-stream" title="Link to this heading">#</a></h3>
+<p>Pass an integer seed to initialize a new stream for a fit:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">gp</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="mi">1234</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Pass a generator when several operations should consume successive draws
+from the same stream:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">1234</span><span class="p">)</span>
+<span class="n">gp</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">rng</span><span class="p">)</span>
+<span class="n">draw</span> <span class="o">=</span> <span class="n">gp</span><span class="o">.</span><span class="n">random_function</span><span class="p">(</span><span class="n">X_star</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">rng</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>These examples assume <code class="docutils literal notranslate"><span class="pre">gp</span></code> is a GP instance, <code class="docutils literal notranslate"><span class="pre">X</span></code> and <code class="docutils literal notranslate"><span class="pre">y</span></code> are training
+data, and <code class="docutils literal notranslate"><span class="pre">X_star</span></code> contains prediction inputs. Calls advance the supplied
+generator. Passing the same integer seed to each call instead creates a new
+stream each time. With <code class="docutils literal notranslate"><span class="pre">rng=None</span></code>, use <code class="docutils literal notranslate"><span class="pre">np.random.seed</span></code> to initialize the
+global stream; a generator passed explicitly is independent of that stream.</p>
 <section id="resolve-rng">
-<h3><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code><a class="headerlink" href="#resolve-rng" title="Link to this heading">#</a></h3>
+<h4><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code><a class="headerlink" href="#resolve-rng" title="Link to this heading">#</a></h4>
 <dl class="py function">
 <dt class="sig sig-object py" id="gpyreg.rng.resolve_rng">
 <span class="sig-prename descclassname"><span class="pre">gpyreg.rng.</span></span><span class="sig-name descname"><span class="pre">resolve_rng</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/rng.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.rng.resolve_rng" title="Link to this definition">#</a></dt>
@@ -483,7 +507,7 @@ differs.</p>
 
 </section>
 <section id="random-integer">
-<h3><code class="docutils literal notranslate"><span class="pre">random_integer</span></code><a class="headerlink" href="#random-integer" title="Link to this heading">#</a></h3>
+<h4><code class="docutils literal notranslate"><span class="pre">random_integer</span></code><a class="headerlink" href="#random-integer" title="Link to this heading">#</a></h4>
 <dl class="py function">
 <dt class="sig sig-object py" id="gpyreg.rng.random_integer">
 <span class="sig-prename descclassname"><span class="pre">gpyreg.rng.</span></span><span class="sig-name descname"><span class="pre">random_integer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rng</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/rng.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.rng.random_integer" title="Link to this definition">#</a></dt>
@@ -491,6 +515,7 @@ differs.</p>
 the legacy proxy, <code class="docutils literal notranslate"><span class="pre">integers</span></code> on a <code class="docutils literal notranslate"><span class="pre">Generator</span></code>).</p>
 </dd></dl>
 
+</section>
 </section>
 </section>
 </section>
@@ -534,12 +559,15 @@ the legacy proxy, <code class="docutils literal notranslate"><span class="pre">i
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-rng"><code class="docutils literal notranslate"><span class="pre">gpyreg.rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#resolve-rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.resolve_rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#choosing-a-stream">Choosing a stream</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#resolve-rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.resolve_rng"><code class="docutils literal notranslate"><span class="pre">resolve_rng()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#random-integer"><code class="docutils literal notranslate"><span class="pre">random_integer</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.random_integer"><code class="docutils literal notranslate"><span class="pre">random_integer()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#random-integer"><code class="docutils literal notranslate"><span class="pre">random_integer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.rng.random_integer"><code class="docutils literal notranslate"><span class="pre">random_integer()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

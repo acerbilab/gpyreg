@@ -29,6 +29,7 @@ The primary entry point for users is the :ref:`GP Class<\`\`GP\`\`>`, used to co
    :maxdepth: 2
    :caption: Contents:
 
+   release_notes
    gaussian_process
    covariance_functions
    mean_functions
@@ -40,7 +41,6 @@ Indices and tables
 ==================
 
 * :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`
 
 License and source
@@ -52,4 +52,5 @@ The source code is on :labrepos:`GitHub <gpyreg>`.
 Acknowledgments
 ===============
 
-GPyReg was developed by `members <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people>`_ (past and current) of the `Machine and Human Intelligence Lab <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/>`_ at the University of Helsinki. Development is being supported by the `Finnish Center for Artificial Intelligence FCAI <https://fcai.fi/>`_.
+GPyReg is developed by `members <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people>`_ (past and current) of the `Machine and Human Intelligence Lab <https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/>`_ at the University of Helsinki and `ELLIS Institute Finland <https://www.ellisinstitute.fi/>`_. Development of GPyReg from version 1.1 onwards has been assisted by coding agents, including Anthropic's `Claude Fable 5.1 <https://www.anthropic.com/claude-fable-and-mythos-5-1>`_ and OpenAI's `GPT-6 Astra <https://developers.openai.com/api/docs/models/gpt-6-astra>`_.
+Work on the GPyReg package is supported by the Research Council of Finland (grants 356498 and 358980 to Luigi Acerbi) and its Flagship programme: `Finnish Center for Artificial Intelligence FCAI <https://fcai.fi/>`_.
