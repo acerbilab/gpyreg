@@ -782,8 +782,9 @@ class GP:
         s2_new : ndarray, shape (N, 1), optional
             New input-dependent noise that will be added to the old training
             inputs.
-        hyp : ndarray, shape (hyp_N,), optional
-            New hyperparameters that will replace the old ones.
+        hyp : ndarray, shape (hyp_samples, hyp_N), optional
+            New hyperparameters that will replace the old ones, one row per
+            hyperparameter sample.
         compute_posterior : bool, defaults to True
             Whether to compute the new posterior or not.
 
@@ -806,7 +807,10 @@ class GP:
         if hyp is not None:
             hyp = hyp.copy()
 
-        # Check whether to do a rank-1 update.
+        # Check whether to do a rank-1 update. The shortcut extends the
+        # existing posteriors, so it applies only while their
+        # hyperparameters stay in place: replacement hyperparameters need
+        # a full recomputation.
         rank_one_update = False
         if X_new is not None and y_new is not None and compute_posterior:
             if (
@@ -815,6 +819,7 @@ class GP:
                 and X_new.shape[0] == 1
                 and y_new.shape[0] == 1
                 and s2_new is None
+                and hyp is None
             ):
                 rank_one_update = True
         full_updates = []  # Keep track of unstable rank-1 updates
@@ -2053,8 +2058,9 @@ class GP:
             number which is interpreted as an array of shape ``(1, D)``.
         sigma : array_like
             Either a array of shape ``(N, D)`` with each row containing the
-            variance of a single Gaussian measure, or a single floating point
-            number which is interpreted as an array of shape ``(1, D)``.
+            standard deviation of a single Gaussian measure, or a single
+            floating point number which is interpreted as an array of shape
+            ``(1, D)``.
         compute_var : bool, defaults to False
             Whether to compute variance for each integral.
         separate_samples : bool, defaults to False
@@ -2106,6 +2112,9 @@ class GP:
         quadratic_mean_fun = isinstance(
             self.mean, gpyreg.mean_functions.NegativeQuadratic
         )
+        isotropic = isinstance(
+            self.covariance, isotropic_covariance.SquaredExponentialIsotropic
+        )
 
         F = np.zeros((N_star, N_s))
         if compute_var:
@@ -2116,9 +2125,16 @@ class GP:
             hyp = self.posteriors[s].hyp
 
             # Extract GP hyperparameters
-            ell = np.exp(hyp[0:D])
-            ln_sf2 = 2 * hyp[D]
-            sum_lnell = np.sum(hyp[0:D])
+            if isotropic:
+                # A single shared log lengthscale, then the log output
+                # scale.
+                ell = np.full(D, np.exp(hyp[0]))
+                ln_sf2 = 2 * hyp[1]
+                sum_lnell = D * hyp[0]
+            else:
+                ell = np.exp(hyp[0:D])
+                ln_sf2 = 2 * hyp[D]
+                sum_lnell = np.sum(hyp[0:D])
 
             # GP mean function hyperparameters
             if isinstance(self.mean, gpyreg.mean_functions.ZeroMean):
@@ -2135,8 +2151,15 @@ class GP:
             L = self.posteriors[s].L
             L_chol = self.posteriors[s].L_chol
 
-            sn2 = np.exp(2 * hyp[cov_N])
-            sn2_eff = sn2 * self.posteriors[s].sn2_mult
+            if compute_var and L_chol:
+                # Normalization of the Cholesky factor, matching the
+                # posterior computation: L = chol((K + sn2_mult * sn2) / sl)
+                # with sl the minimum total training noise variance,
+                # including any user-provided variance, times sn2_mult.
+                sn2 = self.noise.compute(
+                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
+                )
+                sl = np.min(sn2) * self.posteriors[s].sn2_mult
 
             # Compute posterior mean of the integral
             tau = np.sqrt(sigma**2 + ell**2)
@@ -2174,7 +2197,7 @@ class GP:
                         sp.linalg.solve_triangular(
                             L, tmp_result, trans=0, check_finite=False
                         )
-                        / sn2_eff
+                        / sl
                     )
                 else:
                     invKzk = np.dot(-L, z.T)
@@ -2831,20 +2854,46 @@ class GP:
 
 class Posterior:
     """
-    This object represents the posterior.
+    GP posterior for one hyperparameter vector.
+
+    Stores the coefficients and matrix factor that prediction, sampling and
+    quadrature need for a fixed set of hyperparameters, so that repeated
+    calls reuse them instead of factorizing the training covariance again.
+    ``GP.posteriors`` holds one instance per hyperparameter sample. Below,
+    ``K`` is the training covariance, ``sn2`` the vector of training noise
+    variances, ``m`` the mean function evaluated at the training inputs
+    and ``sl = min(sn2) * sn2_mult``. Every attribute except ``hyp`` is
+    ``None`` when the posterior has not been computed, after
+    :py:func:`GP.clean` or :py:func:`GP.update` with
+    ``compute_posterior=False``.
+
+    Attributes
+    ==========
+    hyp : ndarray, shape (hyp_N,)
+        The hyperparameters this posterior was computed for.
+    alpha : ndarray, shape (N, 1)
+        ``inv(K + sn2_mult * diag(sn2)) @ (y - m)``, the weights of the
+        training points in the posterior mean.
+    sW : ndarray, shape (N, 1)
+        ``1 / sqrt(sl)`` in every entry; the square root of the noise
+        precision used to scale the factorization.
+    L : ndarray, shape (N, N)
+        If ``L_chol`` is True, the upper triangular Cholesky factor of
+        ``(K + sn2_mult * diag(sn2)) / sl``. Otherwise
+        ``-inv(K + sn2_mult * diag(sn2))``, used when the noise is too
+        small for a stable Cholesky decomposition.
+    sn2_mult : int
+        Multiplier applied to the noise variances, increased in powers of
+        ten until the Cholesky decomposition succeeds.
+    L_chol : bool
+        Whether ``L`` is a Cholesky factor (``min(sn2) >= 1e-6``) or a
+        negative inverse.
     """
 
     def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
         self.hyp = hyp
-        # alpha = inv(K + sn2_mult * sn2) * (y - m) / sl
         self.alpha = alpha
-        # Sqrt of noise precision vector, sW = 1 / sqrt(min(sn2) * sn2_mult)
         self.sW = sW
-        # If L_chol is True, L = chol((K + sn2_mult * sn2) / sl), sl =
-        # sn2_multi * sn2_div, sn2_div = min(sn2)
-        # If L_chol is False, L = -inv((K + sn2_mult * sn2) / sl), sl = 1
         self.L = L
-        # A multiplier factor for making cholesky decomposition work
         self.sn2_mult = sn2_mult
-        # L_chol is True if np.min(sn2) >= 1e-6
         self.L_chol = Lchol

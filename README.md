@@ -5,8 +5,8 @@
 <br />
 [![Discussion](https://img.shields.io/badge/-discussion-blue?logo=github)](https://github.com/orgs/acerbilab/discussions)
 [![tests](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/tests.yml?branch=main&label=tests)](https://github.com/acerbilab/gpyreg/actions/workflows/tests.yml)
-[![docs](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/build.yml?branch=main&label=docs)](https://github.com/acerbilab/gpyreg/actions/workflows/docs.yml)
-[![build](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/docs.yml?branch=main&label=build)](https://github.com/acerbilab/gpyreg/actions/workflows/build.yml)
+[![docs](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/docs.yml?branch=main&label=docs)](https://github.com/acerbilab/gpyreg/actions/workflows/docs.yml)
+[![build](https://img.shields.io/github/actions/workflow/status/acerbilab/gpyreg/build.yml?branch=main&label=build)](https://github.com/acerbilab/gpyreg/actions/workflows/build.yml)
 ### What is it?
 GPyReg is a lightweight package for Gaussian process regression in Python. It was developed for use with [PyVBMC](https://github.com/acerbilab/pyvbmc) (a Python package for efficient black-box Bayesian inference) but is usable as a standalone package.
 
@@ -34,10 +34,9 @@ If you have trouble doing something with GPyReg, spot bugs or strange behavior, 
 You can also demonstrate your appreciation for GPyReg in the following ways:
 
 - *Star :star:* the repository on GitHub;
-- [Subscribe](http://eepurl.com/idcvc9) to the lab's newsletter for news and updates (new features, bug fixes, new releases, etc.);
-- [Follow Luigi Acerbi on Twitter](https://twitter.com/AcerbiLuigi) for updates about our other projects;
+- Follow Luigi Acerbi on [X](https://x.com/AcerbiLuigi) or [Bluesky](https://bsky.app/profile/lacerbi.bsky.social) for updates about our other projects;
 
-If you are interested in applications of Gaussian process regression to Bayesian inference and optimization, you may also want to check out [PyVBMC](https://github.com/acerbilab/pyvbmc) for efficient black-box inference, and [Bayesian Adaptive Direct Search](https://github.com/acerbilab/bads) (BADS), our method for fast Bayesian optimization. BADS is currently available only in MATLAB, but a Python version will be released soon.
+If you are interested in applications of Gaussian process regression to Bayesian inference and optimization, you may also want to check out [PyVBMC](https://github.com/acerbilab/pyvbmc) for efficient black-box inference, and [PyBADS](https://github.com/acerbilab/pybads), the Python implementation of Bayesian Adaptive Direct Search (BADS), our method for fast Bayesian optimization.
 
 ### License
 

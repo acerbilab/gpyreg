@@ -1,11 +1,12 @@
-# run: conda env create --file environment.yml
+# run: conda env create --file environment_pure_conda.yml
 name: gpyreg_pure_conda
 dependencies:
-  - python>=3.8
+  - python>=3.9
   - pip
   - numpy
   - scipy
   - matplotlib
+  - numdifftools
   - pytest
   - pytest-cov
   - pytest-rerunfailures

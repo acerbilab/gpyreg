@@ -57,7 +57,7 @@ Hyperparameters are a single flat float vector ordered **covariance, then noise,
 
 - `GP.fit(X, y, s2, hyp0, options)`: fill unset bounds from the components' recommended bounds, evaluate the objective on a Sobol space-filling design of initial candidates built by `f_min_fill` (which maps unit-cube points through the hyperparameter priors), run `scipy.optimize.minimize` with analytic gradients from the best candidates, optionally run `SliceSampler` for `n_samples` posterior draws, then call `update` to build posteriors. Returns `(hyp, optimize_result, sampling_result)`.
 - `Posterior` (bottom of `gaussian_process.py`) is a plain class holding `hyp, alpha, sW, L, sn2_mult, L_chol`; `GP.posteriors` is an object array with one entry per hyperparameter sample. `predict` averages over posteriors and adds between-sample variance unless `separate_samples=True`.
-- `GP.update` appends data. Adding exactly one point with `y_new` and no `s2_new` performs a rank-one Cholesky update per posterior, falling back to a full recomputation when that is numerically unsafe; anything else recomputes every posterior.
+- `GP.update` appends data. Adding exactly one point with `y_new`, no `s2_new`, and no replacement `hyp` performs a rank-one Cholesky update per posterior, falling back to a full recomputation when that is numerically unsafe; anything else recomputes every posterior.
 - `GP.quad` (Bayesian quadrature) hard-codes the `SquaredExponential` hyperparameter layout and rejects other kernels.
 - `GP.temporary_data` is a free-form dict used by PyVBMC to stash per-GP scratch; `GP.clean` empties it and drops cached quantities.
 

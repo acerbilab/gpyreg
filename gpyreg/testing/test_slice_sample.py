@@ -1,4 +1,6 @@
 import copy
+import logging
+import math
 import pickle
 
 import numpy as np
@@ -79,6 +81,171 @@ def test_evaluations_stay_on_coordinate_line(step_out):
     assert np.all(np.ptp(samples, axis=0) > 0)
     if step_out:
         assert len(evaluated) >= 2 * D * N
+
+
+def _split(trace):
+    """Split a trace into the two half-chains the diagnostics compare."""
+    n = math.floor(trace.shape[0] / 2)
+    return np.array([trace[0:n, :], trace[n : 2 * n, :]])
+
+
+def _diagnostics_sampler():
+    """A sampler whose private diagnostics helpers can be called directly."""
+    return SliceSampler(norm.logpdf, np.array([0.0]), options=options)
+
+
+def test_short_chain_diagnostics_do_not_claim_success():
+    """Four draws are too few to diagnose anything, and the effective
+    sample size of such a chain is still positive and finite."""
+    sampler = SliceSampler(
+        norm.logpdf,
+        np.array([0.0]),
+        widths=1.0,
+        options=options,
+        rng=np.random.default_rng(0),
+    )
+    res = sampler.sample(4, burn=0)
+
+    assert res["exit_flag"] == -3
+    assert np.all(np.isnan(res["R"]))
+    assert np.all(np.isnan(res["eff_N"]))
+
+    eff_N = sampler._SliceSampler__effective_n(_split(res["samples"]))
+    assert np.all(eff_N > 0)
+    assert np.all(np.isfinite(eff_N))
+
+
+def test_constant_trace_in_a_free_parameter_fails_the_diagnostics(caplog):
+    """A parameter that is free to move but whose chain stayed put has
+    undefined diagnostics, which must not pass as convergence."""
+    sampler = _diagnostics_sampler()
+    samples = np.zeros((20, 1))
+
+    with caplog.at_level(logging.INFO, logger="SliceSampler"):
+        exit_flag, R, eff_N = sampler._SliceSampler__diagnose(samples)
+
+    assert exit_flag == -3
+    assert np.all(np.isnan(R))
+    assert np.all(np.isnan(eff_N))
+    assert "did not move" in caplog.text
+
+
+def test_fixed_parameter_is_left_out_of_the_diagnostics():
+    """A parameter fixed by LB == UB has no diagnostics to report, and the
+    checks look only at the parameter that is actually sampled."""
+    rv = multivariate_normal(np.zeros(2), np.eye(2))
+    sampler = SliceSampler(
+        rv.logpdf,
+        np.array([0.0, 1.0]),
+        LB=np.array([-np.inf, 1.0]),
+        UB=np.array([np.inf, 1.0]),
+        options=options,
+        rng=np.random.default_rng(2),
+    )
+    res = sampler.sample(200)
+
+    assert np.all(res["samples"][:, 1] == 1.0)
+    assert np.isnan(res["R"][1])
+    assert np.isnan(res["eff_N"][1])
+    assert np.isfinite(res["R"][0])
+    assert res["eff_N"][0] > 0
+    assert res["exit_flag"] == 1
+
+
+def test_anticorrelated_trace_has_a_large_but_bounded_effective_n():
+    """Anticorrelated draws carry more information than independent ones,
+    so the effective sample size exceeds the number of draws, up to the
+    cap that keeps the estimate finite."""
+    sampler = _diagnostics_sampler()
+    trace = np.tile([-1.0, 1.0], 10)[:, None]
+    split = _split(trace)
+    m, n = split.shape[0], split.shape[1]
+
+    eff_N = sampler._SliceSampler__effective_n(split)
+
+    cap = m * n * np.log10(m * n)
+    assert np.all(np.isfinite(eff_N))
+    assert np.all(eff_N > trace.shape[0])
+    assert np.all(eff_N <= cap * (1 + 1e-12))
+
+
+def test_positively_correlated_trace_has_a_small_effective_n():
+    """An AR(1) chain with a high coefficient mixes slowly, so its
+    effective sample size is well below the number of draws."""
+    sampler = _diagnostics_sampler()
+    rng = np.random.default_rng(5)
+    N = 400
+    phi = 0.9
+    innovations = rng.standard_normal(N)
+    trace = np.zeros(N)
+    for i in range(1, N):
+        trace[i] = phi * trace[i - 1] + innovations[i]
+
+    eff_N = sampler._SliceSampler__effective_n(_split(trace[:, None]))
+
+    assert np.all(eff_N > 0)
+    assert np.all(eff_N < N / 4)
+
+
+def _geyer_effective_n_reference(split):
+    """Effective sample size of two half-chains, written out directly.
+
+    Estimates the autocorrelations from the split-chain variance and the
+    variogram, sums them in consecutive pairs while the pair sum is
+    positive, and floors the integrated autocorrelation time at
+    ``1 / log10(m * n)``.
+    """
+    m, n = split.shape
+    chain_means = split.mean(axis=1)
+    B_over_n = np.sum((chain_means - split.mean()) ** 2) / (m - 1)
+    W = np.sum((split - chain_means[:, None]) ** 2) / (m * (n - 1))
+    s2 = W * (n - 1) / n + B_over_n
+    rho = np.ones(n)
+    for t in range(1, n):
+        variogram = np.sum((split[:, t:] - split[:, :-t]) ** 2)
+        variogram /= m * (n - t)
+        rho[t] = 1.0 - variogram / (2.0 * s2)
+    tau = -1.0
+    for t in range(0, n - 1, 2):
+        pair = rho[t] + rho[t + 1]
+        if pair <= 0:
+            break
+        tau += 2 * pair
+    tau = max(tau, 1.0 / np.log10(m * n))
+    return m * n / tau
+
+
+def test_healthy_chain_effective_n_matches_reference():
+    """A mixing chain whose autocorrelation dies out ends the pair sum on
+    a non-positive pair. The estimator then equals Geyer's initial positive
+    sequence written out directly, and the diagnostics report success."""
+    rng = np.random.default_rng(8)
+    N = 300
+    phi = 0.5
+    innovations = rng.standard_normal(N)
+    trace = np.zeros(N)
+    for i in range(1, N):
+        trace[i] = phi * trace[i - 1] + innovations[i]
+    split = _split(trace[:, None])
+
+    sampler = _diagnostics_sampler()
+    eff_N = sampler._SliceSampler__effective_n(split)
+    expected = _geyer_effective_n_reference(split[:, :, 0])
+    assert 0 < expected < N
+    np.testing.assert_allclose(eff_N, expected, rtol=1e-12)
+
+    rv = multivariate_normal(np.zeros(2), np.eye(2))
+    slicer = SliceSampler(
+        rv.logpdf,
+        np.zeros(2),
+        options=options,
+        rng=np.random.default_rng(9),
+    )
+    res = slicer.sample(400)
+    assert res["exit_flag"] == 1
+    assert np.all(np.isfinite(res["R"]))
+    assert np.all(np.isfinite(res["eff_N"]))
+    assert np.all(res["eff_N"] >= 400 / 10)
 
 
 # The following tests can fail with some small probability.
