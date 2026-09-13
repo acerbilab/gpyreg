@@ -13,6 +13,14 @@ This module contains the ``GP`` class, which is the main entry point for working
     :members:
     :undoc-members:
 
+``GP.predict`` can optionally return the latent kernel matrices between the
+training and prediction inputs.  Passing
+``return_cross_covariance=True`` appends a tuple in hyperparameter-sample
+order to the ordinary return values.  These matrices have shape
+``(N_training, N_prediction)`` and are not averaged when prediction samples
+are averaged.  See the method documentation for the complete return
+contract, including prior-only Gaussian processes.
+
 ``Posterior``
 ===================
 .. autoclass:: gpyreg.gaussian_process.Posterior

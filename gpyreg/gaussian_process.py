@@ -11,6 +11,7 @@ import numpy as np
 import scipy as sp
 
 import gpyreg.covariance_functions
+import gpyreg.isotropic_covariance_functions as isotropic_covariance
 import gpyreg.mean_functions
 from gpyreg.f_min_fill import (
     f_min_fill,
@@ -25,6 +26,40 @@ from gpyreg.slice_sample import SliceSampler
 # one fit when only mean-function hyperparameters moved (see
 # GP.__core_computation). Module-level so a test can switch it off.
 _REUSE_CHOLESKY = True
+
+
+# These bundled covariance implementations return a fresh cross-kernel matrix
+# on every call. Keep the original method objects so later class or instance
+# overrides take the defensive-copy path.
+_ZERO_COPY_CROSS_COVARIANCE_COMPUTES = {
+    gpyreg.covariance_functions.SquaredExponential: (
+        gpyreg.covariance_functions.SquaredExponential.compute
+    ),
+    gpyreg.covariance_functions.Matern: (
+        gpyreg.covariance_functions.Matern.compute
+    ),
+    gpyreg.covariance_functions.RationalQuadraticARD: (
+        gpyreg.covariance_functions.RationalQuadraticARD.compute
+    ),
+    isotropic_covariance.MaternIsotropic: (
+        isotropic_covariance.MaternIsotropic.compute
+    ),
+    isotropic_covariance.SquaredExponentialIsotropic: (
+        isotropic_covariance.SquaredExponentialIsotropic.compute
+    ),
+}
+
+
+def _can_retain_cross_covariance(covariance):
+    """Return whether a covariance method produces fresh bundled matrices."""
+    expected = _ZERO_COPY_CROSS_COVARIANCE_COMPUTES.get(type(covariance))
+    compute = getattr(covariance, "compute", None)
+    return (
+        expected is not None
+        and type(covariance).compute is expected
+        and getattr(compute, "__self__", None) is covariance
+        and getattr(compute, "__func__", None) is expected
+    )
 
 
 def _solve_triangular(a, b, trans=0, lower=False):
@@ -1466,7 +1501,9 @@ class GP:
 
             if np.any(sb_idx_b | sb_idx_a):
                 lp -= 0.5 * np.sum(
-                    np.log(C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2)
+                    np.log(
+                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
+                    )
                     + z2_tmp[sb_idx_b | sb_idx_a]
                 )
             if np.any(sb_idx_btw):
@@ -1785,6 +1822,8 @@ class GP:
         add_noise: bool = False,
         separate_samples: bool = False,
         return_lpd: bool = False,
+        *,
+        return_cross_covariance: bool = False,
     ):
         """
         Compute the GP posterior mean and noise variance at given points.
@@ -1797,7 +1836,7 @@ class GP:
             True values at the points.
         s2_star : ndarray, shape (M, 1), optional
             Noise variance at the points.
-        add_noise : bool, defaults to ``True``
+        add_noise : bool, defaults to ``False``
             Whether to add noise to the prediction results.
         separate_samples : bool, defaults to ``False``
             Whether to return the results separately for each hyperparameter
@@ -1806,18 +1845,34 @@ class GP:
             Whether to return the log predictive density at the input points.
             If separate_samples is ``False``, returns the lpd of the
             corresponding mean approximation.
+        return_cross_covariance : bool, defaults to ``False``
+            Whether to append the latent training-to-prediction kernel
+            matrices to the return values. The matrices are kept separate for
+            each hyperparameter sample even when ``separate_samples`` is
+            ``False``.
 
         Returns
         =======
         mu : ndarray
             Posterior mean at the requested points. If we requested
             separate samples the shape is ``(M, sample_N)`` while
-            otherwise it is  ``(M,)``.
-            sample.
+            otherwise it is ``(M, 1)``.
         s2 : ndarray
             Noise variance at each point. If we requested
             separate samples the shape is ``(M, sample_N)`` while
-            otherwise it is ``(M,)``.
+            otherwise it is ``(M, 1)``.
+        lpd : ndarray, optional
+            Log predictive density at each point. Returned when
+            ``return_lpd`` is ``True`` and shaped like ``mu``.
+        cross_covariance : tuple of ndarray or None, optional
+            Returned when ``return_cross_covariance`` is ``True``. Entry
+            ``s`` is the latent, unconditioned kernel matrix
+            ``K(X, x_star)`` with shape ``(N, M)`` for hyperparameter sample
+            ``s``. Prior-only GPs, which have no training targets, return
+            ``None`` for every sample. The matrices are call-local and should
+            be treated as read-only; custom covariance results may be copied
+            to give each tuple entry stable values. Observation-noise inputs
+            and ``add_noise`` do not affect these latent kernel matrices.
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
 
@@ -1836,6 +1891,11 @@ class GP:
                 lpd = np.zeros((N_star, s_N))
         if return_lpd or add_noise:
             y_s2 = np.zeros((N_star, s_N))
+        if return_cross_covariance:
+            cross_covariance = []
+            retain_cross_covariance = _can_retain_cross_covariance(
+                self.covariance
+            )
 
         cov_N = self.covariance.hyperparameter_count(D)
         mean_N = self.mean.hyperparameter_count(D)
@@ -1896,6 +1956,13 @@ class GP:
 
             if self.y is not None:
                 Ks = self.covariance.compute(hyp[0:cov_N], self.X, x_star)
+                if return_cross_covariance:
+                    if retain_cross_covariance:
+                        cross_covariance.append(Ks)
+                    else:
+                        cross_covariance.append(
+                            np.array(Ks, copy=True, order="K", subok=False)
+                        )
                 mu[:, s] = (
                     m_star + np.dot(Ks.T, alpha)[:, 0]
                 )  # Conditional mean
@@ -1908,6 +1975,8 @@ class GP:
                 else:
                     s2[:, s] = kss + np.sum(Ks * np.dot(L, Ks), 0)
             else:
+                if return_cross_covariance:
+                    cross_covariance.append(None)
                 mu[:, s] = m_star
                 s2[:, s] = kss
 
@@ -1956,9 +2025,12 @@ class GP:
                 )
 
         if return_lpd:
+            if return_cross_covariance:
+                return mu, s2, lpd, tuple(cross_covariance)
             return mu, s2, lpd
-        else:
-            return mu, s2
+        if return_cross_covariance:
+            return mu, s2, tuple(cross_covariance)
+        return mu, s2
 
     def quad(
         self,
