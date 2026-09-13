@@ -399,6 +399,11 @@ class SliceSampler:
                 )
 
             ## Slice sampling step.
+            # Bracket and proposal vectors for the coordinate sweep. Each
+            # dimension edits only its own entry and resets it to the
+            # accepted coordinate afterwards, so all three equal xx between
+            # dimensions and the step-out evaluations of x_l and x_r stay on
+            # the current coordinate line.
             x_l = xx.copy()
             x_r = xx.copy()
             xprime = xx.copy()
@@ -509,6 +514,8 @@ class SliceSampler:
                     )
 
                 xx[dd] = xprime[dd]
+                x_l[dd] = xprime[dd]
+                x_r[dd] = xprime[dd]
 
             # Metropolis step (optional)
             if self.metropolis_flag:
