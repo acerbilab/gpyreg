@@ -45,4 +45,5 @@ GPyReg is released under the terms of the [BSD 3-Clause License](LICENSE).
 
 ### Acknowledgments
 
-GPyReg was developed by [members](https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people) (past and current) of the [Machine and Human Intelligence Lab](https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/) at the University of Helsinki. Development is being supported by the Academy of Finland Flagship programme: [Finnish Center for Artificial Intelligence FCAI](https://fcai.fi/).
+GPyReg is developed by [members](https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/people) (past and current) of the [Machine and Human Intelligence Lab](https://www.helsinki.fi/en/researchgroups/machine-and-human-intelligence/) at the University of Helsinki and [ELLIS Institute Finland](https://www.ellisinstitute.fi/). Development of GPyReg from version 1.1 onwards has been assisted by coding agents, including Anthropic's [Claude Fable 5.1](https://www.anthropic.com/claude-fable-and-mythos-5-1) and OpenAI's [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra).
+Work on the GPyReg package is supported by the Research Council of Finland (grants 356498 and 358980 to Luigi Acerbi) and its Flagship programme: [Finnish Center for Artificial Intelligence FCAI](https://fcai.fi/).
