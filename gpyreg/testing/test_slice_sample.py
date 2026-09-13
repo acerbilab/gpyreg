@@ -43,6 +43,44 @@ def test_multiple_runs():
     )
 
 
+@pytest.mark.parametrize("step_out", [False, True])
+def test_evaluations_stay_on_coordinate_line(step_out):
+    # Coordinate-wise slice sampling evaluates the density along one axis at
+    # a time, so consecutive evaluations differ in at most one coordinate.
+    # With step_out=True the bracket ends x_l and x_r are evaluated as full
+    # vectors, and their entries for earlier dimensions must hold the
+    # accepted coordinates rather than those dimensions' shrunk bracket
+    # edges (GitHub issue #44).
+    D = 3
+    rho = 0.9
+    cov = rho * np.ones((D, D)) + (1 - rho) * np.eye(D)
+    precision = np.linalg.inv(cov)
+    evaluated = []
+
+    def logpdf(x):
+        evaluated.append(np.array(x, copy=True))
+        return -0.5 * (x @ precision @ x)
+
+    N = 200
+    slicer = SliceSampler(
+        logpdf,
+        np.zeros(D),
+        widths=0.5,
+        options={"display": "off", "step_out": step_out},
+        rng=np.random.default_rng(7),
+    )
+    samples = slicer.sample(N, burn=0)["samples"]
+
+    evaluated = np.array(evaluated)
+    n_changed = np.count_nonzero(np.diff(evaluated, axis=0), axis=1)
+    assert np.all(n_changed <= 1)
+    # The checks above are not vacuous: every coordinate moved, and with
+    # step-out both bracket ends were evaluated for every coordinate.
+    assert np.all(np.ptp(samples, axis=0) > 0)
+    if step_out:
+        assert len(evaluated) >= 2 * D * N
+
+
 # The following tests can fail with some small probability.
 
 
@@ -65,6 +103,26 @@ def test_normal_step_out():
 
     assert np.abs(norm.mean() - np.mean(samples)) < threshold
     assert np.abs(norm.var() - np.var(samples)) < threshold
+
+
+def test_correlated_normal_step_out():
+    # Strongly correlated target, where step-out decisions taken off the
+    # current coordinate line would distort the brackets.
+    rho = 0.9
+    cov = np.array([[1.0, rho], [rho, 1.0]])
+    precision = np.linalg.inv(cov)
+    logpdf = lambda x: -0.5 * (x @ precision @ x)
+    new_options = {"display": "off", "diagnostics": True, "step_out": True}
+    slicer = SliceSampler(
+        logpdf,
+        np.array([0.5, -0.5]),
+        options=new_options,
+        rng=np.random.default_rng(1234),
+    )
+    samples = slicer.sample(20000)["samples"]
+
+    assert np.all(np.abs(np.mean(samples, axis=0)) < threshold)
+    assert np.all(np.abs(cov - np.cov(samples.T)) < threshold)
 
 
 def test_normal_mixture():
