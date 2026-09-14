@@ -414,6 +414,7 @@
             </div>
             <nav aria-label="Page">
                 <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.2.1 (unreleased)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.2.0 (2026-09-13)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.1.0 (2026-09-05)</a></li>
 </ul>
@@ -429,6 +430,58 @@
                   
   <section id="release-notes">
 <h1>Release notes<a class="headerlink" href="#release-notes" title="Link to this heading">#</a></h1>
+<section id="unreleased">
+<h2>1.2.1 (unreleased)<a class="headerlink" href="#unreleased" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.quad" title="gpyreg.GP.quad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.quad()</span></code></a> returns the correct integral variance when the
+training noise is heteroskedastic, for example with user-provided
+observation variances. The variance previously collapsed to machine
+epsilon in that case. <code class="docutils literal notranslate"><span class="pre">quad</span></code> also handles
+<code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic</span></code> in more than one dimension, where it
+previously read the hyperparameters in the wrong order. Results with
+homoskedastic noise, and with the isotropic kernel in one dimension, are
+unchanged.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> applies replacement hyperparameters passed
+together with a single new observation. The rank-one shortcut is taken
+only when the hyperparameters stay in place; it previously discarded the
+new values. Calls without <code class="docutils literal notranslate"><span class="pre">hyp</span></code> are unchanged.</p></li>
+<li><p>The rank-one update of a single appended observation extends the
+Cholesky factor with the noise scale the factor was built with, stored
+as the <a class="reference internal" href="gaussian_process.html#gpyreg.gaussian_process.Posterior" title="gpyreg.gaussian_process.Posterior"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.gaussian_process.Posterior</span></code></a> attribute <code class="docutils literal notranslate"><span class="pre">sl</span></code>. It
+is therefore exact for heteroskedastic noise, where it previously
+assumed the new point’s noise equal to the smallest training noise, and
+it works with output-dependent noise, which previously raised an error.
+The shortcut now also applies when <code class="docutils literal notranslate"><span class="pre">s2_new</span></code> is supplied, which
+previously triggered a full recomputation; the result is the same up to
+floating-point rounding. The homoskedastic case is unchanged.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> keeps the stored user-provided noise aligned
+with the training inputs. Points added without <code class="docutils literal notranslate"><span class="pre">s2_new</span></code> to a GP that
+stores <code class="docutils literal notranslate"><span class="pre">s2</span></code>, or earlier points of a GP that receives <code class="docutils literal notranslate"><span class="pre">s2_new</span></code> for
+the first time, get a variance of zero. Previously <code class="docutils literal notranslate"><span class="pre">s2</span></code> could end up
+with fewer rows than <code class="docutils literal notranslate"><span class="pre">X</span></code>, which made the next posterior computation
+fail, and in the second case a single new variance was silently applied
+to every training point.</p></li>
+<li><p><a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler" title="gpyreg.slice_sample.SliceSampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler</span></code></a> accepts bounds and widths
+given as lists. A coordinate with equal list bounds is now recognized as
+fixed; previously it went undetected and list widths raised an error.
+The sampler also logs its no-violation message when the diagnostics
+report success, which previously never happened.</p></li>
+<li><p><a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler" title="gpyreg.slice_sample.SliceSampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler</span></code></a> with <code class="docutils literal notranslate"><span class="pre">step_out=True</span></code> in more
+than one dimension evaluates the stepping-out brackets on the current
+coordinate line. Previously the bracket ends of a later coordinate
+carried an earlier coordinate’s shrunk bracket edge. Sampling with the
+default <code class="docutils literal notranslate"><span class="pre">step_out=False</span></code> is unchanged.</p></li>
+<li><p>The convergence diagnostics of <a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler" title="gpyreg.slice_sample.SliceSampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler</span></code></a>
+report a positive, bounded effective sample size, following Geyer’s
+initial positive sequence with the floor used by Stan and ArviZ; it
+could previously be negative. A coordinate fixed by <code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">==</span> <span class="pre">UB</span></code> is
+excluded from the checks, and undefined diagnostics or fewer than eight
+recorded samples give <code class="docutils literal notranslate"><span class="pre">exit_flag</span></code> -3 instead of reporting success.
+<code class="docutils literal notranslate"><span class="pre">R</span></code> and the effective sample size are unchanged for chains that mix.</p></li>
+<li><p>The documentation gains a section on BLAS threading, and the attributes
+of <a class="reference internal" href="gaussian_process.html#gpyreg.gaussian_process.Posterior" title="gpyreg.gaussian_process.Posterior"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.gaussian_process.Posterior</span></code></a> are documented.</p></li>
+</ul>
+</section>
 <section id="id1">
 <h2>1.2.0 (2026-09-13)<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
 <ul class="simple">
@@ -517,6 +570,7 @@ older sampler saves resume using the global stream.</p></li>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.2.1 (unreleased)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.2.0 (2026-09-13)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.1.0 (2026-09-05)</a></li>
 </ul>
@@ -540,13 +594,6 @@ By Machine and Human Intelligence research group (PI: Luigi Acerbi, University o
   
   <div class="footer-item">
     
-
-  <p class="copyright">
-    
-      © Copyright 2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
-      <br/>
-    
-  </p>
 
   </div>
   

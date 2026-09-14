@@ -988,8 +988,9 @@ mean of a single Gaussian measure, or a single floating point
 number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>.</p>
 </dd>
 <dt><strong>sigma</strong><span class="classifier">array_like</span></dt><dd><p>Either a array of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">D)</span></code> with each row containing the
-variance of a single Gaussian measure, or a single floating point
-number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>.</p>
+standard deviation of a single Gaussian measure, or a single
+floating point number which is interpreted as an array of shape
+<code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>.</p>
 </dd>
 <dt><strong>compute_var</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute variance for each integral.</p>
 </dd>
@@ -1142,9 +1143,11 @@ inputs.</p>
 targets.</p>
 </dd>
 <dt><strong>s2_new</strong><span class="classifier">ndarray, shape (N, 1), optional</span></dt><dd><p>New input-dependent noise that will be added to the old training
-inputs.</p>
+inputs. When only some training points come with a
+user-provided variance, the others are assigned zero.</p>
 </dd>
-<dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_N,), optional</span></dt><dd><p>New hyperparameters that will replace the old ones.</p>
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_samples, hyp_N), optional</span></dt><dd><p>New hyperparameters that will replace the old ones, one row per
+hyperparameter sample.</p>
 </dd>
 <dt><strong>compute_posterior</strong><span class="classifier">bool, defaults to True</span></dt><dd><p>Whether to compute the new posterior or not.</p>
 </dd>
@@ -1167,8 +1170,50 @@ by adding numerical stability values to the matrix.</p>
 <h3><code class="docutils literal notranslate"><span class="pre">Posterior</span></code><a class="headerlink" href="#posterior" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.Posterior">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">Posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.Posterior" title="Link to this definition">#</a></dt>
-<dd><p>This object represents the posterior.</p>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">Posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.Posterior" title="Link to this definition">#</a></dt>
+<dd><p>GP posterior for one hyperparameter vector.</p>
+<p>Stores the coefficients and matrix factor that prediction, sampling and
+quadrature need for a fixed set of hyperparameters, so that repeated
+calls reuse them instead of factorizing the training covariance again.
+<code class="docutils literal notranslate"><span class="pre">GP.posteriors</span></code> holds one instance per hyperparameter sample. Below,
+<code class="docutils literal notranslate"><span class="pre">K</span></code> is the training covariance, <code class="docutils literal notranslate"><span class="pre">sn2</span></code> the vector of training noise
+variances, <code class="docutils literal notranslate"><span class="pre">m</span></code> the mean function evaluated at the training inputs
+and <code class="docutils literal notranslate"><span class="pre">sl</span> <span class="pre">=</span> <span class="pre">min(sn2)</span> <span class="pre">*</span> <span class="pre">sn2_mult</span></code> at the time the posterior was
+computed; <code class="docutils literal notranslate"><span class="pre">sl</span></code> scales the Cholesky factor when <code class="docutils literal notranslate"><span class="pre">L_chol</span></code> is True.
+Every attribute except <code class="docutils literal notranslate"><span class="pre">hyp</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code> when the posterior has not
+been computed, after <code class="xref py py-func docutils literal notranslate"><span class="pre">GP.clean()</span></code> or <code class="xref py py-func docutils literal notranslate"><span class="pre">GP.update()</span></code> with
+<code class="docutils literal notranslate"><span class="pre">compute_posterior=False</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Attributes<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (hyp_N,)</span></dt><dd><p>The hyperparameters this posterior was computed for.</p>
+</dd>
+<dt><strong>alpha</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p><code class="docutils literal notranslate"><span class="pre">inv(K</span> <span class="pre">+</span> <span class="pre">sn2_mult</span> <span class="pre">*</span> <span class="pre">diag(sn2))</span> <span class="pre">&#64;</span> <span class="pre">(y</span> <span class="pre">-</span> <span class="pre">m)</span></code>, the weights of the
+training points in the posterior mean.</p>
+</dd>
+<dt><strong>sW</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p><code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">/</span> <span class="pre">sqrt(sl)</span></code> in every entry; the square root of the noise
+precision used to scale the factorization.</p>
+</dd>
+<dt><strong>L</strong><span class="classifier">ndarray, shape (N, N)</span></dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">L_chol</span></code> is True, the upper triangular Cholesky factor of
+<code class="docutils literal notranslate"><span class="pre">(K</span> <span class="pre">+</span> <span class="pre">sn2_mult</span> <span class="pre">*</span> <span class="pre">diag(sn2))</span> <span class="pre">/</span> <span class="pre">sl</span></code>. Otherwise
+<code class="docutils literal notranslate"><span class="pre">-inv(K</span> <span class="pre">+</span> <span class="pre">sn2_mult</span> <span class="pre">*</span> <span class="pre">diag(sn2))</span></code>, used when the noise is too
+small for a stable Cholesky decomposition.</p>
+</dd>
+<dt><strong>sn2_mult</strong><span class="classifier">int</span></dt><dd><p>Multiplier applied to the noise variances, increased in powers of
+ten until the Cholesky decomposition succeeds.</p>
+</dd>
+<dt><strong>L_chol</strong><span class="classifier">bool</span></dt><dd><p>Whether <code class="docutils literal notranslate"><span class="pre">L</span></code> is a Cholesky factor (<code class="docutils literal notranslate"><span class="pre">min(sn2)</span> <span class="pre">&gt;=</span> <span class="pre">1e-6</span></code>) or a
+negative inverse.</p>
+</dd>
+<dt><strong>sl</strong><span class="classifier">float</span></dt><dd><p><code class="docutils literal notranslate"><span class="pre">min(sn2)</span> <span class="pre">*</span> <span class="pre">sn2_mult</span></code> when the posterior was computed; the scale
+of <code class="docutils literal notranslate"><span class="pre">L</span></code> when <code class="docutils literal notranslate"><span class="pre">L_chol</span></code> is True. Rank-one updates extend the
+factorization with this scale, so it can differ from the minimum
+of the current training noise after observations have been
+appended.</p>
+</dd>
+</dl>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -1278,13 +1323,6 @@ By Machine and Human Intelligence research group (PI: Luigi Acerbi, University o
   
   <div class="footer-item">
     
-
-  <p class="copyright">
-    
-      © Copyright 2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
-      <br/>
-    
-  </p>
 
   </div>
   

@@ -614,11 +614,16 @@ been run).</p>
 </dd>
 <dt>-1, No explicit violation of convergence detected, but</dt><dd><p>the number of effective (independent) samples in the
 sampled sequence is much lower than the number of
-requested samples N for at least one dimension.</p>
+requested samples N for at least one sampled
+parameter.</p>
 </dd>
 <dt>-2, Detected probable lack of convergence of the sampling</dt><dd><p>procedure.</p>
 </dd>
-<dt>-3, Detected lack of convergence of the sampling</dt><dd><p>procedure.</p>
+<dt>-3, Detected lack of convergence of the sampling</dt><dd><p>procedure, or convergence could not be assessed
+because the diagnostics are undefined: a sampled
+parameter did not move within each half of the
+sampled sequence, or there were fewer than eight
+recorded samples.</p>
 </dd>
 </dl>
 </div></blockquote>
@@ -626,11 +631,19 @@ requested samples N for at least one dimension.</p>
 <dt><strong>log_priors</strong><span class="classifier">array_like</span></dt><dd><p>The sequence of the values of the log prior at the sampled
 points.</p>
 </dd>
-<dt><strong>R</strong><span class="classifier">array_like</span></dt><dd><p>Estimate of the potential scale reduction factor in each
-dimension.</p>
+<dt><strong>R</strong><span class="classifier">array_like</span></dt><dd><p>Estimate of the potential scale reduction factor for each
+sampled parameter. It is not finite for a parameter whose
+chain is constant within each half of the sampled
+sequence, which includes a parameter fixed by
+<code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">==</span> <span class="pre">UB</span></code>, and NaN everywhere when there were too few
+recorded samples to run the diagnostics.</p>
 </dd>
-<dt><strong>eff_N</strong><span class="classifier">array_like</span></dt><dd><p>Estimate of the effective number of samples in each
-dimension.</p>
+<dt><strong>eff_N</strong><span class="classifier">array_like</span></dt><dd><p>Estimate of the effective number of samples for each
+sampled parameter. It is NaN for a parameter whose chain is
+constant over the whole sampled sequence, which includes a
+parameter fixed by <code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">==</span> <span class="pre">UB</span></code>, and NaN everywhere when
+there were too few recorded samples. A value above <code class="docutils literal notranslate"><span class="pre">N</span></code>
+means the recorded samples are anticorrelated.</p>
 </dd>
 </dl>
 </div></blockquote>
@@ -735,13 +748,6 @@ By Machine and Human Intelligence research group (PI: Luigi Acerbi, University o
   
   <div class="footer-item">
     
-
-  <p class="copyright">
-    
-      © Copyright 2021, Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki).
-      <br/>
-    
-  </p>
 
   </div>
   
