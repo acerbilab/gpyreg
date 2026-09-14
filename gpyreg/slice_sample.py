@@ -7,6 +7,13 @@ import numpy as np
 
 from gpyreg.rng import resolve_rng
 
+# Minimum number of samples in each half of the split chain for the
+# convergence diagnostics to be computed. The autocorrelation estimates
+# behind the effective sample size need a few lags to say anything at all.
+# ArviZ requires at least four draws per chain; here the requirement
+# applies to each half of the split chain.
+_MIN_SPLIT_SAMPLES = 4
+
 
 class SliceSampler:
     """Class for drawing random samples from a target distribution with a
@@ -140,14 +147,16 @@ class SliceSampler:
         self.x0 = x0.copy()
         self.rng = resolve_rng(rng)
 
+        # Bounds and widths are stored as float arrays so that array
+        # comparisons such as LB == UB work for any array-like input.
         if LB is None:
             self.LB = np.tile(-np.inf, D)
             self.LB_out = np.tile(-np.inf, D)
         else:
             if np.size(LB) == 1:
-                self.LB = np.tile(LB, D)
+                self.LB = np.tile(LB, D).astype(float)
             else:
-                self.LB = LB.copy()
+                self.LB = np.array(LB, dtype=float)
         # np.spacing could return negative numbers so use nextafter
         self.LB_out = np.nextafter(self.LB, -np.inf)
 
@@ -156,9 +165,9 @@ class SliceSampler:
             self.UB_out = np.tile(np.inf, D)
         else:
             if np.size(UB) == 1:
-                self.UB = np.tile(UB, D)
+                self.UB = np.tile(UB, D).astype(float)
             else:
-                self.UB = UB.copy()
+                self.UB = np.array(UB, dtype=float)
         # np.spacing could return negative numbers so use nextafter
         self.UB_out = np.nextafter(self.UB, np.inf)
 
@@ -169,7 +178,11 @@ class SliceSampler:
             if np.size(widths) == 1:
                 self.widths = np.tile(widths, D)
             else:
-                self.widths = widths.copy()
+                self.widths = np.array(widths)
+            # Complex input is left as is so that the check below rejects
+            # it.
+            if not np.iscomplexobj(self.widths):
+                self.widths = self.widths.astype(float)
             self.base_widths = self.widths.copy()
 
         self.widths[np.isinf(self.widths)] = 10
@@ -282,22 +295,35 @@ class SliceSampler:
                     -1, No explicit violation of convergence detected, but
                       the number of effective (independent) samples in the
                       sampled sequence is much lower than the number of
-                      requested samples N for at least one dimension.
+                      requested samples N for at least one sampled
+                      parameter.
 
                     -2, Detected probable lack of convergence of the sampling
                       procedure.
 
                     -3, Detected lack of convergence of the sampling
-                      procedure.
+                      procedure, or convergence could not be assessed
+                      because the diagnostics are undefined: a sampled
+                      parameter did not move within each half of the
+                      sampled sequence, or there were fewer than eight
+                      recorded samples.
             **log_priors** : array_like
                 The sequence of the values of the log prior at the sampled
                 points.
             **R** : array_like
-                Estimate of the potential scale reduction factor in each
-                dimension.
+                Estimate of the potential scale reduction factor for each
+                sampled parameter. It is not finite for a parameter whose
+                chain is constant within each half of the sampled
+                sequence, which includes a parameter fixed by
+                ``LB == UB``, and NaN everywhere when there were too few
+                recorded samples to run the diagnostics.
             **eff_N** : array_like
-                Estimate of the effective number of samples in each
-                dimension.
+                Estimate of the effective number of samples for each
+                sampled parameter. It is NaN for a parameter whose chain is
+                constant over the whole sampled sequence, which includes a
+                parameter fixed by ``LB == UB``, and NaN everywhere when
+                there were too few recorded samples. A value above ``N``
+                means the recorded samples are anticorrelated.
 
         Raises
         ------
@@ -351,8 +377,9 @@ class SliceSampler:
                 "WIDTHS."
             )
 
-        # Effective samples
-        eff_N = N + (N - 1) * (thin - 1)
+        # Number of sampling iterations needed for N recorded samples,
+        # thinning included (burn-in excluded).
+        total_N = N + (N - 1) * (thin - 1)
 
         samples = np.zeros((N, D))
         xx_sum = np.zeros((D,))
@@ -381,7 +408,7 @@ class SliceSampler:
 
         # Main loop
         perm = np.array(range(D))
-        for i in range(0, eff_N + burn):
+        for i in range(0, total_N + burn):
             if i == burn:
                 action = "start recording"
                 self.logger.debug(
@@ -603,7 +630,7 @@ class SliceSampler:
                     " * Try increasing thinning factor to obtain "
                     "more uncorrelated samples"
                 )
-            elif exit_flag == 0:
+            elif exit_flag == 1:
                 diag_msg = (
                     " * No violations of convergence have been "
                     "detected (this does NOT guarantee convergence)"
@@ -625,7 +652,17 @@ class SliceSampler:
 
     def __diagnose(self, samples: np.ndarray):
         """Performs a quick and dirty diagnosis of convergence."""
-        N = samples.shape[0]
+        N, D = samples.shape
+
+        if math.floor(N / 2) < _MIN_SPLIT_SAMPLES:
+            diag_msg = (
+                " * Too few samples for the convergence diagnostics"
+                " (%d recorded samples, at least %d are needed)"
+                % (N, 2 * _MIN_SPLIT_SAMPLES)
+            )
+            self.logger.info(diag_msg)
+            return -3, np.full(D, np.nan), np.full(D, np.nan)
+
         # split psrf
         split_samples = np.array(
             [
@@ -636,29 +673,51 @@ class SliceSampler:
         R = self.__gelman_rubin(split_samples)
         eff_N = self.__effective_n(split_samples)
 
+        # A parameter with LB == UB is fixed and never moves, so its
+        # diagnostics are undefined by construction and say nothing about
+        # convergence. A parameter that is free to move but whose
+        # diagnostics are not finite has a chain that stayed constant
+        # within each half of the sequence, which is a failure:
+        # comparisons against NaN are all False, so without the explicit
+        # check below such a chain would pass every test.
+        free = self.LB != self.UB
+        undefined = free & ~(np.isfinite(R) & np.isfinite(eff_N))
+        checked = free & ~undefined
+
         diag_msg = None
         exit_flag = 0
-        if np.any(R > 1.5):
+        if np.any(R[checked] > 1.5):
             diag_msg = (
                 " * Detected lack of convergence! (max R = %.2f >> 1"
-                ", mean R = %.2f)" % (np.max(R), np.mean(R))
+                ", mean R = %.2f)"
+                % (np.max(R[checked]), np.mean(R[checked]))
             )
             exit_flag = -3
-        elif np.any(R > 1.1):
+        elif np.any(R[checked] > 1.1):
             diag_msg = (
                 " * Detected probable lack of convergence! (max R = %.2f"
-                " > 1, mean R = %.2f)" % (np.max(R), np.mean(R))
+                " > 1, mean R = %.2f)"
+                % (np.max(R[checked]), np.mean(R[checked]))
             )
             exit_flag = -2
 
-        if np.any(eff_N < N / 10.0):
+        if np.any(eff_N[checked] < N / 10.0):
             diag_msg = (
                 " * Low number of effective samples! (min eff_N = %.1f"
                 ", mean eff_N = %.1f, requested N = %d)"
-                % (np.min(eff_N), np.mean(eff_N), N)
+                % (np.min(eff_N[checked]), np.mean(eff_N[checked]), N)
             )
             if exit_flag == 0:
                 exit_flag = -1
+
+        if np.any(undefined):
+            diag_msg = (
+                " * The chain did not move within each half of the"
+                " sampled sequence for %d of the sampled parameters, so"
+                " their convergence diagnostics are undefined!"
+                % np.sum(undefined)
+            )
+            exit_flag = -3
 
         if diag_msg is None and exit_flag == 0:
             exit_flag = 1
@@ -726,24 +785,25 @@ class SliceSampler:
         Parameters
         ----------
         x : ndarray, shape (m, n, k)
-          An array containing the 2 or more traces of a stochastic parameter.
-          Here m is the number of traces, n the number of samples, and k
-          the dimension of the stochastic.
+          An array containing 2 or more traces of the sampled parameters.
+          Here m is the number of traces, n the number of samples in each
+          trace, and k the number of sampled parameters.
 
         return_var : bool
           Flag for returning the marginal posterior variance instead of R-hat.
 
         Returns
         -------
-        Rhat : float
-          Return the potential scale reduction factor, :math:`\\hat{R}`
+        Rhat : float or ndarray, shape (k,)
+          The potential scale reduction factor, :math:`\\hat{R}`, or the
+          marginal posterior variance when `return_var` is True; one value
+          per sampled parameter for a three-dimensional `x`.
 
         Raises
         ------
         ValueError
-            Raised when `x` only contains one trace of a stochastic parameter.
-            As the Gelman-Rubin diagnostic requires multiple chains of the same
-            length.
+            Raised when `x` contains a single trace, as the Gelman-Rubin
+            diagnostic requires multiple chains of the same length.
 
         Notes
         -----
@@ -800,21 +860,34 @@ class SliceSampler:
         Parameters
         ----------
         x : ndarray, shape (m, n, k)
-          An array containing the 2 or more traces of a stochastic parameter.
-          Here m is the number of traces, n the number of samples, and k the
-          dimension of the stochastic.
+          An array containing 2 or more traces of the sampled parameters.
+          Here m is the number of traces, n the number of samples in each
+          trace, and k the number of sampled parameters.
 
         Returns
         -------
-        n_eff : float
-          Return the effective sample size, :math:`\\hat{n}_{eff}`
+        n_eff : float or ndarray, shape (k,)
+          The effective sample size, :math:`\\hat{n}_{eff}`; one value per
+          sampled parameter for a three-dimensional `x`.
 
         Raises
         ------
         ValueError
-            Raised when `x` only contains one trace of a stochastic parameter.
-            As the calculation of effective sample size requires multiple
-            chains of the same length.
+            Raised when `x` contains a single trace, as the calculation of
+            the effective sample size requires multiple chains of the same
+            length.
+
+        Notes
+        -----
+        The integrated autocorrelation time is estimated with Geyer's
+        initial positive sequence: the autocorrelation estimates are summed
+        in consecutive pairs, and the first pair whose sum is not positive
+        ends the sum. The estimate is then floored at
+        ``1 / log10(m * n)``, as in Stan and ArviZ, so that the effective
+        sample size is positive and at most ``m * n * log10(m * n)``. An
+        effective sample size larger than the number of draws is a valid
+        outcome and indicates anticorrelated samples. A trace that does not
+        move has no variance and gets an effective sample size of NaN.
         """
         if np.shape(x) < (2,):
             raise ValueError(
@@ -831,9 +904,6 @@ class SliceSampler:
 
         s2 = self.__gelman_rubin(x, return_var=True)
 
-        negative_autocorr = False
-        t = 1
-
         variogram = lambda t: (
             sum(
                 sum((x[j][i] - x[j][i - t]) ** 2 for i in range(t, n))
@@ -842,17 +912,32 @@ class SliceSampler:
             / (m * (n - t))
         )
         rho = np.ones(n)
-        # Iterate until the sum of consecutive estimates of autocorrelation
-        # is negative
-        while not negative_autocorr and (t < n):
+        # Geyer's initial positive sequence: walk up the lags, and keep the
+        # autocorrelation estimates of every consecutive pair whose sum is
+        # positive. The first pair with a non-positive sum stops the walk
+        # and is left out; if the lags run out first, the pairs completed
+        # so far are kept. ``positive_n`` counts the kept estimates, which
+        # always form whole pairs.
+        positive_n = 0
+        t = 1
+        while t < n:
             rho[t] = 1.0 - variogram(t) / (2.0 * s2)
 
+            # A pair (rho[t - 1], rho[t]) is complete at every odd lag.
             if t % 2:
-                negative_autocorr = sum(rho[t - 1 : t + 1]) < 0
+                if rho[t - 1] + rho[t] <= 0:
+                    break
+                positive_n = t + 1
 
             t += 1
 
-        # This part in the original code was slightly different, along with
-        # the modulo check above.
-        # However, looking at definitions this seems like the correct way.
-        return m * n / (-1 + 2 * rho[0 : t - 2].sum())
+        # Integrated autocorrelation time. A sum of 0.5 or less leaves it
+        # zero or negative, which happens when the very first pair is
+        # already non-positive and nothing is kept, and can happen
+        # whenever the kept pairs are small. The floor below, the one Stan
+        # and ArviZ use, keeps the estimate positive and so caps the
+        # effective sample size of an anticorrelated chain.
+        tau = -1 + 2 * rho[0:positive_n].sum()
+        tau = np.maximum(tau, 1.0 / np.log10(m * n))
+
+        return m * n / tau

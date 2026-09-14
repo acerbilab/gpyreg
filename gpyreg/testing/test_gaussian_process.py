@@ -8,7 +8,10 @@ import scipy.stats
 from scipy.integrate import quad
 
 import gpyreg as gpr
-from gpyreg.testing.test_utils import check_grad
+from gpyreg.testing.test_utils import (
+    check_grad,
+    gauss_hermite_quadrature_reference,
+)
 
 
 @pytest.mark.filterwarnings(
@@ -286,6 +289,7 @@ def test_cleaning():
         assert gp.posteriors[i].L is None
         assert gp.posteriors[i].L_chol is None
         assert gp.posteriors[i].sn2_mult is None
+        assert gp.posteriors[i].sl is None
 
     gp.update(compute_posterior=True)
 
@@ -429,6 +433,196 @@ def test_gp_gradient_computations():
     # gp.plot()
 
 
+def test_update_one_point_with_new_hyperparameters():
+    # Appending a single observation takes a rank-one shortcut that extends
+    # the existing posteriors. Replacement hyperparameters passed in the
+    # same call must instead trigger a full recomputation with them.
+    N = 12
+    D = 2
+    rng = np.random.default_rng(3)
+    X = rng.uniform(-3, 3, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    # Layout: [log ell (D), log sf, log sn, m0].
+    hyp_old = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.0]])
+    hyp_new = np.array([[0.3, -0.2, 0.5, np.log(0.05), 0.7]])
+
+    gp = make_gp()
+    gp.update(X_new=X[:-1], y_new=y[:-1], hyp=hyp_old)
+    gp.update(X_new=X[-1:], y_new=y[-1:], hyp=hyp_new)
+
+    gp_ref = make_gp()
+    gp_ref.update(X_new=X, y_new=y, hyp=hyp_new)
+
+    assert np.array_equal(gp.posteriors[0].hyp, hyp_new[0])
+    for attr in ("alpha", "sW", "L"):
+        value = getattr(gp.posteriors[0], attr)
+        value_ref = getattr(gp_ref.posteriors[0], attr)
+        assert np.array_equal(value, value_ref)
+    assert gp.posteriors[0].sn2_mult == gp_ref.posteriors[0].sn2_mult
+    assert gp.posteriors[0].L_chol == gp_ref.posteriors[0].L_chol
+
+    x_star = rng.uniform(-3, 3, size=(5, D))
+    f_mu, f_s2 = gp.predict(x_star)
+    f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.array_equal(f_mu, f_mu_ref)
+    assert np.array_equal(f_s2, f_s2_ref)
+
+
+@pytest.mark.parametrize(
+    "case", ["provided_with_s2_new", "provided_without_s2_new", "rectified"]
+)
+def test_rank_one_update_with_heteroskedastic_noise(case):
+    # A single appended observation extends the Cholesky factor with the
+    # noise scale the factor was built with, so the result matches a full
+    # recomputation also when the training noise varies across points.
+    N = 15
+    D = 2
+    rng = np.random.default_rng(6)
+    X = rng.uniform(-3, 3, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+
+    if case == "rectified":
+        noise_kwargs = {
+            "constant_add": True,
+            "rectified_linear_output_dependent_add": True,
+        }
+        # [log ell (D), log sf, log sn, y threshold, log multiplier, m0]
+        hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.5, 0.0, 0.0]])
+        s2 = None
+    else:
+        noise_kwargs = {
+            "constant_add": True,
+            "user_provided_add": True,
+            "scale_user_provided": True,
+        }
+        # [log ell (D), log sf, log sn, log s2 multiplier, m0]
+        hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.2, 0.0]])
+        s2 = rng.uniform(0.01, 0.5, size=(N, 1))
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(**noise_kwargs),
+        )
+
+    s2_old = None if s2 is None else s2[:-1]
+    s2_last = s2[-1:] if case == "provided_with_s2_new" else None
+    gp = make_gp()
+    gp.update(X_new=X[:-1], y_new=y[:-1], s2_new=s2_old, hyp=hyp)
+    gp.update(X_new=X[-1:], y_new=y[-1:], s2_new=s2_last)
+
+    # Reference: everything at once. A point appended without s2_new has
+    # zero user-provided variance.
+    s2_ref = None if s2 is None else s2.copy()
+    if case == "provided_without_s2_new":
+        s2_ref[-1] = 0.0
+    gp_ref = make_gp()
+    gp_ref.update(X_new=X, y_new=y, s2_new=s2_ref, hyp=hyp)
+
+    if s2 is not None:
+        assert np.array_equal(gp.s2, s2_ref)
+    post, post_ref = gp.posteriors[0], gp_ref.posteriors[0]
+    assert post.L_chol and post_ref.L_chol
+    assert np.allclose(post.alpha, post_ref.alpha, rtol=1e-10, atol=1e-12)
+    # sW is uniform and consistent with the stored scale, and the factor
+    # reproduces the same unscaled matrix K + sn2_mult * diag(sn2).
+    assert np.allclose(post.sW, 1 / np.sqrt(post.sl))
+    assert np.allclose(
+        post.L.T @ post.L * post.sl,
+        post_ref.L.T @ post_ref.L * post_ref.sl,
+        rtol=1e-10,
+        atol=1e-12,
+    )
+
+    x_star = rng.uniform(-3, 3, size=(5, D))
+    f_mu, f_s2 = gp.predict(x_star)
+    f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.allclose(f_mu, f_mu_ref, rtol=1e-10, atol=1e-12)
+    assert np.allclose(f_s2, f_s2_ref, rtol=1e-10, atol=1e-12)
+
+
+def test_rank_one_update_without_stored_noise_scale():
+    # Posteriors pickled by earlier versions have no ``sl`` attribute; the
+    # rank-one update then recovers the scale from ``sW``.
+    N = 12
+    D = 1
+    rng = np.random.default_rng(15)
+    X = np.reshape(np.linspace(-2, 2, N), (-1, 1))
+    y = np.sin(X) + 0.1 * rng.standard_normal((N, 1))
+    hyp = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    gp = make_gp()
+    gp.update(X_new=X[:-1], y_new=y[:-1], hyp=hyp)
+    del gp.posteriors[0].sl
+    gp.update(X_new=X[-1:], y_new=y[-1:])
+
+    gp_ref = make_gp()
+    gp_ref.update(X_new=X, y_new=y, hyp=hyp)
+    f_mu, f_s2 = gp.predict(X)
+    f_mu_ref, f_s2_ref = gp_ref.predict(X)
+    assert np.allclose(f_mu, f_mu_ref, rtol=1e-10, atol=1e-12)
+    assert np.allclose(f_s2, f_s2_ref, rtol=1e-10, atol=1e-12)
+
+
+def test_update_aligns_user_provided_noise():
+    # The stored s2 always has one row per training input: points without
+    # a supplied variance get zero, whichever side of the update lacks it.
+    N = 10
+    D = 1
+    rng = np.random.default_rng(12)
+    X = np.reshape(np.linspace(-2, 2, N), (-1, 1))
+    y = np.sin(X)
+    s2 = rng.uniform(0.01, 0.2, size=(N, 1))
+    hyp = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(
+                constant_add=True, user_provided_add=True
+            ),
+        )
+
+    gp = make_gp()
+    gp.update(X_new=X[:5], y_new=y[:5], hyp=hyp)
+    assert gp.s2 is None
+    gp.update(X_new=X[5:8], y_new=y[5:8], s2_new=s2[5:8])
+    gp.update(X_new=X[8:], y_new=y[8:])
+
+    s2_expected = s2.copy()
+    s2_expected[:5] = 0.0
+    s2_expected[8:] = 0.0
+    assert np.array_equal(gp.s2, s2_expected)
+
+    gp_ref = make_gp()
+    gp_ref.update(X_new=X, y_new=y, s2_new=s2_expected, hyp=hyp)
+    f_mu, f_s2 = gp.predict(X)
+    f_mu_ref, f_s2_ref = gp_ref.predict(X)
+    assert np.array_equal(f_mu, f_mu_ref)
+    assert np.array_equal(f_s2, f_s2_ref)
+
+
 def test_split_update():
     N = 20
     D = 2
@@ -552,22 +746,93 @@ def test_quadrature_without_noise():
     # gp.plot()
 
 
-@pytest.mark.filterwarnings(
-    """ignore:Matplotlib is currently using agg:UserWarning"""
+@pytest.mark.parametrize(
+    "noise_kwargs, s2_scale",
+    [
+        ({"constant_add": True}, None),
+        ({"constant_add": True, "user_provided_add": True}, 1.0),
+        (
+            {
+                "constant_add": True,
+                "user_provided_add": True,
+                "scale_user_provided": True,
+            },
+            0.5,
+        ),
+    ],
 )
-def test_quadrature_with_noise():
+def test_quadrature_with_noise_matches_numerical_integration(
+    noise_kwargs, s2_scale
+):
+    # Fixed hyperparameters, so quad and the numerical reference integrate
+    # exactly the same posterior. User-provided noise makes the training
+    # noise heteroskedastic, which exercises the normalization of the
+    # Cholesky factor inside quad.
+    rng = np.random.default_rng(11)
+    N = 30
+    D = 1
+    X = np.reshape(np.linspace(-3, 3, N), (-1, 1))
+    y = np.sin(X) + 0.1 * rng.standard_normal((N, 1))
+    if s2_scale is None:
+        s2 = None
+    else:
+        s2 = s2_scale * rng.uniform(0.1, 2.0, (N, 1))
+
+    noise = gpr.noise_functions.GaussianNoise(**noise_kwargs)
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=noise,
+    )
+    # Three hyperparameter samples, each [log ell, log sf, noise..., m0].
+    extra_noise_N = noise.hyperparameter_count() - 1
+    hyp = np.array(
+        [
+            [0.0, 0.0, np.log(0.1)] + [0.2] * extra_noise_N + [0.1],
+            [np.log(0.7), np.log(1.5), np.log(0.3)]
+            + [-0.3] * extra_noise_N
+            + [-0.2],
+            [np.log(1.3), np.log(0.8), np.log(0.05)]
+            + [0.0] * extra_noise_N
+            + [0.4],
+        ]
+    )
+    gp.update(X_new=X, y_new=y, s2_new=s2, hyp=hyp)
+
+    mu, sigma = 0.4, 0.6
+    F_ref, F_var_ref = gauss_hermite_quadrature_reference(gp, mu, sigma)
+
+    F, F_var = gp.quad(mu, sigma, compute_var=True, separate_samples=True)
+    assert F.shape == F_var.shape == (1, hyp.shape[0])
+    assert np.allclose(F[0], F_ref, rtol=1e-9, atol=1e-13)
+    assert np.allclose(F_var[0], F_var_ref, rtol=1e-9, atol=1e-13)
+
+    # Averaging over samples: mean of the means, and mean of the variances
+    # plus the variance of the means.
+    F_avg, F_var_avg = gp.quad(mu, sigma, compute_var=True)
+    assert F_avg.shape == F_var_avg.shape == (1, 1)
+    assert np.isclose(F_avg[0, 0], np.mean(F_ref), rtol=1e-9, atol=1e-13)
+    assert np.isclose(
+        F_var_avg[0, 0],
+        np.mean(F_var_ref) + np.var(F_ref, ddof=1),
+        rtol=1e-9,
+        atol=1e-13,
+    )
+
+
+def test_quadrature_with_noise_fitting():
+    # Fit a GP to noisy observations, check quad against numerical
+    # integration of the fitted posterior, and compare the Bayesian
+    # quadrature estimate with the integral of the underlying function.
+    rng = np.random.default_rng(1234)
     N = 500
     D = 1
     s2_constant = 0.01
     X = np.reshape(np.linspace(-15, 15, N), (-1, 1))
     s2 = np.full(X.shape, s2_constant)
 
-    mu_N = 1000
-    x_star = np.reshape(np.linspace(-15, 15, mu_N), (-1, 1))
-
-    y = np.sin(X) + np.sqrt(s2) * scipy.stats.norm.ppf(
-        np.random.random_sample(X.shape)
-    )
+    y = np.sin(X) + np.sqrt(s2) * rng.standard_normal(X.shape)
     y[y < 0] = -(np.abs(3 * y[y < 0]) ** 2)
 
     gp = gpr.GP(
@@ -583,22 +848,16 @@ def test_quadrature_with_noise():
     )
 
     gp_train = {"n_samples": 10}
-    gp.fit(X=X, y=y, s2=s2, options=gp_train)
+    gp.fit(X=X, y=y, s2=s2, options=gp_train, rng=rng)
 
-    f_mu, f_cov = gp.predict_full(x_star, s2_star=s2_constant, add_noise=True)
-    F_predict = 0
-    for i in range(0, mu_N):
-        F_predict += f_mu[i, 0] * scipy.stats.norm.pdf(x_star[i], scale=0.11)
-    F_predict *= 30 / mu_N
-
-    pdf_tmp = np.reshape(scipy.stats.norm.pdf(x_star, scale=0.1), (-1, 1))
-    tmp = np.dot(pdf_tmp, pdf_tmp.T)
-    F_predict_var = np.sum(np.sum(f_cov[:, :, 0] * tmp)) * (30 / mu_N) ** 2
+    # Per hyperparameter sample, quad must agree with numerical integration
+    # of the fitted posterior, including the variance.
+    F_ref, F_var_ref = gauss_hermite_quadrature_reference(gp, 0, 0.1)
+    F_s, F_var_s = gp.quad(0, 0.1, compute_var=True, separate_samples=True)
+    assert np.allclose(F_s[0], F_ref, rtol=1e-8, atol=1e-13)
+    assert np.allclose(F_var_s[0], F_var_ref, rtol=1e-8, atol=1e-13)
 
     F_bayes, F_bayes_var = gp.quad(0, 0.1, compute_var=True)
-
-    assert np.abs(F_bayes_var - F_predict_var) < 0.05
-    assert np.abs(F_bayes - F_predict) < 0.05
 
     def f(x):
         y = np.sin(x)
@@ -611,8 +870,6 @@ def test_quadrature_with_noise():
     F_true = scipy.integrate.quad(f_p, -np.inf, np.inf)[0]
 
     assert np.abs(F_true - F_bayes) < 0.1
-
-    # gp.plot()
 
 
 @pytest.mark.filterwarnings(
