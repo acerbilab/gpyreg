@@ -1,7 +1,7 @@
 Release notes
 =============
 
-1.2.1 (unreleased)
+1.2.1 (2026-09-14)
 ------------------
 
 * :meth:`gpyreg.GP.quad` returns the correct integral variance when the
