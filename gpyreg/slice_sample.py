@@ -147,14 +147,16 @@ class SliceSampler:
         self.x0 = x0.copy()
         self.rng = resolve_rng(rng)
 
+        # Bounds and widths are stored as float arrays so that array
+        # comparisons such as LB == UB work for any array-like input.
         if LB is None:
             self.LB = np.tile(-np.inf, D)
             self.LB_out = np.tile(-np.inf, D)
         else:
             if np.size(LB) == 1:
-                self.LB = np.tile(LB, D)
+                self.LB = np.tile(LB, D).astype(float)
             else:
-                self.LB = LB.copy()
+                self.LB = np.array(LB, dtype=float)
         # np.spacing could return negative numbers so use nextafter
         self.LB_out = np.nextafter(self.LB, -np.inf)
 
@@ -163,9 +165,9 @@ class SliceSampler:
             self.UB_out = np.tile(np.inf, D)
         else:
             if np.size(UB) == 1:
-                self.UB = np.tile(UB, D)
+                self.UB = np.tile(UB, D).astype(float)
             else:
-                self.UB = UB.copy()
+                self.UB = np.array(UB, dtype=float)
         # np.spacing could return negative numbers so use nextafter
         self.UB_out = np.nextafter(self.UB, np.inf)
 
@@ -176,7 +178,11 @@ class SliceSampler:
             if np.size(widths) == 1:
                 self.widths = np.tile(widths, D)
             else:
-                self.widths = widths.copy()
+                self.widths = np.array(widths)
+            # Complex input is left as is so that the check below rejects
+            # it.
+            if not np.iscomplexobj(self.widths):
+                self.widths = self.widths.astype(float)
             self.base_widths = self.widths.copy()
 
         self.widths[np.isinf(self.widths)] = 10
@@ -371,8 +377,9 @@ class SliceSampler:
                 "WIDTHS."
             )
 
-        # Effective samples
-        eff_N = N + (N - 1) * (thin - 1)
+        # Number of sampling iterations needed for N recorded samples,
+        # thinning included (burn-in excluded).
+        total_N = N + (N - 1) * (thin - 1)
 
         samples = np.zeros((N, D))
         xx_sum = np.zeros((D,))
@@ -401,7 +408,7 @@ class SliceSampler:
 
         # Main loop
         perm = np.array(range(D))
-        for i in range(0, eff_N + burn):
+        for i in range(0, total_N + burn):
             if i == burn:
                 action = "start recording"
                 self.logger.debug(
@@ -623,7 +630,7 @@ class SliceSampler:
                     " * Try increasing thinning factor to obtain "
                     "more uncorrelated samples"
                 )
-            elif exit_flag == 0:
+            elif exit_flag == 1:
                 diag_msg = (
                     " * No violations of convergence have been "
                     "detected (this does NOT guarantee convergence)"

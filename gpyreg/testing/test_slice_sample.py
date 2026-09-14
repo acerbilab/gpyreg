@@ -215,7 +215,7 @@ def _geyer_effective_n_reference(split):
     return m * n / tau
 
 
-def test_healthy_chain_effective_n_matches_reference():
+def test_healthy_chain_effective_n_matches_reference(caplog):
     """A mixing chain whose autocorrelation dies out ends the pair sum on
     a non-positive pair. The estimator then equals Geyer's initial positive
     sequence written out directly, and the diagnostics report success."""
@@ -241,11 +241,37 @@ def test_healthy_chain_effective_n_matches_reference():
         options=options,
         rng=np.random.default_rng(9),
     )
-    res = slicer.sample(400)
+    with caplog.at_level(logging.INFO, logger="SliceSampler"):
+        res = slicer.sample(400)
     assert res["exit_flag"] == 1
     assert np.all(np.isfinite(res["R"]))
     assert np.all(np.isfinite(res["eff_N"]))
     assert np.all(res["eff_N"] >= 400 / 10)
+    assert "No violations of convergence" in caplog.text
+
+
+def test_list_bounds_detect_fixed_parameter():
+    """Bounds and widths given as lists behave like arrays: a coordinate
+    with equal bounds is fixed, its width is irrelevant, and it is left
+    out of the diagnostics."""
+    rv = multivariate_normal(np.zeros(2), np.eye(2))
+    sampler = SliceSampler(
+        rv.logpdf,
+        np.array([0.0, 1.0]),
+        widths=[1.0, 3.0],
+        LB=[-np.inf, 1.0],
+        UB=[np.inf, 1.0],
+        options=options,
+        rng=np.random.default_rng(4),
+    )
+    for bounds in (sampler.LB, sampler.UB, sampler.widths):
+        assert isinstance(bounds, np.ndarray)
+        assert bounds.dtype == float
+    assert sampler.widths[1] == 1.0
+
+    res = sampler.sample(100)
+    assert np.all(res["samples"][:, 1] == 1.0)
+    assert res["exit_flag"] == 1
 
 
 # The following tests can fail with some small probability.

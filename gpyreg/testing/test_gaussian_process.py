@@ -289,6 +289,7 @@ def test_cleaning():
         assert gp.posteriors[i].L is None
         assert gp.posteriors[i].L_chol is None
         assert gp.posteriors[i].sn2_mult is None
+        assert gp.posteriors[i].sl is None
 
     gp.update(compute_posterior=True)
 
@@ -472,6 +473,152 @@ def test_update_one_point_with_new_hyperparameters():
     x_star = rng.uniform(-3, 3, size=(5, D))
     f_mu, f_s2 = gp.predict(x_star)
     f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.array_equal(f_mu, f_mu_ref)
+    assert np.array_equal(f_s2, f_s2_ref)
+
+
+@pytest.mark.parametrize(
+    "case", ["provided_with_s2_new", "provided_without_s2_new", "rectified"]
+)
+def test_rank_one_update_with_heteroskedastic_noise(case):
+    # A single appended observation extends the Cholesky factor with the
+    # noise scale the factor was built with, so the result matches a full
+    # recomputation also when the training noise varies across points.
+    N = 15
+    D = 2
+    rng = np.random.default_rng(6)
+    X = rng.uniform(-3, 3, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+
+    if case == "rectified":
+        noise_kwargs = {
+            "constant_add": True,
+            "rectified_linear_output_dependent_add": True,
+        }
+        # [log ell (D), log sf, log sn, y threshold, log multiplier, m0]
+        hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.5, 0.0, 0.0]])
+        s2 = None
+    else:
+        noise_kwargs = {
+            "constant_add": True,
+            "user_provided_add": True,
+            "scale_user_provided": True,
+        }
+        # [log ell (D), log sf, log sn, log s2 multiplier, m0]
+        hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.2, 0.0]])
+        s2 = rng.uniform(0.01, 0.5, size=(N, 1))
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(**noise_kwargs),
+        )
+
+    s2_old = None if s2 is None else s2[:-1]
+    s2_last = s2[-1:] if case == "provided_with_s2_new" else None
+    gp = make_gp()
+    gp.update(X_new=X[:-1], y_new=y[:-1], s2_new=s2_old, hyp=hyp)
+    gp.update(X_new=X[-1:], y_new=y[-1:], s2_new=s2_last)
+
+    # Reference: everything at once. A point appended without s2_new has
+    # zero user-provided variance.
+    s2_ref = None if s2 is None else s2.copy()
+    if case == "provided_without_s2_new":
+        s2_ref[-1] = 0.0
+    gp_ref = make_gp()
+    gp_ref.update(X_new=X, y_new=y, s2_new=s2_ref, hyp=hyp)
+
+    if s2 is not None:
+        assert np.array_equal(gp.s2, s2_ref)
+    post, post_ref = gp.posteriors[0], gp_ref.posteriors[0]
+    assert post.L_chol and post_ref.L_chol
+    assert np.allclose(post.alpha, post_ref.alpha, rtol=1e-10, atol=1e-12)
+    # sW is uniform and consistent with the stored scale, and the factor
+    # reproduces the same unscaled matrix K + sn2_mult * diag(sn2).
+    assert np.allclose(post.sW, 1 / np.sqrt(post.sl))
+    assert np.allclose(
+        post.L.T @ post.L * post.sl,
+        post_ref.L.T @ post_ref.L * post_ref.sl,
+        rtol=1e-10,
+        atol=1e-12,
+    )
+
+    x_star = rng.uniform(-3, 3, size=(5, D))
+    f_mu, f_s2 = gp.predict(x_star)
+    f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.allclose(f_mu, f_mu_ref, rtol=1e-10, atol=1e-12)
+    assert np.allclose(f_s2, f_s2_ref, rtol=1e-10, atol=1e-12)
+
+
+def test_rank_one_update_without_stored_noise_scale():
+    # Posteriors pickled by earlier versions have no ``sl`` attribute; the
+    # rank-one update then recovers the scale from ``sW``.
+    N = 12
+    D = 1
+    rng = np.random.default_rng(15)
+    X = np.reshape(np.linspace(-2, 2, N), (-1, 1))
+    y = np.sin(X) + 0.1 * rng.standard_normal((N, 1))
+    hyp = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    gp = make_gp()
+    gp.update(X_new=X[:-1], y_new=y[:-1], hyp=hyp)
+    del gp.posteriors[0].sl
+    gp.update(X_new=X[-1:], y_new=y[-1:])
+
+    gp_ref = make_gp()
+    gp_ref.update(X_new=X, y_new=y, hyp=hyp)
+    f_mu, f_s2 = gp.predict(X)
+    f_mu_ref, f_s2_ref = gp_ref.predict(X)
+    assert np.allclose(f_mu, f_mu_ref, rtol=1e-10, atol=1e-12)
+    assert np.allclose(f_s2, f_s2_ref, rtol=1e-10, atol=1e-12)
+
+
+def test_update_aligns_user_provided_noise():
+    # The stored s2 always has one row per training input: points without
+    # a supplied variance get zero, whichever side of the update lacks it.
+    N = 10
+    D = 1
+    rng = np.random.default_rng(12)
+    X = np.reshape(np.linspace(-2, 2, N), (-1, 1))
+    y = np.sin(X)
+    s2 = rng.uniform(0.01, 0.2, size=(N, 1))
+    hyp = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(
+                constant_add=True, user_provided_add=True
+            ),
+        )
+
+    gp = make_gp()
+    gp.update(X_new=X[:5], y_new=y[:5], hyp=hyp)
+    assert gp.s2 is None
+    gp.update(X_new=X[5:8], y_new=y[5:8], s2_new=s2[5:8])
+    gp.update(X_new=X[8:], y_new=y[8:])
+
+    s2_expected = s2.copy()
+    s2_expected[:5] = 0.0
+    s2_expected[8:] = 0.0
+    assert np.array_equal(gp.s2, s2_expected)
+
+    gp_ref = make_gp()
+    gp_ref.update(X_new=X, y_new=y, s2_new=s2_expected, hyp=hyp)
+    f_mu, f_s2 = gp.predict(X)
+    f_mu_ref, f_s2_ref = gp_ref.predict(X)
     assert np.array_equal(f_mu, f_mu_ref)
     assert np.array_equal(f_s2, f_s2_ref)
 

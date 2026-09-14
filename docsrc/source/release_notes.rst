@@ -16,6 +16,27 @@ Release notes
   together with a single new observation. The rank-one shortcut is taken
   only when the hyperparameters stay in place; it previously discarded the
   new values. Calls without ``hyp`` are unchanged.
+* The rank-one update of a single appended observation extends the
+  Cholesky factor with the noise scale the factor was built with, stored
+  as the :class:`gpyreg.gaussian_process.Posterior` attribute ``sl``. It
+  is therefore exact for heteroskedastic noise, where it previously
+  assumed the new point's noise equal to the smallest training noise, and
+  it works with output-dependent noise, which previously raised an error.
+  The shortcut now also applies when ``s2_new`` is supplied, which
+  previously triggered a full recomputation; the result is the same up to
+  floating-point rounding. The homoskedastic case is unchanged.
+* :meth:`gpyreg.GP.update` keeps the stored user-provided noise aligned
+  with the training inputs. Points added without ``s2_new`` to a GP that
+  stores ``s2``, or earlier points of a GP that receives ``s2_new`` for
+  the first time, get a variance of zero. Previously ``s2`` could end up
+  with fewer rows than ``X``, which made the next posterior computation
+  fail, and in the second case a single new variance was silently applied
+  to every training point.
+* :class:`gpyreg.slice_sample.SliceSampler` accepts bounds and widths
+  given as lists. A coordinate with equal list bounds is now recognized as
+  fixed; previously it went undetected and list widths raised an error.
+  The sampler also logs its no-violation message when the diagnostics
+  report success, which previously never happened.
 * :class:`gpyreg.slice_sample.SliceSampler` with ``step_out=True`` in more
   than one dimension evaluates the stepping-out brackets on the current
   coordinate line. Previously the bracket ends of a later coordinate

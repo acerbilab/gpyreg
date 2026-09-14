@@ -290,6 +290,7 @@ def test_cleaning():
         assert gp.posteriors[i].L is None
         assert gp.posteriors[i].L_chol is None
         assert gp.posteriors[i].sn2_mult is None
+        assert gp.posteriors[i].sl is None
 
     gp.update(compute_posterior=True)
 

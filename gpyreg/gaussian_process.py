@@ -781,7 +781,8 @@ class GP:
             targets.
         s2_new : ndarray, shape (N, 1), optional
             New input-dependent noise that will be added to the old training
-            inputs.
+            inputs. When only some training points come with a
+            user-provided variance, the others are assigned zero.
         hyp : ndarray, shape (hyp_samples, hyp_N), optional
             New hyperparameters that will replace the old ones, one row per
             hyperparameter sample.
@@ -818,7 +819,6 @@ class GP:
                 and self.y is not None
                 and X_new.shape[0] == 1
                 and y_new.shape[0] == 1
-                and s2_new is None
                 and hyp is None
             ):
                 rank_one_update = True
@@ -831,7 +831,11 @@ class GP:
 
             # Compute prediction for all samples.
             m_star, v_star = self.predict(
-                X_new, y_new, add_noise=True, separate_samples=True
+                X_new,
+                y_new,
+                s2_star=s2_new,
+                add_noise=True,
+                separate_samples=True,
             )
             s_N = np.size(self.posteriors)
 
@@ -839,9 +843,26 @@ class GP:
             for s in range(0, s_N):
                 hyp_s = self.posteriors[s].hyp
 
+                # Total noise variance of the new point (a scalar; the
+                # noise function returns an array for output-dependent
+                # noise).
                 hyp_noise = hyp_s[cov_N : cov_N + noise_N]
-                sn2 = self.noise.compute(hyp_noise, X_new, y_new, 0)
+                sn2 = np.ravel(
+                    self.noise.compute(
+                        hyp_noise,
+                        X_new,
+                        y_new,
+                        0 if s2_new is None else s2_new,
+                    )
+                )[0]
                 sn2_eff = sn2 * self.posteriors[s].sn2_mult
+
+                # Noise scale of the existing factorization, kept for the
+                # extended factor. Posteriors pickled before the scale was
+                # stored lack the attribute and recover it from sW.
+                sl = getattr(self.posteriors[s], "sl", None)
+                if sl is None:
+                    sl = 1.0 / self.posteriors[s].sW[0, 0] ** 2
 
                 # Compute covariance and cross-covariance.
                 hyp_cov = hyp_s[0:cov_N]
@@ -853,14 +874,17 @@ class GP:
 
                 full_update_s = False
                 if L_chol:  # High-noise parametrization
+                    # L^T L = (K + sn2_mult * sn2) / sl. With u = L^-T k*,
+                    # the new column is u / sl and the new diagonal entry
+                    # is sqrt(sl * sn2_eff + sl * k** - u^T u) / sl.
                     new_L_column = sp.linalg.solve_triangular(
                         L, Ks, trans=1, check_finite=False
                     )
                     # If rank-1 update is not numerically stable, perform a
                     # full update for this posterior instead:
                     sqrt_arg = (
-                        sn2_eff**2
-                        + K * sn2_eff
+                        sl * sn2_eff
+                        + K * sl
                         - np.dot(new_L_column.T, new_L_column)
                     )
                     if sqrt_arg <= 0.0:
@@ -881,14 +905,14 @@ class GP:
                                 trans=0,
                                 check_finite=False,
                             )
-                            / sn2_eff
+                            / sl
                         )
                         self.posteriors[s].L = np.block(
                             [
-                                [L, new_L_column / sn2_eff],
+                                [L, new_L_column / sl],
                                 [
                                     np.zeros((1, L.shape[0])),
-                                    np.sqrt(sqrt_arg) / sn2_eff,
+                                    np.sqrt(sqrt_arg) / sl,
                                 ],
                             ]
                         )
@@ -909,7 +933,7 @@ class GP:
                     self.posteriors[s].sW = np.concatenate(
                         (
                             self.posteriors[s].sW,
-                            np.array([[1 / np.sqrt(sn2_eff)]]),
+                            np.array([[1 / np.sqrt(sl)]]),
                         )
                     )
 
@@ -920,6 +944,7 @@ class GP:
                         (alpha_update, np.array([[-1]]))
                     )
 
+        N_old = 0 if self.X is None else self.X.shape[0]
         if X_new is not None:
             if self.X is None:
                 self.X = X_new
@@ -932,9 +957,17 @@ class GP:
             else:
                 self.y = np.concatenate((self.y, y_new))
 
+        # Keep the stored user-provided noise aligned with the training
+        # inputs: points without a supplied variance get zero, the value
+        # the noise function uses when no variance is given.
+        if X_new is not None and s2_new is None and self.s2 is not None:
+            s2_new = np.zeros((X_new.shape[0], 1))
         if s2_new is not None:
             if self.s2 is None:
-                self.s2 = s2_new
+                if X_new is not None and N_old > 0:
+                    self.s2 = np.concatenate((np.zeros((N_old, 1)), s2_new))
+                else:
+                    self.s2 = s2_new
             else:
                 self.s2 = np.concatenate((self.s2, s2_new))
 
@@ -980,6 +1013,7 @@ class GP:
                 posterior.L = None
                 posterior.sn2_mult = None
                 posterior.L_chol = None
+                posterior.sl = None
         # Maybe add a call to garbage collection here? This would
         # make sure that the things set to None are actually no longer
         # using memory.
@@ -2798,13 +2832,15 @@ class GP:
 
             return nlZ[0, 0]
 
+        sl_post = np.min(sn2) * sn2_mult
         return Posterior(
             hyp,
             alpha,
-            np.ones((N, 1)) / np.sqrt(np.min(sn2) * sn2_mult),
+            np.ones((N, 1)) / np.sqrt(sl_post),
             pL,
             sn2_mult,
             L_chol,
+            sl_post,
         )
 
     def _convert_shapes(
@@ -2862,9 +2898,10 @@ class Posterior:
     ``GP.posteriors`` holds one instance per hyperparameter sample. Below,
     ``K`` is the training covariance, ``sn2`` the vector of training noise
     variances, ``m`` the mean function evaluated at the training inputs
-    and ``sl = min(sn2) * sn2_mult``. Every attribute except ``hyp`` is
-    ``None`` when the posterior has not been computed, after
-    :py:func:`GP.clean` or :py:func:`GP.update` with
+    and ``sl = min(sn2) * sn2_mult`` at the time the posterior was
+    computed; ``sl`` scales the Cholesky factor when ``L_chol`` is True.
+    Every attribute except ``hyp`` is ``None`` when the posterior has not
+    been computed, after :py:func:`GP.clean` or :py:func:`GP.update` with
     ``compute_posterior=False``.
 
     Attributes
@@ -2888,12 +2925,19 @@ class Posterior:
     L_chol : bool
         Whether ``L`` is a Cholesky factor (``min(sn2) >= 1e-6``) or a
         negative inverse.
+    sl : float
+        ``min(sn2) * sn2_mult`` when the posterior was computed; the scale
+        of ``L`` when ``L_chol`` is True. Rank-one updates extend the
+        factorization with this scale, so it can differ from the minimum
+        of the current training noise after observations have been
+        appended.
     """
 
-    def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol):
+    def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol, sl=None):
         self.hyp = hyp
         self.alpha = alpha
         self.sW = sW
         self.L = L
         self.sn2_mult = sn2_mult
         self.L_chol = Lchol
+        self.sl = sl

@@ -211,7 +211,7 @@ def test_missing_factors_remain_unsupported(clear_method):
     assert gp.posteriors is posteriors
     for posterior, hyp in zip(posteriors, hypotheses):
         np.testing.assert_array_equal(posterior.hyp, hyp)
-        for field in ("alpha", "L", "L_chol", "sW", "sn2_mult"):
+        for field in ("alpha", "L", "L_chol", "sW", "sn2_mult", "sl"):
             assert getattr(posterior, field) is None
 
 
