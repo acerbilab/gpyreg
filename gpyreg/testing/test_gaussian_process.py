@@ -1857,3 +1857,43 @@ def test_fit_seed_continues_design_stream(init_method, seed_kind):
         results.append((hyp, sampling["samples"], sampling["f_vals"]))
     for seeded, generated in zip(*results):
         assert np.array_equal(seeded, generated)
+
+
+def test_predict_full_add_noise_per_point():
+    """``predict_full(add_noise=True)`` adds the observation noise on the
+    diagonal, so the returned matrix stays a covariance also when the noise
+    varies from point to point, and its diagonal is ``predict``'s."""
+    N = 12
+    D = 2
+    rng = np.random.default_rng(4)
+    X = rng.uniform(-2, 2, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(
+            constant_add=True, user_provided_add=True
+        ),
+    )
+    # [log ell (D), log sf, log sn, m0]
+    hyp = np.array([[0.0, 0.0, 0.0, np.log(0.2), 0.0]])
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+
+    x_star = rng.uniform(-2, 2, size=(5, D))
+    s2_star = np.array([[0.5], [0.1], [0.3], [0.05], [0.4]])
+
+    __, cov = gp.predict_full(x_star, s2_star=s2_star, add_noise=True)
+    C = cov[:, :, 0]
+    assert np.allclose(C, C.T, rtol=0, atol=1e-14)
+    assert np.min(np.linalg.eigvalsh((C + C.T) / 2)) > -1e-10
+
+    __, s2 = gp.predict(x_star, s2_star=s2_star, add_noise=True)
+    assert np.allclose(np.diag(C), s2[:, 0], rtol=1e-12, atol=1e-14)
+
+    # The latent covariance differs from the noisy one on the diagonal only.
+    __, cov_latent = gp.predict_full(x_star, s2_star=s2_star)
+    added = C - cov_latent[:, :, 0]
+    assert np.allclose(added, np.diag(np.diag(added)), rtol=0, atol=1e-14)
+    assert np.allclose(np.diag(added), np.ravel(s2_star) + 0.04)

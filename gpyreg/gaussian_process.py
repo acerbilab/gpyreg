@@ -1845,11 +1845,15 @@ class GP:
                 sn2_mult = self.posteriors[s].sn2_mult
                 if sn2_mult is None:
                     sn2_mult = 1
-                # Also the noise function.
+                # Also the noise function. The observation noise is
+                # independent between points, so it enters on the diagonal;
+                # a constant noise function returns a scalar, which is
+                # broadcast to one entry per point.
                 sn2_star = self.noise.compute(
                     hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
                 )
-                cov[s, :, :] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
+                sn2_diag = np.broadcast_to(np.ravel(sn2_star), (N_star,))
+                cov[s, :, :] += np.diag(sn2_diag) * sn2_mult
 
         return mu, cov.transpose(1, 2, 0)
 
