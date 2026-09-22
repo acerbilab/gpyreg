@@ -487,7 +487,7 @@ def _bounds_info_helper(mean_N, X, y, idx):
     PUB = np.full((mean_N,), np.inf)
     x0 = np.full((mean_N,), np.nan)
 
-    w = np.max(X) - np.min(X)
+    w = np.max(X, axis=0) - np.min(X, axis=0)
     if np.size(y) <= 1:
         y = np.array([0, 1])
     h, _ = _target_spread(y)
@@ -510,20 +510,18 @@ def _bounds_info_helper(mean_N, X, y, idx):
         x0[0] = np.quantile(y, 0.9)
 
         # xm
-        LB[1 : 1 + D] = np.min(X) - 0.5 * w
-        UB[1 : 1 + D] = np.max(X) + 0.5 * w
-        PLB[1 : 1 + D] = np.min(X)
-        PUB[1 : 1 + D] = np.max(X)
-        x0[1 : 1 + D] = np.median(X)
+        LB[1 : 1 + D] = np.min(X, axis=0) - 0.5 * w
+        UB[1 : 1 + D] = np.max(X, axis=0) + 0.5 * w
+        PLB[1 : 1 + D] = np.min(X, axis=0)
+        PUB[1 : 1 + D] = np.max(X, axis=0)
+        x0[1 : 1 + D] = np.median(X, axis=0)
 
         # omega
         LB[1 + D : mean_N] = np.log(w) + np.log(tol)
         UB[1 + D : mean_N] = np.log(w) + np.log(big)
         PLB[1 + D : mean_N] = np.log(w) + 0.5 * np.log(tol)
         PUB[1 + D : mean_N] = np.log(w)
-        # For future reference note that std behaviour in
-        # MATLAB and NumPy is slightly different.
-        x0[1 + D : mean_N] = np.log(np.std(X, ddof=1))
+        x0[1 + D : mean_N] = np.log(np.std(X, axis=0, ddof=1))
 
     # Plausible starting point
     i_nan = np.isnan(x0)

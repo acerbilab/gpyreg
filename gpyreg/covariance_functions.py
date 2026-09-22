@@ -468,7 +468,7 @@ class RationalQuadraticARD(AbstractKernel):
         upper_bounds[0:D] = np.log(width * 10)
         plausible_lower_bounds[0:D] = np.log(width) + 0.5 * np.log(tol)
         plausible_upper_bounds[0:D] = np.log(width)
-        plausible_x0[0:D] = np.log(np.std(X, ddof=1))
+        plausible_x0[0:D] = np.log(np.std(X, axis=0, ddof=1))
 
         lower_bounds[D] = np.log(height) + np.log(tol)
         upper_bounds[D] = np.log(height * 10)
@@ -518,7 +518,7 @@ def _bounds_info_helper(cov_N, X, y):
     upper_bounds[0:D] = np.log(width * 10)
     plausible_lower_bounds[0:D] = np.log(width) + 0.5 * np.log(tol)
     plausible_upper_bounds[0:D] = np.log(width)
-    plausible_x0[0:D] = np.log(np.std(X, ddof=1))
+    plausible_x0[0:D] = np.log(np.std(X, axis=0, ddof=1))
 
     lower_bounds[D] = np.log(height) + np.log(tol)
     upper_bounds[D] = np.log(height * 10)
