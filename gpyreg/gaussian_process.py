@@ -1,6 +1,7 @@
 """Module for Gaussian Processes."""
 
 import math
+import numbers
 import time
 import warnings
 from textwrap import indent
@@ -859,6 +860,17 @@ class GP:
             s2_new = s2_new.copy()
 
         if hyp is not None:
+            hyp_N = (
+                self.covariance.hyperparameter_count(self.D)
+                + self.noise.hyperparameter_count()
+                + self.mean.hyperparameter_count(self.D)
+            )
+            if np.ndim(hyp) != 2 or np.shape(hyp)[1] != hyp_N:
+                raise ValueError(
+                    f"The hyperparameters have shape {np.shape(hyp)}, but "
+                    f"this GP has {hyp_N} hyperparameters and expects one "
+                    "row per hyperparameter sample."
+                )
             hyp = hyp.copy()
 
         # Check whether to do a rank-1 update. The shortcut extends the
@@ -2207,12 +2219,16 @@ class GP:
         mu : array_like
             Either a array of shape ``(N, D)`` with each row containing the
             mean of a single Gaussian measure, or a single floating point
-            number which is interpreted as an array of shape ``(1, D)``.
+            number which is interpreted as an array of shape ``(1, D)``. A
+            one-dimensional array of length ``D`` is one measure of ``D``
+            dimensions, as ``gplite_quad.m``'s ``size(mu, 1)`` reads a row
+            vector.
         sigma : array_like
             Either a array of shape ``(N, D)`` with each row containing the
             standard deviation of a single Gaussian measure, or a single
             floating point number which is interpreted as an array of shape
-            ``(1, D)``.
+            ``(1, D)``. A one-dimensional array of length ``D`` is one
+            measure, as for ``mu``.
         compute_var : bool, defaults to False
             Whether to compute variance for each integral.
         separate_samples : bool, defaults to False
@@ -2234,7 +2250,12 @@ class GP:
         ------
         ValueError
             Raised when the method is called and the covariance of the GP is
-            not squared exponential.
+            not squared exponential, or the mean function is none of the
+            zero, constant and negative quadratic means.
+        ValueError
+            Raised when the GP has no training data or no posterior
+            factors, or when the Gaussian measures do not have one column
+            per input dimension.
         """
 
         if not isinstance(
@@ -2243,6 +2264,28 @@ class GP:
             raise ValueError(
                 "Bayesian quadrature only supports the squared exponential "
                 "kernel."
+            )
+        if not isinstance(
+            self.mean,
+            (
+                gpyreg.mean_functions.ZeroMean,
+                gpyreg.mean_functions.ConstantMean,
+                gpyreg.mean_functions.NegativeQuadratic,
+            ),
+        ):
+            raise ValueError(
+                "Bayesian quadrature only supports the zero, constant and "
+                "negative quadratic mean functions."
+            )
+        if self.X is None or self.y is None:
+            raise ValueError(
+                "Bayesian quadrature needs the training data of the GP, "
+                "which has none."
+            )
+        if self.posteriors is None or self.posteriors[0].alpha is None:
+            raise ValueError(
+                "Bayesian quadrature needs the posterior factors of the "
+                "GP; call `update` with `compute_posterior=True` first."
             )
 
         N, D = self.X.shape
@@ -2254,12 +2297,22 @@ class GP:
         # mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
 
+        # A one-dimensional input is one measure of D dimensions, as
+        # `gplite_quad.m:26`'s `size(mu, 1)` reads a row vector.
+        mu = np.atleast_2d(np.asarray(mu, dtype=float))
+        sigma = np.atleast_2d(np.asarray(sigma, dtype=float))
         if np.size(mu) == 1:
             mu = np.tile(mu, (1, D))
-
-        N_star = mu.shape[0]
         if np.size(sigma) == 1:
             sigma = np.tile(sigma, (1, D))
+        if mu.shape[1] != D or sigma.shape[1] != D:
+            raise ValueError(
+                "Each Gaussian measure needs one column per input "
+                f"dimension, {D} of them: mu has {mu.shape[1]} and sigma "
+                f"{sigma.shape[1]}."
+            )
+
+        N_star = mu.shape[0]
 
         quadratic_mean_fun = isinstance(
             self.mean, gpyreg.mean_functions.NegativeQuadratic
@@ -3014,11 +3067,11 @@ class GP:
             if X.ndim == 1:
                 X = X[None, :]
             if X.ndim != 2:
-                raise AssertionError("X need to be an array of shape (N, D)")
+                raise ValueError("X need to be an array of shape (N, D)")
             N, D = X.shape
             if D != self.D:
-                raise AssertionError(
-                    f"The dimension of input data {D}"
+                raise ValueError(
+                    f"The dimension of input data {D} "
                     f"doesn't match GP's input dimension {self.D}."
                 )
         else:
@@ -3031,16 +3084,25 @@ class GP:
 
         if y is not None:
             y = y.reshape(N, 1)
-        if isinstance(s2, float) or isinstance(s2, int):
-            s2 = s2 * np.ones((N, 1))
-        elif isinstance(s2, np.ndarray):
+        if isinstance(s2, np.ndarray) and s2.ndim > 0:
+            # One variance per input, as `gplite_pred.m:16-23` requires:
+            # a row of N is not a column of N.
+            if s2.shape[0] != N:
+                raise ValueError(
+                    f"The noise variance has {s2.shape[0]} rows, but the "
+                    f"input data has {N}."
+                )
             s2 = s2.reshape(N, 1)
+        elif isinstance(s2, numbers.Number) or isinstance(s2, np.ndarray):
+            # A number, a NumPy scalar or a 0-d array: the same variance
+            # at every input.
+            s2 = float(s2) * np.ones((N, 1))
         elif s2 is None:
             s2 = None  # noiseless case
         else:
-            raise TypeError(
-                "s2 type need to be \
-                            Union[np.ndarray, float, int, None]."
+            raise ValueError(
+                "s2 type need to be "
+                "Union[np.ndarray, numbers.Number, None]."
             )
         return X, y, s2
 

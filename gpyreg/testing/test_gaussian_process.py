@@ -1223,6 +1223,10 @@ def test_predict_lpd():
         mean=gpr.mean_functions.NegativeQuadratic(),
         noise=gpr.noise_functions.GaussianNoise(user_provided_add=True),
     )
+    # This noise function has no hyperparameter of its own: its variance is
+    # the user-provided one plus a nugget of ``eps``. So a row is
+    # [log ell (D), log sf, m0, mode location (D), log scale (D)]. The two
+    # samples differ, so that neither is the average over them.
     hyp = np.array(
         [
             [
@@ -1230,9 +1234,7 @@ def test_predict_lpd():
                 0.0,
                 0.0,
                 0.0,  # log ell
-                1.0,  # log sf2
-                # Noise
-                np.log(np.pi),  # log std. dev. of noise
+                1.0,  # log sf
                 # Mean
                 -(D / 2) * np.log(2 * np.pi),  # MVN mode
                 0.0,
@@ -1244,20 +1246,18 @@ def test_predict_lpd():
             ],
             [
                 # Covariance
-                0.0,
-                0.0,
-                0.0,  # log ell
-                1.0,  # log sf2
-                # Noise
-                np.log(np.pi),  # log std. dev. of noise
+                0.3,
+                -0.2,
+                0.1,  # log ell
+                0.5,  # log sf
                 # Mean
-                -(D / 2) * np.log(2 * np.pi),  # MVN mode
-                0.0,
-                0.0,
-                0.0,  # Mode location
-                0.0,
-                0.0,
-                0.0,  # log scale
+                -1.0,  # MVN mode
+                0.2,
+                -0.1,
+                0.4,  # Mode location
+                0.3,
+                0.3,
+                0.3,  # log scale
             ],
         ]
     )
@@ -1271,22 +1271,28 @@ def test_predict_lpd():
         ).reshape(-1, 1)
         + offset
     )
-    s2_star = np.arange(-3, 3).reshape((-1, 1))
-    s2_star = np.zeros((6, 1))
+    s2_star = np.linspace(0.1, 0.7, 6).reshape((-1, 1))
+
+    # The log predictive density always carries the observation noise,
+    # here the user-provided variance, whichever variance ``add_noise``
+    # selects for the returned ``s2``.
     f_mu, f_s2, lpd = gp.predict(
         X_star, y_star, s2_star=s2_star, return_lpd=True
     )
     assert np.allclose(
         lpd,
         scipy.stats.norm.logpdf(
-            y_star, loc=f_mu, scale=np.sqrt(np.pi * s2_star + f_s2)
+            y_star, loc=f_mu, scale=np.sqrt(s2_star + f_s2)
         ),
     )
-    __, __, lpd2 = gp.predict(
+    __, s2_with_noise, lpd2 = gp.predict(
         X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True
     )
     assert np.all(lpd2 == lpd)
-    __, __, lpd3 = gp.predict(
+    assert np.allclose(s2_with_noise, f_s2 + s2_star)
+
+    # Per sample it is the density of that sample's own Gaussian.
+    f_mu_s, y_s2_s, lpd3 = gp.predict(
         X_star,
         y_star,
         s2_star=s2_star,
@@ -1294,8 +1300,25 @@ def test_predict_lpd():
         add_noise=True,
         separate_samples=True,
     )
-    assert np.all(lpd3[:, 0:1] == lpd)
-    assert np.all(lpd3[:, 1:2] == lpd)
+    assert np.allclose(
+        lpd3,
+        scipy.stats.norm.logpdf(y_star, loc=f_mu_s, scale=np.sqrt(y_s2_s)),
+    )
+    assert not np.allclose(lpd3[:, 0], lpd3[:, 1])
+
+    # Averaged over the samples it is the density of the Gaussian that
+    # carries the mean and the variance of the mixture, and not the average
+    # of the per-sample densities.
+    mu_bar = np.mean(f_mu_s, 1, keepdims=True)
+    var_bar = np.mean(y_s2_s, 1, keepdims=True) + np.var(
+        f_mu_s, axis=1, ddof=1, keepdims=True
+    )
+    assert np.allclose(f_mu, mu_bar)
+    assert np.allclose(
+        lpd,
+        scipy.stats.norm.logpdf(y_star, loc=mu_bar, scale=np.sqrt(var_bar)),
+    )
+    assert not np.allclose(lpd, np.mean(lpd3, 1, keepdims=True))
 
 
 def test__str__and__repr__():
@@ -2555,3 +2578,100 @@ def test_noise_gradient_with_a_constant_total_noise():
     )
     # With no variance given the multiplier does not enter the noise.
     assert gradient[D + 2] == 0.0
+
+
+def test_quad_input_checks():
+    """Bayesian quadrature needs the training data, the posterior factors,
+    a mean function whose hyperparameters it can place and measures with
+    one column per input dimension."""
+    D = 2
+    rng = np.random.default_rng(8)
+    X = rng.uniform(-2, 2, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.0]])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    gp = make_gp()
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(0.0, 1.0)
+    assert "training data" in execinfo.value.args[0]
+
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+
+    # A one-dimensional measure is one measure of D dimensions.
+    F_flat = gp.quad(np.zeros(D), np.ones(D))
+    F_row = gp.quad(np.zeros((1, D)), np.ones((1, D)))
+    assert F_flat.shape == (1, 1)
+    assert np.array_equal(F_flat, F_row)
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(np.zeros((1, D + 1)), 1.0)
+    assert "one column per input" in execinfo.value.args[0]
+
+    # A mean function of the caller's own, whose hyperparameters quadrature
+    # cannot place.
+    other = make_gp()
+    other.update(X_new=X, y_new=y, hyp=hyp)
+    other.mean = object()
+    with pytest.raises(ValueError) as execinfo:
+        other.quad(0.0, 1.0)
+    assert "mean function" in execinfo.value.args[0]
+
+    gp.clean()
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(0.0, 1.0)
+    assert "posterior factors" in execinfo.value.args[0]
+
+
+def test_convert_shapes_input_checks():
+    """A variance given as a number of any kind is one variance for every
+    input; an array carries one row per input, as `gplite_pred.m:16-23`
+    requires."""
+    N = 5
+    gp = _gp_1d()
+    X = np.ones((N, 1))
+
+    for s2 in (3, 3.0, np.int64(3), np.float64(3.0), np.array(3.0)):
+        __, __, converted = gp._convert_shapes(X, None, s2)
+        assert converted.shape == (N, 1)
+        assert np.all(converted == 3.0)
+
+    with pytest.raises(ValueError) as execinfo:
+        gp._convert_shapes(X, None, np.ones((1, N)))
+    assert "rows" in execinfo.value.args[0]
+
+    with pytest.raises(ValueError):
+        gp._convert_shapes(X, None, "nonsense")
+
+    gp3 = gpr.GP(
+        D=3,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(ValueError) as execinfo:
+        gp3._convert_shapes(np.ones((N, 5)), None, None)
+    assert "input data 5 doesn't match" in execinfo.value.args[0]
+
+
+def test_update_checks_the_hyperparameter_width():
+    """`update(hyp=...)` stored a row of any width, which `predict` then
+    read block by block at the wrong offsets."""
+    gp = _gp_1d()  # two kernel, one noise and one mean hyperparameter
+    with pytest.raises(ValueError) as execinfo:
+        gp.update(hyp=np.zeros((1, 5)))
+    assert "4 hyperparameters" in execinfo.value.args[0]
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.update(hyp=np.zeros(4))
+    assert "one row per hyperparameter sample" in execinfo.value.args[0]
+
+    gp.update(hyp=np.zeros((2, 4)))
+    assert np.size(gp.posteriors) == 2
