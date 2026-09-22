@@ -83,6 +83,76 @@ def test_evaluations_stay_on_coordinate_line(step_out):
         assert len(evaluated) >= 2 * D * N
 
 
+@pytest.mark.parametrize("burn", [2, 3])
+def test_short_burn_in_keeps_the_chain_moving(burn):
+    """The width adaptation at the end of the burn-in needs a window of at
+    least two iterations. A window of one iteration has no variance to
+    estimate, and a width of zero brackets nothing, so the coordinate would
+    stop and the chain return its starting point once per requested sample."""
+    rv = multivariate_normal(np.zeros(2), np.eye(2))
+    sampler = SliceSampler(
+        rv.logpdf,
+        np.zeros(2),
+        widths=1.0,
+        options={"display": "off", "diagnostics": False},
+        rng=np.random.default_rng(3),
+    )
+    res = sampler.sample(6, burn=burn)
+
+    assert np.all(sampler.widths > 0)
+    assert np.unique(res["samples"], axis=0).shape[0] == 6
+
+
+def test_burn_in_statistics_window_is_the_second_half():
+    """The adapted widths come from the last ``floor(burn / 2)`` burn-in
+    iterations, one term per iteration and the same number in the divisor.
+
+    On a uniform target whose widths already span the whole box, every
+    proposal is accepted at the first try and the within-burn-in adaptation
+    leaves the widths untouched, so a second sampler with the same seed and
+    no adaptation walks the identical chain and hands over its iterates.
+    """
+    burn = 7  # odd, where MATLAB accumulates one term more than it divides by
+    LB = np.array([-2.0, -1.0])
+    UB = np.array([3.0, 4.0])
+    widths = UB - LB
+    uniform_logpdf = lambda x: 0.0
+
+    def sampler(adaptive):
+        return SliceSampler(
+            uniform_logpdf,
+            np.array([0.0, 0.5]),
+            widths=widths,
+            LB=LB,
+            UB=UB,
+            options={
+                "display": "off",
+                "diagnostics": False,
+                "adaptive": adaptive,
+            },
+            rng=np.random.default_rng(11),
+        )
+
+    adapted = sampler(True)
+    adapted.sample(1, burn=burn)
+    # The same chain without adaptation, recorded iteration by iteration.
+    trace = sampler(False).sample(burn + 1, burn=0)["samples"]
+
+    def widths_from(window):
+        n = window.shape[0]
+        var = (window**2).sum(0) / n - (window.sum(0) / n) ** 2
+        new_widths = np.fmin(
+            5 * np.sqrt(np.maximum(var, 0)), adapted.UB_out - adapted.LB_out
+        )
+        return np.maximum(new_widths, np.sqrt(new_widths * widths))
+
+    expected = widths_from(trace[math.ceil(burn / 2) : burn])
+    np.testing.assert_allclose(adapted.widths, expected, rtol=1e-12)
+    # Not vacuous: MATLAB's window, one iteration longer, gives other widths.
+    assert trace[math.ceil(burn / 2) : burn].shape[0] == burn // 2
+    assert np.any(widths_from(trace[burn // 2 : burn]) != expected)
+
+
 def _split(trace):
     """Split a trace into the two half-chains the diagnostics compare."""
     n = math.floor(trace.shape[0] / 2)

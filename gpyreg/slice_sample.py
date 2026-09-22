@@ -564,32 +564,33 @@ class SliceSampler:
                 xx_sq_sum += xx**2
 
                 # End of burn-in, update widths if using adaptive method.
-                if i == burn - 1 and self.adaptive:
-                    burn_stored = np.floor(burn / 2)
-                    # There can be numerical error here but then width
-                    # has already shrunk to 0?
+                # A window of fewer than two iterations has no variance to
+                # estimate (one iteration gives exactly zero), so it adapts
+                # nothing.
+                burn_stored = np.floor(burn / 2)
+                if i == burn - 1 and self.adaptive and burn_stored >= 2:
+                    variance = (
+                        xx_sq_sum / burn_stored - (xx_sum / burn_stored) ** 2
+                    )
                     new_widths = np.fmin(
-                        5
-                        * np.sqrt(
-                            np.maximum(
-                                xx_sq_sum / burn_stored
-                                - (xx_sum / burn_stored) ** 2,
-                                0,
-                            )
-                        ),
+                        5 * np.sqrt(np.maximum(variance, 0)),
                         self.UB_out - self.LB_out,
                     )
                     if not np.all(np.isreal(new_widths)):
                         new_widths = self.widths
                     if self.base_widths is None:
-                        self.widths = new_widths
+                        adapted = new_widths
                     else:
                         # Max between new widths and geometric mean with
                         # user-supplied widths (i.e. bias towards keeping
                         # larger widths)
-                        self.widths = np.maximum(
+                        adapted = np.maximum(
                             new_widths, np.sqrt(new_widths * self.base_widths)
                         )
+                    # A coordinate whose estimate is not positive keeps the
+                    # width it has: a width of zero brackets nothing, so it
+                    # would stop the coordinate for the rest of the chain.
+                    self.widths = np.where(variance > 0, adapted, self.widths)
 
             if i < burn:
                 action = "burn"
