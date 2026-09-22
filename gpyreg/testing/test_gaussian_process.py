@@ -2146,11 +2146,14 @@ def test_rank_one_update_low_noise_branch():
     assert np.allclose(f_s2, f_s2_ref, rtol=1e-8, atol=1e-10)
 
 
-def test_rank_one_update_low_noise_duplicate_recomputes():
-    """An observation at an existing training input leaves the low-noise
-    rank-one update dividing by a variance the clamp of ``predict``
-    produced, which is no variance: it warns and recomputes in full, as
-    the Cholesky branch does."""
+def test_rank_one_update_low_noise_duplicate_recomputes(monkeypatch):
+    """Where rounding drives the latent variance of the new point to zero
+    or below, ``predict`` clamps it, and the low-noise rank-one update
+    would divide by the noise alone, which is no predictive variance: it
+    warns and recomputes in full, as the Cholesky branch does. Rounding
+    takes an observation at an existing training input to either side of
+    zero depending on the platform, so ``predict`` is made to return the
+    clamped value, the noise, whatever the rounding."""
     D = 2
     rng = np.random.default_rng(3)
     X = rng.uniform(-3, 3, size=(12, D))
@@ -2162,8 +2165,28 @@ def test_rank_one_update_low_noise_duplicate_recomputes():
     gp = _low_noise_rank_one_gp(D)
     gp.update(X_new=X, y_new=y, hyp=hyp)
     assert not gp.posteriors[0].L_chol
-    with pytest.warns(UserWarning, match="Reverting to full update"):
-        gp.update(X_new=x_new, y_new=y_new)
+
+    # The noise variance of the new point, computed as `update` computes
+    # it: what the clamped predictive variance equals.
+    posterior = gp.posteriors[0]
+    cov_N = gp.covariance.hyperparameter_count(D)
+    noise_N = gp.noise.hyperparameter_count()
+    sn2 = np.ravel(
+        gp.noise.compute(
+            posterior.hyp[cov_N : cov_N + noise_N], x_new, y_new, 0
+        )
+    )[0]
+    clamped = sn2 * posterior.sn2_mult
+    predict = gp.predict
+
+    def predict_at_the_clamp(*args, **kwargs):
+        mu, s2 = predict(*args, **kwargs)
+        return mu, np.full_like(s2, clamped)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(gp, "predict", predict_at_the_clamp)
+        with pytest.warns(UserWarning, match="Reverting to full update"):
+            gp.update(X_new=x_new, y_new=y_new)
 
     gp_ref = _low_noise_rank_one_gp(D)
     gp_ref.update(
