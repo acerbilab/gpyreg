@@ -2882,12 +2882,24 @@ def test_update_checks_the_hyperparameter_width():
     assert np.size(gp.posteriors) == 2
 
 
-def test_fit_with_targets_of_a_tiny_range():
+def test_fit_with_targets_of_a_tiny_range(monkeypatch):
     """Targets whose standard deviation falls below the lower bound of the
     noise put the noise's plausible box outside its hard box. The two
     clips into the hard box then move the plausible bounds independently
     and can cross them, and the space-filling design needs
     ``PLB <= PUB``."""
+    from gpyreg import gaussian_process as gp_module
+
+    received = {}
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(fun, x0, LB, UB, PLB, PUB, *args, **kwargs):
+        received.update(LB=LB.copy(), UB=UB.copy())
+        received.update(PLB=PLB.copy(), PUB=PUB.copy())
+        return real_f_min_fill(fun, x0, LB, UB, PLB, PUB, *args, **kwargs)
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
     rng = np.random.default_rng(2)
     X = rng.uniform(-2, 2, size=(20, 1))
     y = 1.0 + 1e-4 * rng.random((20, 1))
@@ -2900,4 +2912,7 @@ def test_fit_with_targets_of_a_tiny_range():
         rng=np.random.default_rng(3),
     )
     assert np.all(np.isfinite(hyp))
-    assert np.all(gp.lower_bounds <= gp.upper_bounds)
+    # The design receives an ordered plausible pair inside the hard box.
+    assert np.all(received["PLB"] <= received["PUB"])
+    assert np.all(received["LB"] <= received["PLB"])
+    assert np.all(received["PUB"] <= received["UB"])
