@@ -1667,8 +1667,13 @@ def test_float32_kernel_preserves_diagonal_noise(
 
 
 def _small_gp_with_priors(seed=3):
+    """A GP in three dimensions with a prior of each family. Each smooth
+    box is set on a block of three hyperparameters (the length scales, and
+    the log scales of the mean), with a box per coordinate that puts the
+    starting values, all within (-1, 1), above the first box, inside the
+    second and below the third."""
     rng = np.random.default_rng(seed)
-    N, D = 25, 2
+    N, D = 25, 3
     X = rng.standard_normal((N, D))
     y = np.sin(X).sum(1, keepdims=True) + 0.1 * rng.standard_normal((N, 1))
     gp = gpr.GP(
@@ -1680,27 +1685,21 @@ def _small_gp_with_priors(seed=3):
     hyp = 0.3 * rng.standard_normal((1, 3 * D + 3))
     gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
     names = list(gp.get_bounds().keys())
+    a = np.array([-3.0, -1.0, 1.0])
+    b = np.array([-1.0, 1.0, 3.0])
     priors = {
-        names[0]: (
-            "student_t",
-            (np.zeros(D), np.full(D, 1.0), np.full(D, 3.0)),
-        ),
+        names[0]: ("smoothbox", (a, b, np.array([0.5, 0.7, 0.4]))),
         names[1]: ("gaussian", (np.zeros(1), np.ones(1))),
         names[2]: (
-            "smoothbox",
-            (np.array([-3.0]), np.array([-1.0]), np.array([0.5])),
+            "student_t",
+            (np.zeros(1), np.ones(1), np.full(1, 3.0)),
         ),
-        names[3]: (
-            "smoothbox_student_t",
-            (
-                np.array([-1.0]),
-                np.array([1.0]),
-                np.array([0.5]),
-                np.array([4.0]),
-            ),
-        ),
+        names[3]: None,
         names[4]: ("gaussian", (np.zeros(D), np.full(D, 2.0))),
-        names[5]: None,
+        names[5]: (
+            "smoothbox_student_t",
+            (a, b, np.array([0.5, 0.3, 0.6]), np.array([4.0, 3.0, 5.0])),
+        ),
     }
     bounds = {
         n: (np.full(np.size(v[0]), -6.0), np.full(np.size(v[0]), 6.0))
