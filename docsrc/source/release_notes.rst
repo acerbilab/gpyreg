@@ -18,22 +18,25 @@ to change.
   every dimension, which mixes the locations of the dimensions with their
   spreads: where the dimensions lie apart, every recommendation came out
   as wide as the widest gap between them. The per-dimension statistics
-  are those of MATLAB's gplite. A :meth:`gpyreg.GP.fit` with that mean
-  function takes its plausible box from the recommendation, and its hard
-  box wherever the caller leaves it unset, so its space-filling design,
-  its default starting point and its slice sampler change, and its
-  hyperparameters move; a fit that starts from given hyperparameters
-  (``hyp0``, or those the GP already has), with no space-filling design
-  (``init_N = 0``) and no hyperparameter samples (``n_samples = 0``),
-  changes only where its start or its optimizer meets a hard bound that
-  moved. ``fit`` does not start from the recommended length scales, which
-  reach a caller that reads them from ``get_bounds_info``; the bounds of
-  the length scales were per dimension already.
+  are those of MATLAB's gplite. With one input dimension the two agree,
+  and nothing changes. In more than one, a :meth:`gpyreg.GP.fit` with
+  that mean function takes its plausible box from the recommendation,
+  and its hard box wherever the caller leaves it unset, so its
+  space-filling design, its default starting point and its slice sampler
+  change, and its hyperparameters move; a fit that starts from given
+  hyperparameters (``hyp0``, or those the GP already has), with no
+  space-filling design (``init_N = 0``) and no hyperparameter samples
+  (``n_samples = 0``), changes only where its start or its optimizer
+  meets a hard bound that moved. ``fit`` does not start from the
+  recommended length scales, which reach a caller that reads them from
+  ``get_bounds_info``; the bounds of the length scales were per dimension
+  already.
 * The recommended bounds and starting length scale of the isotropic
   kernels take the means of the logarithms of the per-dimension widths
   and standard deviations, as MATLAB's gplite does, where they took the
   logarithm of the mean width and the standard deviation pooled over all
-  entries of ``X``; a fit with
+  entries of ``X``. With one input dimension the two agree; in more than
+  one, a fit with
   :class:`gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic`
   or :class:`gpyreg.isotropic_covariance_functions.MaternIsotropic` takes
   a different plausible box for the length scale than in 1.2.1, and a
@@ -78,13 +81,26 @@ to change.
   the predictive mean without a word. The rounding is measured against
   the prior variance at the test points, from which the predictive
   covariance is formed by subtraction, so a grid inside the training data
-  draws as well; a matrix with a negative eigenvalue beyond that band is
-  no covariance matrix, and the draw raises ``LinAlgError``. The
-  eigenvalue fallback also fixes the signs of whole eigenvectors and uses
-  the symmetric eigensolver, so the factor it builds is a factor of the
-  matrix it was given; a draw at closely spaced or duplicated test points
-  came from the wrong covariance before. Draws through this path change
-  for a given generator.
+  draws as well. This holds in both representations of the posterior.
+  Where the smallest noise variance at the training inputs is below 1e-6,
+  as it can be after a default fit on noiseless targets, the posterior
+  holds the inverse of the training covariance instead of its Cholesky
+  factor (the low-noise representation). The predictive covariance that
+  1.2.1 formed from that inverse carried a rounding error that grows as
+  the noise shrinks, so that the draws of 1.2.1 from such a posterior
+  often came out as the predictive mean, inside the training data and
+  outside it;
+  the draw now forms the covariance from a Cholesky factor of the
+  training covariance. It raises ``LinAlgError`` where the covariance it
+  computes has a negative eigenvalue beyond the rounding of the prior
+  variance, and, in the low-noise representation, where the Cholesky
+  decomposition of the training covariance fails even with the noise
+  raised. The eigenvalue fallback also fixes the signs of whole
+  eigenvectors and uses the symmetric eigensolver, so the factor it
+  builds is a factor of the matrix it was given; a draw at closely spaced
+  or duplicated test points came from the wrong covariance before. Draws
+  through the eigenvalue fallback, and draws from a posterior in the
+  low-noise representation, change for a given generator.
 * :meth:`gpyreg.GP.predict_full` with ``add_noise=True`` adds the
   observation noise on the diagonal; with a noise that varies from point
   to point the returned matrix was neither symmetric nor a covariance
@@ -149,7 +165,7 @@ to change.
 * :meth:`gpyreg.GP.quad` reads a one-dimensional ``mu`` or ``sigma`` of
   length ``D`` as one measure in ``D`` dimensions, as MATLAB's gplite
   does, where 1.2.1 raised.
-* Inputs that were taken in silence are refused with a message: a
+* Inputs that 1.2.1 took in silence are refused with a message: a
   coordinate that has a prior needs a finite, positive ``sigma`` (a
   hyperparameter without a prior is written as ``None``, and a coordinate
   of a block without one as NaN location and ``sigma``, as 1.2.1 accepted
@@ -160,19 +176,28 @@ to change.
   which fills its bounds through it; :meth:`gpyreg.GP.update` with
   ``hyp`` checks the width of the hyperparameter row, and with
   ``compute_posterior=True`` refuses hyperparameters that are NaN (never
-  set), naming them; :meth:`gpyreg.GP.quad` refuses a GP without training
-  data or posterior factors, a mean function it cannot place, and a
-  measure that has not one column per input dimension; a noise variance
-  may be any number or 0-d array, while an array whose row count is not
-  that of the inputs is refused; and
+  set), naming them; :meth:`gpyreg.GP.quad` refuses a mean function it
+  cannot place; and a noise variance given as an array whose row count is
+  not that of the inputs is refused, where 1.2.1 reshaped any array of
+  ``N`` entries into a column and failed on any other. Inputs on which
+  1.2.1 failed with an error from inside the computation are refused
+  with a message that names the problem: :meth:`gpyreg.GP.quad` refuses
+  a GP without training data or posterior factors, where 1.2.1 raised
+  ``AttributeError`` or ``TypeError``, and a measure that has not one
+  column per input dimension; and
   :meth:`gpyreg.slice_sample.SliceSampler.sample` refuses a ``thin`` or
   ``burn`` that is not a whole number, an infinite one included, with
-  ``ValueError`` instead of raising ``TypeError`` from ``range``. A
-  failed Cholesky decomposition reports ``LinAlgError`` in both noise
+  ``ValueError`` instead of raising ``TypeError`` from ``range``. A noise
+  variance may be any number or 0-d array, and ``SliceSampler.sample``
+  takes a ``thin`` or ``burn`` that is a whole number of any type, a
+  float such as 2.0 included, where 1.2.1 took integers only. A failed
+  Cholesky decomposition reports ``LinAlgError`` in both noise
   representations, where the low-noise one raised ``TypeError``, and the
   checks of the shape of the inputs raise ``ValueError`` where they raised
-  ``AssertionError``. **Upgrading:** each refusal can stop a script that
-  ran under 1.2.1, which changes as follows:
+  ``AssertionError``. **Upgrading:** each refusal of an input that 1.2.1
+  took in silence can stop a script that ran under 1.2.1, and so can the
+  new type of the exception of the shape checks where a script catches
+  the old one; such a script changes as follows:
 
   - a name the model has not, which set nothing, is left out;
   - a prior whose ``sigma`` is infinite, zero or negative, or NaN beside
@@ -184,15 +209,19 @@ to change.
   - ``update(hyp=...)`` is given one column per hyperparameter of the
     GP, where 1.2.1 stored a row of another width and read it by offset;
   - ``gp.update(X_new=X, y_new=y)`` on a GP whose hyperparameters were
-    never set, which 1.2.1 completed with NaN posterior factors that a
-    following ``gp.fit()`` replaced, passes ``compute_posterior=False``,
-    or the data go to ``gp.fit(X, y)`` directly;
+    never set, which 1.2.1 completed with NaN posterior factors, gives
+    the data to ``gp.fit(X, y)`` instead. A following ``gp.fit()`` found
+    hyperparameters in 1.2.1 only where it drew no hyperparameter samples
+    (``n_samples=0``) and started from a space-filling design (``init_N``
+    above zero, as at the default); for such a fit,
+    ``compute_posterior=False`` in the update keeps the pattern working;
   - ``quad`` with another mean function, whose integral 1.2.1 computed
     as if that mean were a constant equal to its first hyperparameter,
     has no replacement;
   - a noise variance given as a row of ``N`` is given as a column;
-  - a fractional ``thin`` or ``burn`` is rounded; a whole number of any
-    type is still accepted.
+  - a script that catches the ``AssertionError`` of a shape check (an
+    ``X`` that is not two-dimensional, or whose number of columns is not
+    the GP's ``D``) catches ``ValueError``.
 
 * The covariance kernels refuse ``compute(compute_diag=True,
   compute_grad=True)`` with ``ValueError``. **Upgrading:** that
