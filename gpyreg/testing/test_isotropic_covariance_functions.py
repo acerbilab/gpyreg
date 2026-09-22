@@ -97,10 +97,11 @@ def test_matern_isotropic_invalid_degree():
         )
 
 
+@pytest.mark.parametrize("degree", [1, 3, 5])
 @pytest.mark.parametrize("seed", [0, 3, 42])
-def test_matern_isotropic_kernel_gradient(seed):
+def test_matern_isotropic_kernel_gradient(seed, degree):
     rng = np.random.RandomState(seed)
-    matern_fun = MaternIsotropic(3)
+    matern_fun = MaternIsotropic(degree)
     D = 3
     N = 20
     diag_cov = np.eye(N) * (0.2)
@@ -199,7 +200,8 @@ def test_matern_isotropic_against_anisotropic():
             [dK2[:, :, 0:-1].sum(axis=2, keepdims=True), dK2[:, :, [-1]]]
         )
         assert np.allclose(K2_iso, K2), f"degree {degree}"
-        assert np.allclose(dK2_iso, dK2, equal_nan=True), f"degree {degree}"
+        assert np.all(np.isfinite(dK2_iso)), f"degree {degree}"
+        assert np.allclose(dK2_iso, dK2), f"degree {degree}"
         assert np.allclose(K2_iso, K1_iso), f"degree {degree}"
 
         K3_iso = matern_iso.compute(hyp_iso, X, X_star)

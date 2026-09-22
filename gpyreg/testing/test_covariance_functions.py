@@ -93,10 +93,11 @@ def test_matern_invalid_degree():
         )
 
 
+@pytest.mark.parametrize("degree", [1, 3, 5])
 @pytest.mark.parametrize("seed", [0, 3, 42])
-def test_matern_kernel_gradient(seed):
+def test_matern_kernel_gradient(seed, degree):
     rng = np.random.RandomState(seed)
-    matern_fun = Matern(3)
+    matern_fun = Matern(degree)
     D = 3
     N = 20
     diag_cov = np.eye(N) * (0.2)

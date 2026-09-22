@@ -154,11 +154,17 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
             K_ls = squareform(
                 pdist(np.sqrt(self.degree) / ell * X, "sqeuclidean")
             )
-            # With d=1 kernel there will be issues caused by zero
-            # divisions. This is OK, the kernel is just not
-            # differentiable there.
+            # Where two inputs coincide the kernel does not depend on the
+            # length scale, so the derivative is zero. The d=1 kernel
+            # divides by zero there and gives inf * 0 = NaN, which would
+            # poison the gradient of the marginal likelihood through the
+            # whole diagonal, so the product is taken as the zero it is.
             with np.errstate(all="ignore"):
-                dK[0, :, :] = sf2 * (self.df(tmp) * np.exp(-tmp)) * K_ls
+                dK[0, :, :] = np.where(
+                    K_ls > 0,
+                    sf2 * (self.df(tmp) * np.exp(-tmp)) * K_ls,
+                    0.0,
+                )
             # Gradient of cov output scale
             dK[1, :, :] = 2 * K
             return K, dK.transpose(1, 2, 0)
