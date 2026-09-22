@@ -1347,15 +1347,18 @@ class GP:
             )
             PLB = np.minimum(np.maximum(PLB, LB), UB)
             PUB = np.maximum(np.minimum(PUB, UB), LB)
-            # The two clips move the plausible bounds independently, so a
-            # plausible box that lies outside the hard box comes back
-            # inverted: with training targets whose standard deviation is
-            # below the lower bound of the noise, the noise's plausible
-            # lower bound is clipped down to the hard upper bound and its
-            # plausible upper bound stays under that. The space-filling
-            # design needs the pair ordered, so an inverted one collapses
-            # onto its upper bound, which the clip left inside the hard
-            # box.
+            # With LB <= UB, which holds here, the two clips are one
+            # monotone map into the hard box, so an ordered plausible pair
+            # stays ordered. The noise recommends an inverted pair,
+            # [0.5 * log(tol), log(std(y))], for targets whose standard
+            # deviation is below 1e-3, as `gplite_noisefun.m:105-106`
+            # does; the clips keep it inverted unless the range of the
+            # targets is below 1e-6, where the hard pair collapses and
+            # takes both bounds with it. gplite clips the same way
+            # (`gplite_train.m:157-158`) and draws its design from the
+            # inverted pair; the space-filling design here needs the pair
+            # ordered, so an inverted one collapses onto its upper bound,
+            # which the clip left inside the hard box.
             inverted = PLB > PUB
             PLB[inverted] = PUB[inverted]
 

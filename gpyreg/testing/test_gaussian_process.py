@@ -2883,11 +2883,13 @@ def test_update_checks_the_hyperparameter_width():
 
 
 def test_fit_with_targets_of_a_tiny_range(monkeypatch):
-    """Targets whose standard deviation falls below the lower bound of the
-    noise put the noise's plausible box outside its hard box. The two
-    clips into the hard box then move the plausible bounds independently
-    and can cross them, and the space-filling design needs
-    ``PLB <= PUB``."""
+    """Targets whose standard deviation is below 1e-3, the noise's
+    plausible lower bound, give the noise an inverted recommended
+    plausible pair, ``[0.5 * log(tol), log(std(y))]``, as gplite's noise
+    does. The clips into the hard box keep it inverted while the range of
+    the targets is above 1e-6 (below that the hard pair collapses first),
+    and the space-filling design needs ``PLB <= PUB``. These targets have
+    a range of 8.2e-5 and a standard deviation of 2.6e-5."""
     from gpyreg import gaussian_process as gp_module
 
     received = {}
