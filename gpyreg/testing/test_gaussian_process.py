@@ -2560,11 +2560,10 @@ def _gp_2d():
 )
 def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
     """A coordinate of a block whose location and ``sigma`` are both NaN
-    has no prior, as in ``gplite_hypprior.m``: the location is ``mu`` for
-    the Gaussian and Student's t families and the box ``[a, b]`` for the
-    smooth-box ones. The block's log prior is that of its other
-    coordinates alone. PyVBMC writes such a block for the rectified
-    output-dependent noise."""
+    has no prior: the location is ``mu`` for the Gaussian and Student's t
+    families and the box ``[a, b]`` for the smooth-box ones. The block's
+    log prior is that of its other coordinates alone. PyVBMC writes such
+    a block for the rectified output-dependent noise."""
     # The first length scale has no prior; its degrees of freedom, where
     # the family has them, are NaN as well.
     block = tuple(np.array([np.nan, value]) for value in params)
@@ -2600,8 +2599,9 @@ def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
 def test_get_priors_returns_what_set_priors_reads_back(family, params):
     """``get_priors`` returns a prior whose degrees of freedom are NaN, and
     a block with a coordinate that has no prior, in a form ``set_priors``
-    reads back unchanged, before and after a ``fit``. A NaN ``df`` names
-    the Gaussian family outside ``fit``, as in ``gplite_hypprior.m``, and
+    reads back unchanged, before and after a ``fit``. Outside ``fit`` a
+    NaN ``df`` names the Gaussian family, as in ``gplite_hypprior.m``, and
+    the smooth box for the smooth-box Student's t, gpyreg's own family;
     ``fit`` fills it with ``df_base`` for its own duration alone."""
     X = np.reshape(np.linspace(-2, 2, 12), (-1, 2))
     y = np.sum(np.sin(X), 1)

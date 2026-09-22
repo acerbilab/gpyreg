@@ -652,8 +652,10 @@ class GP:
                 # and Student's t families and the box `[a, b]` for the
                 # smooth-box ones, whose `mu` stays NaN. A coordinate
                 # whose location and `sigma` are both NaN has no prior,
-                # as `gplite_hypprior.m` reads it; every other coordinate
-                # is scaled by its `sigma`.
+                # and every other coordinate is scaled by its `sigma`.
+                # `gplite_hypprior.m` reads a coordinate as having no
+                # prior where either is not finite, which the smooth-box
+                # families, gpyreg's own, cannot share.
                 if prior_type in ("smoothbox", "smoothbox_student_t"):
                     location = np.vstack(
                         (hyper_priors["a"][i], hyper_priors["b"][i])

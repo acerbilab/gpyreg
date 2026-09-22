@@ -196,8 +196,8 @@ to change.
   checks of the shape of the inputs raise ``ValueError`` where they raised
   ``AssertionError``. **Upgrading:** each refusal of an input that 1.2.1
   took in silence can stop a script that ran under 1.2.1, and so can the
-  new type of the exception of the shape checks where a script catches
-  the old one; such a script changes as follows:
+  new type of an exception where a script catches the old one; such a
+  script changes as follows:
 
   - a name the model has not, which set nothing, is left out;
   - a prior whose ``sigma`` is infinite, zero or negative, or NaN beside
@@ -219,9 +219,15 @@ to change.
     as if that mean were a constant equal to its first hyperparameter,
     has no replacement;
   - a noise variance given as a row of ``N`` is given as a column;
-  - a script that catches the ``AssertionError`` of a shape check (an
-    ``X`` that is not two-dimensional, or whose number of columns is not
-    the GP's ``D``) catches ``ValueError``.
+  - a script that catches the exception of a check whose type changed
+    catches the new one: ``ValueError`` for a shape check (an ``X`` that
+    is not two-dimensional, or whose number of columns is not the GP's
+    ``D``), which raised ``AssertionError``, for ``quad`` on a GP without
+    training data or posterior factors (``AttributeError`` or
+    ``TypeError``) or with a measure of another width (``IndexError``),
+    and for a ``thin`` or ``burn`` that is not a whole number
+    (``TypeError``); ``LinAlgError`` for a failed Cholesky decomposition
+    in the low-noise representation (``TypeError``).
 
 * The covariance kernels refuse ``compute(compute_diag=True,
   compute_grad=True)`` with ``ValueError``. **Upgrading:** that
