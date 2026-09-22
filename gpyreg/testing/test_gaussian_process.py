@@ -1945,3 +1945,34 @@ def test_failed_factorization_raises_linalgerror():
     with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
         make_gp().update(X_new=X, y_new=y, hyp=hyp[None, :])
     assert "Singular matrix" in execinfo.value.args[0]
+
+
+def test_robust_cholesky_factors_matrices_cholesky_refuses():
+    """The eigenvalue fallback returns a factor of the matrix it was given:
+    ``T.T @ T == sigma`` for the semidefinite matrices a direct Cholesky
+    decomposition refuses."""
+    robust_cholesky = gpr.GP._GP__robust_cholesky
+    rng = np.random.default_rng(7)
+
+    cases = {}
+    # Rank-deficient but positive semidefinite.
+    A = rng.standard_normal((6, 3))
+    cases["rank deficient"] = A @ A.T
+    # A kernel matrix at duplicated points, exactly singular.
+    kernel = gpr.covariance_functions.SquaredExponential()
+    X = np.array([[0.0], [0.0], [1.0], [1.0], [-1.5]])
+    cases["duplicate points"] = kernel.compute(np.array([0.0, 0.0]), X)
+    # A repeated positive eigenvalue, whose eigenspace the general solver
+    # need not return an orthogonal basis of.
+    Q, __ = np.linalg.qr(rng.standard_normal((5, 5)))
+    cases["repeated eigenvalue"] = Q @ np.diag([1.0, 1.0, 1.0, 0.0, 0.0]) @ Q.T
+
+    for name, sigma in cases.items():
+        sigma = (sigma + sigma.T) / 2
+        with pytest.raises(scipy.linalg.LinAlgError):
+            scipy.linalg.cholesky(sigma, check_finite=False)
+        T = robust_cholesky(sigma)
+        assert np.isrealobj(T), name
+        assert np.allclose(
+            T.T @ T, sigma, rtol=0, atol=1e-10 * np.max(np.abs(sigma))
+        ), name

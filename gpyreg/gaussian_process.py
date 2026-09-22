@@ -2621,12 +2621,16 @@ class GP:
         try:
             T = sp.linalg.cholesky(sigma, check_finite=False)
         except sp.linalg.LinAlgError:
-            D, U = sp.linalg.eig((sigma + sigma.T) / 2)
+            # The symmetric solver: real eigenvectors, and an orthogonal
+            # basis of a repeated eigenvalue, both of which the general
+            # solver may fail to return.
+            D, U = sp.linalg.eigh((sigma + sigma.T) / 2)
+            # Sign convention: the largest entry of each eigenvector is
+            # positive. Flipping a whole column leaves U D U^T unchanged.
             maxidx = np.argmax(np.abs(U), axis=0)
-            negidx = U[maxidx] < 0
-            U[negidx] *= -1
+            negidx = U[maxidx, np.arange(U.shape[1])] < 0
+            U[:, negidx] *= -1
 
-            D = np.real(D)  # symmetric so all are real
             # the abs is there to make sure we don't have issues
             # if np.spacing returns negative values
             tol = np.abs(np.spacing(np.max(D))) * D.shape[0]
@@ -2635,7 +2639,7 @@ class GP:
             p = np.sum(D < 0)  # negative eigenvalues
 
             if p == 0:
-                T = np.dot(np.diag(np.sqrt(D)), np.real(U[:, t]).T)
+                T = np.dot(np.diag(np.sqrt(D)), U[:, t].T)
             else:
                 T = np.zeros(sigma.shape)
 
