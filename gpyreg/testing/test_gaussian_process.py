@@ -2516,3 +2516,42 @@ def test_fit_does_not_write_into_the_space_filling_design(monkeypatch):
     assert np.allclose(
         records["widths"], np.std(records["as_returned"], axis=0, ddof=1)
     )
+
+
+def test_noise_gradient_with_a_constant_total_noise():
+    """A scale for the user-provided variance gives the noise function two
+    hyperparameters and a gradient with one row per training input, while
+    the total noise stays a scalar as long as no variance is given."""
+    D = 2
+    N = 14
+    rng = np.random.default_rng(5)
+    X = rng.uniform(-2, 2, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(
+            constant_add=True,
+            user_provided_add=True,
+            scale_user_provided=True,
+        ),
+    )
+    assert gp.noise.hyperparameter_count() == 2
+    # [log ell (D), log sf, log sn, log s2 multiplier, m0]
+    hyp = np.array([0.1, -0.2, 0.3, np.log(0.2), 0.4, 0.5])
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert gp.s2 is None
+
+    __, gradient = gp.log_likelihood(hyp, compute_grad=True)
+    assert np.all(
+        check_grad(
+            gp.log_likelihood,
+            lambda h: gp.log_likelihood(h, compute_grad=True)[1],
+            hyp,
+        )
+        < 1e-5
+    )
+    # With no variance given the multiplier does not enter the noise.
+    assert gradient[D + 2] == 0.0

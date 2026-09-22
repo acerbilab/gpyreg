@@ -2964,12 +2964,16 @@ class GP:
                 # Gradient of GP likelihood
                 if np.isscalar(sn2):
                     tr_Q = np.trace(Q)
+                    # The noise gradient is (1, noise_N) where the total
+                    # noise does not vary by point, and (N, noise_N) where
+                    # the noise function has a feature that could make it
+                    # vary; a constant total noise has the same row
+                    # everywhere, so the entry of hyperparameter i is that
+                    # of the first row. (`gplite_core.m:244` indexes the
+                    # array linearly and reads another entry.)
+                    dsn2_row = np.atleast_2d(dsn2)[0, :]
                     for i in range(0, noise_N):
-                        # Casting to a scalar suppress deprecation warnings in pytest runs.
-                        # "(Numpy) Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future."
-                        dnlZ[cov_N + i] = (
-                            0.5 * sn2_mult * np.dot(dsn2[i], tr_Q)
-                        ).item()
+                        dnlZ[cov_N + i] = 0.5 * sn2_mult * dsn2_row[i] * tr_Q
                 else:
                     dg_Q = np.diag(Q)
                     for i in range(0, noise_N):
