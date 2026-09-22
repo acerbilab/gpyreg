@@ -127,13 +127,16 @@ def f_min_fill(
                         # Mixture of uniforms
                         # (full bounds and plausible bounds)
 
-                        # The fraction w of the draws of each coordinate
-                        # without a prior from inside its plausible
-                        # interval, so that half of the design points lie
-                        # inside the plausible box when no coordinate has
-                        # a prior and every bound is finite. Coordinates
-                        # with a prior take the branches of the priors
-                        # below.
+                        # Each coordinate that takes this branch puts the
+                        # weight w on its plausible interval, so the
+                        # design puts the weight w ** m = 0.5 ** (m /
+                        # n_vars) on the plausible intervals of the m
+                        # coordinates that take it: one half where all
+                        # n_vars do (no coordinate has a prior or an
+                        # infinite bound, and none is fixed by LB == UB).
+                        # A fixed coordinate takes its value, one with an
+                        # infinite bound its plausible interval, and one
+                        # with a prior the branches of the priors below.
                         w = 0.5 ** (1 / n_vars)
 
                         sX[:, i] = uuinv(

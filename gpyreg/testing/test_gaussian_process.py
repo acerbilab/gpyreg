@@ -2439,8 +2439,10 @@ def test_log_prior_matches_the_documented_densities():
         assert np.isclose(log_prior, expected, rtol=1e-12)
 
         # A Gaussian and a smooth box are also written with an infinite
-        # or a NaN number of degrees of freedom: outside `fit`, a NaN `df`
-        # names the Gaussian families, as in `gplite_hypprior.m`.
+        # or a NaN number of degrees of freedom. Outside `fit`, either
+        # value makes a Student's t a Gaussian, as in `gplite_hypprior.m`,
+        # and a smooth-box Student's t a smooth box, a reading of gpyreg's
+        # own (gplite has no smooth-box priors).
         for df in (np.inf, np.nan):
             gp.set_priors(priors)
             gp.hyper_priors["df"][0] = df  # the Gaussian

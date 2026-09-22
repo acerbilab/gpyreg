@@ -556,11 +556,12 @@ class GP:
             location (``mu``, or ``a`` and ``b`` for the smooth-box
             families) and ``sigma`` are both NaN has no prior.
             Degrees of freedom ``df`` that are zero, infinite or NaN make
-            a ``"student_t"`` prior ``"gaussian"`` and a
-            ``"smoothbox_student_t"`` prior ``"smoothbox"``, as
-            ``gplite_hypprior.m`` reads them, with one exception: for the
-            duration of :py:meth:`fit`, a NaN ``df`` takes the value of
-            its option ``df_base``.
+            a ``"student_t"`` prior ``"gaussian"``, as
+            ``gplite_hypprior.m`` reads them, and a
+            ``"smoothbox_student_t"`` prior ``"smoothbox"``, gpyreg's own
+            reading (gplite has no smooth-box priors). For the duration
+            of :py:meth:`fit`, a NaN ``df`` takes the value of its option
+            ``df_base`` instead.
 
         Raises
         ------
