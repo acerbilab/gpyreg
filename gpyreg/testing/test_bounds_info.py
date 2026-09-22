@@ -1,5 +1,7 @@
 """Tests of the bounds the model components recommend from a training set."""
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -8,6 +10,7 @@ from gpyreg.covariance_functions import (
     Matern,
     RationalQuadraticARD,
     SquaredExponential,
+    _target_spread,
 )
 from gpyreg.isotropic_covariance_functions import (
     MaternIsotropic,
@@ -60,6 +63,20 @@ def test_equal_targets_give_usable_bounds(component):
     assert np.all(info["PUB"] <= info["UB"])
     assert np.all(info["LB"] <= info["x0"])
     assert np.all(info["x0"] <= info["UB"])
+
+
+@pytest.mark.parametrize(
+    "y", [[[0.3], [np.nan]], [[np.inf], [np.inf]]], ids=["nan", "inf"]
+)
+def test_targets_without_a_range_are_not_called_equal(y):
+    """Targets with a NaN among them, or all the same infinity, have a NaN
+    range, which is returned as it is: they get neither the warning that
+    the targets are all equal nor the unit range."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        height, __ = _target_spread(np.array(y))
+    assert np.isnan(height)
+    assert not any("all equal" in str(w.message) for w in caught)
 
 
 def test_fit_on_equal_targets_completes():

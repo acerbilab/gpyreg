@@ -27,13 +27,15 @@ def _target_spread(y: np.ndarray):
     Returns
     -------
     height : float
-        The range of the targets, or one where they are all equal.
+        The range of the targets, or one where they are all equal and
+        finite. It is NaN where a target is NaN or where every target is
+        the same infinity, and is returned as it is.
     y_std : float
         Their standard deviation, or that of a unit range where they are
         all equal.
     """
     height = np.max(y) - np.min(y)
-    if height > 0:
+    if height != 0:
         return height, np.std(y, ddof=1)
 
     warnings.warn(
