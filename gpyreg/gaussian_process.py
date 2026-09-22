@@ -476,7 +476,9 @@ class GP:
         Returns
         =======
         hyper_priors : dict
-            A dictionary of the current hyperparameter names and their priors.
+            A dictionary of the current hyperparameter names and their
+            priors, in the form :py:meth:`set_priors` takes, with ``None``
+            for a hyperparameter without a prior.
         """
 
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -497,23 +499,31 @@ class GP:
             upper = lower + info[1]
             i = range(lower, upper)
 
+            # The family of a block is read from its coordinates that
+            # have a prior; the others have NaN location and sigma
+            # (`set_priors`), which the returned arrays keep. NaN degrees
+            # of freedom belong to a Student's t family, as `set_priors`
+            # wrote them, and `fit` fills them with `df_base`.
+            p = np.isfinite(mu[i]) | np.isfinite(sigma[i])
+            df_p = df[i][p]
+            gaussian_df = np.all(df_p == 0) or np.all(df_p == np.inf)
+            student_t_df = np.all((df_p > 0) | np.isnan(df_p))
+
             prior_type = prior_params = None
-            if (
-                np.all(np.isfinite(a[i]))
-                and np.all(np.isfinite(b[i]))
-                and np.all(np.isfinite(sigma[i]))
-            ):
-                if np.all(df[i] == 0) or np.all(df[i] == np.inf):
+            if not np.any(p) or not np.all(np.isfinite(sigma[i][p])):
+                pass  # no prior, or none of the four families
+            elif np.all(np.isfinite(a[i][p])) and np.all(np.isfinite(b[i][p])):
+                if gaussian_df:
                     prior_type = "smoothbox"
                     prior_params = (a[i], b[i], sigma[i])
-                elif np.all(df[i] > 0):
+                elif student_t_df:
                     prior_type = "smoothbox_student_t"
                     prior_params = (a[i], b[i], sigma[i], df[i])
-            elif np.all(np.isfinite(mu[i])) and np.all(np.isfinite(sigma[i])):
-                if np.all(df[i] == 0) or np.all(df[i] == np.inf):
+            elif np.all(np.isfinite(mu[i][p])):
+                if gaussian_df:
                     prior_type = "gaussian"
                     prior_params = (mu[i], sigma[i])
-                elif np.all(df[i] > 0):
+                elif student_t_df:
                     prior_type = "student_t"
                     prior_params = (mu[i], sigma[i], df[i])
 
@@ -540,6 +550,12 @@ class GP:
             Within a block of several hyperparameters, a coordinate whose
             location (``mu``, or ``a`` and ``b`` for the smooth-box
             families) and ``sigma`` are both NaN has no prior.
+            Degrees of freedom ``df`` that are zero, infinite or NaN make
+            a ``"student_t"`` prior ``"gaussian"`` and a
+            ``"smoothbox_student_t"`` prior ``"smoothbox"``, as
+            ``gplite_hypprior.m`` reads them, with one exception: for the
+            duration of :py:meth:`fit`, a NaN ``df`` takes the value of
+            its option ``df_base``.
 
         Raises
         ------
@@ -1168,7 +1184,13 @@ class GP:
                 **init_N** : int, defaults to 1024
                     Initial design size for hyperparameter optimization.
                 **df_base** : int, defaults to 7
-                    Default degrees of freedom for student's t prior.
+                    The degrees of freedom of a ``"student_t"`` or
+                    ``"smoothbox_student_t"`` prior whose ``df`` is NaN,
+                    filled into a copy of the priors for the duration of
+                    the fit, as ``gplite_train.m`` fills its local copy.
+                    The GP keeps the priors as they were set, and outside
+                    the fit a NaN ``df`` reads as ``"gaussian"`` or
+                    ``"smoothbox"`` (see :py:meth:`set_priors`).
                 **n_samples** : int, defaults to 10
                     Number of hyperparameters to sample.
                 **thin** : int, defaults to 5

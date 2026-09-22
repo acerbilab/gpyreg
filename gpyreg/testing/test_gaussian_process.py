@@ -2457,6 +2457,58 @@ def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
 @pytest.mark.parametrize(
     "family, params",
     [
+        # A NaN number of degrees of freedom, on the whole block.
+        ("student_t", (0.3, 1.2, np.nan)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, np.nan)),
+        # A block whose first coordinate has no prior.
+        ("gaussian", ([np.nan, 0.3], [np.nan, 1.2])),
+        ("student_t", ([np.nan, 0.3], [np.nan, 1.2], [np.nan, 3.0])),
+        ("smoothbox", ([np.nan, -1.0], [np.nan, 1.0], [np.nan, 0.7])),
+    ],
+)
+def test_get_priors_returns_what_set_priors_reads_back(family, params):
+    """``get_priors`` returns a prior whose degrees of freedom are NaN, and
+    a block with a coordinate that has no prior, in a form ``set_priors``
+    reads back unchanged, before and after a ``fit``. A NaN ``df`` names
+    the Gaussian family outside ``fit``, as in ``gplite_hypprior.m``, and
+    ``fit`` fills it with ``df_base`` for its own duration alone."""
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 2))
+    y = np.sum(np.sin(X), 1)
+    hyp0 = np.array([[0.4, -0.4, 0.0, np.log(0.1), 0.0]])
+    gp = _gp_2d()
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, params)
+    gp.set_priors(priors)
+    hyper_priors = copy.deepcopy(gp.hyper_priors)
+
+    for fitted in (False, True):
+        if fitted:
+            gp.fit(
+                X=X,
+                y=y,
+                hyp0=hyp0,
+                options={"init_N": 0, "opts_N": 1, "n_samples": 0},
+            )
+        returned = gp.get_priors()["covariance_log_lengthscale"]
+        assert returned is not None
+        assert returned[0] == family
+        for value, given in zip(returned[1], params):
+            assert np.array_equal(
+                value, np.broadcast_to(given, (2,)), equal_nan=True
+            )
+
+        other = _gp_2d()
+        other.set_priors(gp.get_priors())
+        for key, value in hyper_priors.items():
+            assert np.array_equal(gp.hyper_priors[key], value, equal_nan=True)
+            assert np.array_equal(
+                other.hyper_priors[key], value, equal_nan=True
+            )
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
         ("gaussian", ([0.0, 0.3], [np.nan, 1.2])),
         ("student_t", ([0.0, 0.3], [np.nan, 1.2], 5.0)),
         ("smoothbox", ([-1.0, -1.0], [1.0, 1.0], [np.nan, 0.7])),
