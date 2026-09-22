@@ -244,3 +244,34 @@ def test_squared_exponential_isotropic_against_anisotropic():
     K3_iso = sqexp_iso.compute(hyp_iso, X, X_star)
     K3 = sqexp.compute(hyp, X, X_star)
     assert np.allclose(K3_iso, K3)
+
+
+def _uneven_inputs(N=20, seed=0):
+    """Inputs whose columns differ in width and in spread."""
+    rng = np.random.default_rng(seed)
+    scale = np.array([1.0, 3.0, 9.0])
+    offset = np.array([0.0, 10.0, -5.0])
+    return rng.uniform(0.0, 1.0, (N, 3)) * scale + offset
+
+
+def test_isotropic_bounds_take_the_means_of_the_logs():
+    """The single length scale of an isotropic kernel takes the mean of the
+    logs of the per-dimension widths, as the isoflag branch of
+    gplite_covfun.m does. The log of the mean width, which the helper used
+    instead, is larger by a Jensen gap and shifts all four bounds up."""
+    X = _uneven_inputs()
+    y = np.random.default_rng(1).normal(size=(X.shape[0], 1))
+    tol = 1e-6
+    width = np.max(X, axis=0) - np.min(X, axis=0)
+    mean_log_width = np.mean(np.log(width))
+
+    info = SquaredExponentialIsotropic().get_bounds_info(X, y)
+
+    assert info["LB"][0] == mean_log_width + np.log(tol)
+    assert info["UB"][0] == np.mean(np.log(width * 10))
+    assert info["PLB"][0] == mean_log_width + 0.5 * np.log(tol)
+    assert info["PUB"][0] == mean_log_width
+    assert info["x0"][0] == np.mean(np.log(np.std(X, axis=0, ddof=1)))
+    # Not vacuous: on these inputs the two conventions differ.
+    assert not np.isclose(np.log(np.mean(width)), mean_log_width)
+    assert not np.isclose(np.log(np.std(X, ddof=1)), info["x0"][0], atol=1e-3)
