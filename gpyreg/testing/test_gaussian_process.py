@@ -2357,15 +2357,101 @@ def _no_priors():
     }
 
 
-@pytest.mark.parametrize("sigma", [np.inf, -np.inf, np.nan, 0.0, -2.0])
-def test_set_priors_refuses_a_scale_that_is_not_positive(sigma):
-    """A prior needs a finite, positive scale; no prior is ``None``."""
+@pytest.mark.parametrize(
+    "sigma, problem",
+    [
+        (np.inf, "infinite"),
+        (-np.inf, "infinite"),
+        (np.nan, "NaN"),
+        (0.0, "zero or negative"),
+        (-2.0, "zero or negative"),
+    ],
+)
+def test_set_priors_refuses_a_scale_that_is_not_positive(sigma, problem):
+    """A prior needs a finite, positive scale; no prior is ``None``. The
+    message names the hyperparameter and what is wrong with its scale."""
     priors = _no_priors()
     priors["mean_const"] = ("gaussian", (0.0, sigma))
     with pytest.raises(ValueError) as execinfo:
         _gp_1d().set_priors(priors)
-    assert "mean_const" in execinfo.value.args[0]
-    assert "None" in execinfo.value.args[0]
+    message = execinfo.value.args[0]
+    assert "mean_const" in message
+    assert problem in message
+    assert "None" in message
+
+
+def _gp_2d():
+    """A two-dimensional GP with five hyperparameters: the two length
+    scales and the output scale of the kernel, one of the noise and one of
+    the mean."""
+    return gpr.GP(
+        D=2,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
+        ("gaussian", (0.3, 1.2)),
+        ("student_t", (0.3, 1.2, 5.0)),
+        ("smoothbox", (-1.0, 1.0, 0.7)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, 4.0)),
+    ],
+)
+def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
+    """A coordinate of a block whose location and ``sigma`` are both NaN
+    has no prior, as in ``gplite_hypprior.m``: the location is ``mu`` for
+    the Gaussian and Student's t families and the box ``[a, b]`` for the
+    smooth-box ones. The block's log prior is that of its other
+    coordinates alone. PyVBMC writes such a block for the rectified
+    output-dependent noise."""
+    # The first length scale has no prior; its degrees of freedom, where
+    # the family has them, are NaN as well.
+    block = tuple(np.array([np.nan, value]) for value in params)
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, block)
+
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 2))
+    y = np.sum(np.sin(X), 1)
+    gp = _gp_2d()
+    hyp = np.array([0.4, -1.4, 0.0, np.log(0.1), 0.0])
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    gp.set_priors(priors)
+
+    expected = _reference_log_prior(family, params, hyp[1])
+    for moved in (0.4, 3.0):
+        hyp[0] = moved
+        log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+        assert np.isclose(log_prior, expected, rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
+        ("gaussian", ([0.0, 0.3], [np.nan, 1.2])),
+        ("student_t", ([0.0, 0.3], [np.nan, 1.2], 5.0)),
+        ("smoothbox", ([-1.0, -1.0], [1.0, 1.0], [np.nan, 0.7])),
+        (
+            "smoothbox_student_t",
+            ([-1.0, -1.0], [1.0, 1.0], [np.nan, 0.7], 4.0),
+        ),
+    ],
+)
+def test_set_priors_refuses_a_nan_scale_beside_a_location(family, params):
+    """A coordinate whose location is set needs a finite, positive
+    ``sigma``: a NaN one beside it is refused, with a message that says
+    the scale is NaN."""
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, params)
+    with pytest.raises(ValueError) as execinfo:
+        _gp_2d().set_priors(priors)
+    message = execinfo.value.args[0]
+    assert "covariance_log_lengthscale" in message
+    assert "NaN" in message
+    assert "infinite" not in message
 
 
 def test_set_priors_and_set_bounds_refuse_an_unknown_hyperparameter():

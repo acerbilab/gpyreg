@@ -537,6 +537,9 @@ class GP:
             All hyperparameters need to appear in the dictionary.
             Use the value ``None`` to set no priors for a hyperparameter.
             If ``priors=None``, all hyperparameter priors are removed.
+            Within a block of several hyperparameters, a coordinate whose
+            location (``mu``, or ``a`` and ``b`` for the smooth-box
+            families) and ``sigma`` are both NaN has no prior.
 
         Raises
         ------
@@ -547,8 +550,8 @@ class GP:
             Raised when ``priors`` is given, but a specified
             hyperparameter is unknown.
         ValueError
-            Raised when a prior is given a ``sigma`` that is not finite
-            and positive.
+            Raised when a coordinate that has a prior is given a ``sigma``
+            that is not finite and positive.
         """
         self.no_prior = False
         if priors is None:
@@ -623,13 +626,37 @@ class GP:
                 else:
                     raise ValueError("Unknown hyperprior type " + prior_type)
 
-                # Every family is scaled by sigma.
+                # The location of a coordinate is `mu` for the Gaussian
+                # and Student's t families and the box `[a, b]` for the
+                # smooth-box ones, whose `mu` stays NaN. A coordinate
+                # whose location and `sigma` are both NaN has no prior,
+                # as `gplite_hypprior.m` reads it; every other coordinate
+                # is scaled by its `sigma`.
+                if prior_type in ("smoothbox", "smoothbox_student_t"):
+                    location = np.vstack(
+                        (hyper_priors["a"][i], hyper_priors["b"][i])
+                    )
+                else:
+                    location = hyper_priors["mu"][i][None, :]
                 scale = hyper_priors["sigma"][i]
-                if not np.all(np.isfinite(scale)) or np.any(scale <= 0.0):
+                has_prior = ~(
+                    np.all(np.isnan(location), axis=0) & np.isnan(scale)
+                )
+                scale = scale[has_prior]
+                problem = None
+                if np.any(np.isnan(scale)):
+                    problem = "a NaN sigma where its location is not NaN"
+                elif np.any(np.isinf(scale)):
+                    problem = "an infinite sigma"
+                elif np.any(scale <= 0.0):
+                    problem = "a sigma that is zero or negative"
+                if problem is not None:
                     raise ValueError(
-                        f"The prior of {info[0]} needs a finite, positive "
-                        "sigma; no prior is expressed as `None`, not as an "
-                        "infinite sigma."
+                        f"The prior of {info[0]} has {problem}. A prior "
+                        "needs a finite, positive sigma; a hyperparameter "
+                        "without a prior is set to `None`, and a coordinate "
+                        "of a block without a prior has NaN for both its "
+                        "location and its sigma."
                     )
 
             lower += info[1]
