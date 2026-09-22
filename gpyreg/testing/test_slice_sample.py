@@ -103,6 +103,28 @@ def test_short_burn_in_keeps_the_chain_moving(burn):
     assert np.unique(res["samples"], axis=0).shape[0] == 6
 
 
+def test_infinite_width_does_not_come_back_after_the_burn_in():
+    """An infinite width is legal for an unbounded coordinate and is
+    replaced by 10 at construction. The base widths that the geometric-mean
+    recombination at the end of the burn-in uses are the replaced ones: an
+    infinite base width would come back there and fill the chain with NaN."""
+    rv = multivariate_normal(np.zeros(2), np.eye(2))
+    sampler = SliceSampler(
+        rv.logpdf,
+        np.zeros(2),
+        widths=[np.inf, 1.0],
+        LB=[-np.inf, -5.0],
+        UB=[np.inf, 5.0],
+        options={"display": "off", "diagnostics": False},
+        rng=np.random.default_rng(6),
+    )
+    res = sampler.sample(20, burn=10)
+
+    assert np.all(np.isfinite(sampler.base_widths))
+    assert np.all(np.isfinite(sampler.widths))
+    assert np.all(np.isfinite(res["samples"]))
+
+
 def test_burn_in_statistics_window_is_the_second_half():
     """The adapted widths come from the last ``floor(burn / 2)`` burn-in
     iterations, one term per iteration and the same number in the divisor.

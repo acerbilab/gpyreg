@@ -171,9 +171,9 @@ class SliceSampler:
         # np.spacing could return negative numbers so use nextafter
         self.UB_out = np.nextafter(self.UB, np.inf)
 
-        if widths is None:
+        widths_given = widths is not None
+        if not widths_given:
             self.widths = ((self.UB - self.LB) / 2).copy()
-            self.base_widths = None
         else:
             if np.size(widths) == 1:
                 self.widths = np.tile(widths, D)
@@ -183,9 +183,13 @@ class SliceSampler:
             # it.
             if not np.iscomplexobj(self.widths):
                 self.widths = self.widths.astype(float)
-            self.base_widths = self.widths.copy()
 
         self.widths[np.isinf(self.widths)] = 10
+        # The base widths are copied after the replacement above: the
+        # geometric mean of the adapted widths with an infinite base width
+        # is infinite, so the infinity would come back at the end of the
+        # burn-in and fill the chain with NaN.
+        self.base_widths = self.widths.copy() if widths_given else None
         self.widths[
             self.LB == self.UB
         ] = 1  # Widths is irrelevant when LB == UB, set to 1
