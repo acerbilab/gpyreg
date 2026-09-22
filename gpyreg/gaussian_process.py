@@ -2190,14 +2190,15 @@ class GP:
             L_chol = self.posteriors[s].L_chol
 
             if compute_var and L_chol:
-                # Normalization of the Cholesky factor, matching the
-                # posterior computation: L = chol((K + sn2_mult * sn2) / sl)
-                # with sl the minimum total training noise variance,
-                # including any user-provided variance, times sn2_mult.
-                sn2 = self.noise.compute(
-                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
-                )
-                sl = np.min(sn2) * self.posteriors[s].sn2_mult
+                # Normalization of the stored Cholesky factor,
+                # L = chol((K + sn2_mult * sn2) / sl). The scale is the one
+                # the factor was built with, which a rank-one update keeps
+                # and the minimum of the current training noise need not
+                # reproduce. Posteriors pickled before the scale was stored
+                # lack the attribute and recover it from sW.
+                sl = getattr(self.posteriors[s], "sl", None)
+                if sl is None:
+                    sl = 1.0 / self.posteriors[s].sW[0, 0] ** 2
 
             # Compute posterior mean of the integral
             tau = np.sqrt(sigma**2 + ell**2)

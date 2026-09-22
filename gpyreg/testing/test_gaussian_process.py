@@ -551,6 +551,16 @@ def test_rank_one_update_with_heteroskedastic_noise(case):
     assert np.allclose(f_mu, f_mu_ref, rtol=1e-10, atol=1e-12)
     assert np.allclose(f_s2, f_s2_ref, rtol=1e-10, atol=1e-12)
 
+    # Bayesian quadrature normalizes its solves by the scale the stored
+    # factor carries, which after a rank-one update need not be the
+    # minimum of the enlarged training noise, so the integral and its
+    # variance agree with those of the full recomputation.
+    F, F_var = gp.quad(0.0, 1.0, compute_var=True)
+    F_ref, F_var_ref = gp_ref.quad(0.0, 1.0, compute_var=True)
+    assert np.allclose(F, F_ref, rtol=1e-10, atol=1e-12)
+    assert np.allclose(F_var, F_var_ref, rtol=1e-8, atol=1e-12)
+    assert np.all(F_var > np.spacing(1))
+
 
 def test_rank_one_update_without_stored_noise_scale():
     # Posteriors pickled by earlier versions have no ``sl`` attribute; the
