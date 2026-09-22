@@ -128,6 +128,12 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
             )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
+            )
 
         ell = np.exp(hyp[0])
         sf2 = np.exp(2 * hyp[1])
@@ -202,6 +208,12 @@ class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
             raise ValueError(
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
+            )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
             )
 
         ell = np.exp(hyp[0])

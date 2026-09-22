@@ -277,3 +277,20 @@ def test_isotropic_bounds_take_the_means_of_the_logs():
     # Not vacuous: on these inputs the two conventions differ.
     assert not np.isclose(np.log(np.mean(width)), mean_log_width)
     assert not np.isclose(np.log(np.std(X, ddof=1)), info["x0"][0], atol=1e-3)
+
+
+@pytest.mark.parametrize(
+    "kernel",
+    [SquaredExponentialIsotropic(), MaternIsotropic(3)],
+    ids=lambda kernel: type(kernel).__name__,
+)
+def test_isotropic_kernel_refuses_a_gradient_of_the_diagonal(kernel):
+    """As for the anisotropic kernels, the gradient is the gradient of the
+    full covariance matrix."""
+    D = 3
+    X = np.ones((20, D))
+    hyp = np.ones(kernel.hyperparameter_count(D))
+
+    with pytest.raises(ValueError) as execinfo:
+        kernel.compute(hyp, X, compute_diag=True, compute_grad=True)
+    assert "cannot both be True" in execinfo.value.args[0]

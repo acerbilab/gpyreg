@@ -96,6 +96,9 @@ class AbstractKernel(ABC):
             Raised when `hyp` has not the expected number of hyperparameters.
         ValueError
             Raised when `hyp` is not an 1D array but of higher dimension.
+        ValueError
+            Raised when `compute_diag` and `compute_grad` are both True:
+            the gradient is available for the full covariance matrix only.
         """
 
     def hyperparameter_count(self, D: int):
@@ -196,11 +199,17 @@ class SquaredExponential(AbstractKernel):
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
             )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
+            )
 
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
 
-        if X_star is None and compute_diag and not compute_grad:
+        if X_star is None and compute_diag:
             # The diagonal is sf2 * exp(-0 / 2) = sf2 exactly.
             return np.full((N, 1), sf2)
 
@@ -291,6 +300,12 @@ class Matern(AbstractKernel):
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
             )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
+            )
 
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
@@ -377,6 +392,12 @@ class RationalQuadraticARD(AbstractKernel):
             raise ValueError(
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
+            )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
             )
 
         ell = np.exp(hyp[0:D])

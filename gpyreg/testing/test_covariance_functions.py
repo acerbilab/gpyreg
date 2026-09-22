@@ -243,3 +243,22 @@ def test_rational_quad_ard_plausible_upper_bounds():
     assert np.all(np.isfinite(info["PUB"]))
     assert info["PUB"][D] == np.log(np.max(y) - np.min(y))
     assert info["PUB"][D + 1] == 5.0
+
+
+@pytest.mark.parametrize(
+    "kernel",
+    [SquaredExponential(), Matern(3), RationalQuadraticARD()],
+    ids=lambda kernel: type(kernel).__name__,
+)
+def test_kernel_refuses_a_gradient_of_the_diagonal(kernel):
+    """The gradient is the gradient of the full covariance matrix. Asked
+    for the diagonal and the gradient at once the kernels returned an
+    (N, 1) value beside an (N, N, cov_N) gradient, a pair that means
+    nothing."""
+    D = 3
+    X = np.ones((20, D))
+    hyp = np.ones(kernel.hyperparameter_count(D))
+
+    with pytest.raises(ValueError) as execinfo:
+        kernel.compute(hyp, X, compute_diag=True, compute_grad=True)
+    assert "cannot both be True" in execinfo.value.args[0]
