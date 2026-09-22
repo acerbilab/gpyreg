@@ -877,17 +877,14 @@ class SliceSampler:
         initial positive sequence: the autocorrelation estimates are summed
         in consecutive pairs starting from lag 0, so that the first pair is
         ``(rho_0, rho_1)`` with ``rho_0 = 1``, and the first pair whose sum
-        is not positive ends the sum. BDA3 and Stan pair the estimates the
-        same way but take that first pair unconditionally, testing from
-        ``(rho_2, rho_3)`` on; the two give the same estimate, because a
-        first pair that is not positive means ``rho_1 <= -1`` and leaves
-        both integrated times non-positive, hence both replaced by the
-        floor below. The estimate is then floored at
+        is not positive ends the sum. The estimate is then floored at
         ``1 / log10(m * n)``, as in Stan and ArviZ, so that the effective
         sample size is positive and at most ``m * n * log10(m * n)``. An
         effective sample size larger than the number of draws is a valid
-        outcome and indicates anticorrelated samples. A trace that does not
-        move has no variance and gets an effective sample size of NaN.
+        outcome and indicates anticorrelated samples. For traces that do
+        not move the estimate is rounding noise of their constant value:
+        finite where its mean is inexact, NaN where the variance comes out
+        exactly zero. :py:meth:`sample` reports NaN for such a parameter.
         """
         if np.shape(x) < (2,):
             raise ValueError(
