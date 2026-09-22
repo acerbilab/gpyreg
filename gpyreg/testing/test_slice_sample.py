@@ -20,10 +20,6 @@ options = {"display": "off", "diagnostics": True}
 threshold = 0.1
 
 
-def _normal_metropolis_proposal():
-    return np.random.normal(size=1)
-
-
 def test_multiple_runs():
     state = np.random.get_state()
 
@@ -643,14 +639,11 @@ def test_generator_runs_are_reproducible_and_independent_of_global_state():
 
 @pytest.mark.parametrize("serialization", ["pickle", "deepcopy"])
 @pytest.mark.parametrize("rng_kind", ["legacy", "generator", "old_pickle"])
-@pytest.mark.parametrize("metropolis", [False, True])
-def test_serialized_sampler_continues_stream(
-    serialization, rng_kind, metropolis
-):
+def test_serialized_sampler_continues_stream(serialization, rng_kind):
     """Copied samplers resume with generator state or the current global stream.
 
-    Old pickle state has no rng attribute, including when Metropolis steps
-    are enabled. Serializing a legacy sampler must not capture global state.
+    Old pickle state has no rng attribute. Serializing a legacy sampler
+    must not capture global state.
     """
     state = np.random.get_state()
     try:
@@ -662,10 +655,6 @@ def test_serialized_sampler_continues_stream(
             options={"display": "off", "diagnostics": False},
             rng=7 if rng_kind == "generator" else None,
         )
-        if metropolis:
-            sampler.metropolis_pdf = norm.pdf
-            sampler.metropolis_rnd = _normal_metropolis_proposal
-            sampler.metropolis_flag = True
         sampler.sample(5, burn=5)
         if rng_kind == "old_pickle":
             del sampler.rng

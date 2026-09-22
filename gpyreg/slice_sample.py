@@ -238,11 +238,6 @@ class SliceSampler:
         self.adaptive = options.get("adaptive", True)
         self.log_prior = options.get("log_prior", None)
         self.diagnostics = options.get("diagnostics", True)
-        self.metropolis_pdf = options.get("metropolis_pdf", None)
-        self.metropolis_rnd = options.get("metopolis_rnd", None)
-        self.metropolis_flag = (
-            self.metropolis_pdf is not None and self.metropolis_rnd is not None
-        )
 
         # Logging
         self.logger = logging.getLogger("SliceSampler")
@@ -340,7 +335,7 @@ class SliceSampler:
         """
 
         # Samplers pickled before rng was introduced use the legacy stream.
-        # Restore the attribute before either slice or Metropolis draws.
+        # Restore the attribute before the first draw.
         self.rng = resolve_rng(getattr(self, "rng", None))
 
         # Reference to x0 so it is updated as we go along, allowing us to
@@ -420,12 +415,6 @@ class SliceSampler:
                     self.func_count,
                     log_Px,
                     action,
-                )
-
-            # Metropolis step (optional)
-            if self.metropolis_flag:
-                xx, log_Px, f_val, log_prior = self.__metropolis_step(
-                    xx, logdist_vec, log_Px, f_val, log_prior
                 )
 
             ## Slice sampling step.
@@ -546,12 +535,6 @@ class SliceSampler:
                 xx[dd] = xprime[dd]
                 x_l[dd] = xprime[dd]
                 x_r[dd] = xprime[dd]
-
-            # Metropolis step (optional)
-            if self.metropolis_flag:
-                xx, log_Px, f_val, log_prior = self.__metropolis_step(
-                    xx, logdist_vec, log_Px, f_val, log_prior
-                )
 
             # Record samples and miscellaneous bookkeeping.
             record = i >= burn and np.mod(i - burn, thin) == 0
@@ -773,22 +756,6 @@ class SliceSampler:
                 y = np.sum(f_val) + log_prior
 
         return y, f_val, log_prior
-
-    def __metropolis_step(self, x, log_f, log_Px, f_val, log_prior):
-        """Metropolis step."""
-        xx_new = self.metropolis_rnd()
-        log_Px_new, f_val_new, log_prior_new = log_f(xx_new)
-
-        # Acceptance rate
-        a = np.exp(log_Px_new - log_Px) * (
-            self.metropolis_pdf(x) / self.metropolis_pdf(xx_new)
-        )
-
-        # Accept proposal?
-        if self.rng.random() < a:
-            return xx_new, log_Px_new, f_val_new, log_prior_new
-
-        return x, log_Px, f_val, log_prior
 
     def __gelman_rubin(self, x, return_var=False):
         """Returns estimate of R for a set of traces.
