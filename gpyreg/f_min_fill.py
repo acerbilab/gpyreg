@@ -127,8 +127,11 @@ def f_min_fill(
                         # Mixture of uniforms
                         # (full bounds and plausible bounds)
 
-                        # Half of all starting points from inside the
-                        # plausible box
+                        # Half of the draws of each coordinate without a
+                        # prior from inside the plausible box. The
+                        # coordinates that have a prior take the Student's
+                        # t branch below, so the fraction of whole design
+                        # points inside the plausible box is another one.
                         w = 0.5 ** (1 / n_vars)
 
                         sX[:, i] = uuinv(
@@ -190,12 +193,22 @@ def f_min_fill(
 
 
 def uuinv(p, B, w):
-    """
+    r"""
     Inverse of cumulative distribution function of mixture of uniform
-    distributions. The mixture is:
+    distributions. The mixture puts the weight ``w`` on the plausible box
+    and spreads the remaining weight over the union of the two tails in
+    proportion to their lengths:
+
     .. math::
-    w \text{Uniform}(B[1], B[2]) +
-    \frac{1 - w}{2} (\text{Uniform}(B[0], B[1]) + \text{Uniform}(B[2], B[3]))
+        w \, \text{Uniform}(B[1], B[2]) +
+        (1 - w) \frac{B[1] - B[0]}{L} \text{Uniform}(B[0], B[1]) +
+        (1 - w) \frac{B[3] - B[2]}{L} \text{Uniform}(B[2], B[3]),
+
+    with :math:`L = (B[1] - B[0]) + (B[3] - B[2])`. The two tails
+    therefore carry the same density as each other, and a tail of length
+    zero carries no weight. Where both tails have length zero the mixture
+    degenerates to the plausible box with a point mass of
+    :math:`(1 - w) / 2` at each of ``B[0]`` and ``B[3]``.
 
     Parameters
     ----------
@@ -205,12 +218,13 @@ def uuinv(p, B, w):
         1D array or list containing [LB, PLB, PUB, UB].
     w : float
         The coefficient for mixture of uniform distributions.
-        :math: `0 \\leq w \\leq 1`.
+        :math:`0 \leq w \leq 1`.
 
     Returns
     -------
     x : ndarray
-        1D array of samples corresponding to `p`.
+        1D array of samples corresponding to `p`. Entries of `p` outside
+        :math:`[0, 1]` are returned as NaN.
     """
     assert B[0] <= B[1] <= B[2] <= B[3]
     assert 0 <= w <= 1
@@ -219,9 +233,7 @@ def uuinv(p, B, w):
 
     if w == 1:
         x = p * (B[2] - B[1]) + B[1]
-        return x
-
-    if L == 0:
+    elif L == 0:
         # Degenerate to mixture of delta and uniform distributions
         i1 = p <= (1 - w) / 2
         x[i1] = B[0]
@@ -232,23 +244,23 @@ def uuinv(p, B, w):
 
         i3 = p > (1 - w) / 2 + w
         x[i3] = B[3]
-        return x
+    else:
+        # First step
+        i1 = p <= (1 - w) * (B[1] - B[0]) / L
+        x[i1] = B[0] + p[i1] * L / (1 - w)
 
-    # First step
-    i1 = p <= (1 - w) * (B[1] - B[0]) / L
-    x[i1] = B[0] + p[i1] * L / (1 - w)
+        # Second step
+        i2 = (p <= (1 - w) * (B[1] - B[0]) / L + w) & ~i1
+        if w != 0:
+            x[i2] = (p[i2] - (1 - w) * (B[1] - B[0]) / L) * (
+                B[2] - B[1]
+            ) / w + B[1]
 
-    # Second step
-    i2 = (p <= (1 - w) * (B[1] - B[0]) / L + w) & ~i1
-    if w != 0:
-        x[i2] = (p[i2] - (1 - w) * (B[1] - B[0]) / L) * (B[2] - B[1]) / w + B[
-            1
-        ]
+        # Third step
+        i3 = p > (1 - w) * (B[1] - B[0]) / L + w
+        x[i3] = (p[i3] - w - (1 - w) * (B[1] - B[0]) / L) * L / (1 - w) + B[2]
 
-    # Third step
-    i3 = p > (1 - w) * (B[1] - B[0]) / L + w
-    x[i3] = (p[i3] - w - (1 - w) * (B[1] - B[0]) / L) * L / (1 - w) + B[2]
-
+    # Outside the unit interval p is not a quantile, in all three cases.
     x[p < 0] = np.nan
     x[p > 1] = np.nan
 
