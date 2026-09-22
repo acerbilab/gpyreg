@@ -326,9 +326,10 @@ class SliceSampler:
         Raises
         ------
         ValueError
-            Raised when `thin` is not a positive integer.
+            Raised when `thin` is not a whole number greater than zero.
         ValueError
-            Raised when `burn` is not a integer >= 0.
+            Raised when `burn` is not a whole number greater than or equal
+            to zero.
         ValueError
             Raised when the initial starting point X0 does not evaluate to a
             real number (e.g. Inf or NaN).
@@ -351,16 +352,20 @@ class SliceSampler:
                 burn = round(N / 3)
 
         # Sanity checks
-        if not np.isscalar(thin) or thin <= 0:
+        if not np.isscalar(thin) or thin <= 0 or thin != np.floor(thin):
             raise ValueError(
                 "The thinning factor option needs to be a positive integer."
             )
 
-        if not np.isscalar(burn) or burn < 0:
+        if not np.isscalar(burn) or burn < 0 or burn != np.floor(burn):
             raise ValueError(
                 "The burn-in samples option needs to be a non-negative "
                 "integer."
             )
+
+        # Both count iterations from here on.
+        thin = int(thin)
+        burn = int(burn)
 
         if (
             burn == 0

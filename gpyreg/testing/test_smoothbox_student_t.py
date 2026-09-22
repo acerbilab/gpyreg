@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import scipy.special
 import scipy.stats
 from scipy.integrate import quad
 
@@ -104,3 +105,44 @@ def test_ppf_cdf():
             ),
             q,
         )
+
+
+def test_normalizer_survives_a_large_df():
+    """The normalization constant is a ratio of two gamma functions, each of
+    which overflows from a df of about 340 although the ratio is of order
+    ``sqrt(df)``."""
+    sigma = 1.0
+    a = -1.0
+    b = 1.0
+
+    assert np.isfinite(smoothbox_student_t_cdf(0.5, 400, sigma, a, b))
+    assert np.isfinite(smoothbox_student_t_ppf(0.7, 400, sigma, a, b))
+
+
+def test_normalizer_agrees_with_the_gamma_form():
+    """Where the gamma functions do not overflow, the constant is the same
+    as the ratio written out directly."""
+    sigma = 1.0
+    a = -1.0
+    b = 1.0
+    df = 5
+
+    c = scipy.special.gamma(0.5 * (df + 1)) / (
+        scipy.special.gamma(0.5 * df) * sigma * np.sqrt(df * np.pi)
+    )
+    C = 1.0 + (b - a) * c
+
+    x = 0.5  # on the plateau, where the constant is the whole density
+    assert np.isclose(
+        smoothbox_student_t_cdf(x, df, sigma, a, b),
+        (0.5 + (x - a) * c) / C,
+        rtol=1e-12,
+        atol=0.0,
+    )
+    q = 0.7  # between 0.5 / C and (C - 0.5) / C, the plateau's quantiles
+    assert np.isclose(
+        smoothbox_student_t_ppf(q, df, sigma, a, b),
+        (q * C - 0.5) / c + a,
+        rtol=1e-12,
+        atol=0.0,
+    )

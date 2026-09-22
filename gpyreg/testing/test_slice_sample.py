@@ -586,6 +586,21 @@ def test_sample_sanity_checks():
         "burn-in samples option needs to be a non-negative"
         in execinfo.value.args[0]
     )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, thin=1.5)
+    assert (
+        "The thinning factor option needs to be a positive integer"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, burn=2.5)
+    assert (
+        "burn-in samples option needs to be a non-negative"
+        in execinfo.value.args[0]
+    )
+    # A whole number of another type is still a whole number.
+    slicer.sample(3, thin=2.0, burn=1.0)
+
     slicer.x0 = slicer.x0 * np.nan
     with pytest.raises(ValueError) as execinfo:
         slicer.sample(3)

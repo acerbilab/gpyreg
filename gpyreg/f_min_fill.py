@@ -303,10 +303,12 @@ def smoothbox_student_t_cdf(
     b : float
         Value of b for the distribution.
     """
-    # Normalization constant so that integral over pdf is 1.
-    c = sp.special.gamma(0.5 * (df + 1)) / (
-        sp.special.gamma(0.5 * df) * sigma * np.sqrt(df * np.pi)
-    )
+    # Normalization constant so that integral over pdf is 1. The ratio of
+    # the two gamma functions is of order sqrt(df) but each of them
+    # overflows from a df of about 340, so take it through their logs.
+    c = np.exp(
+        sp.special.gammaln(0.5 * (df + 1)) - sp.special.gammaln(0.5 * df)
+    ) / (sigma * np.sqrt(df * np.pi))
     C = 1.0 + (b - a) * c
 
     if x < a:
@@ -366,10 +368,12 @@ def smoothbox_student_t_ppf(
     b : float
         Value of b for the distribution.
     """
-    # Normalization constant so that integral over pdf is 1.
-    c = sp.special.gamma(0.5 * (df + 1)) / (
-        sp.special.gamma(0.5 * df) * sigma * np.sqrt(df * np.pi)
-    )
+    # Normalization constant so that integral over pdf is 1. The ratio of
+    # the two gamma functions is of order sqrt(df) but each of them
+    # overflows from a df of about 340, so take it through their logs.
+    c = np.exp(
+        sp.special.gammaln(0.5 * (df + 1)) - sp.special.gammaln(0.5 * df)
+    ) / (sigma * np.sqrt(df * np.pi))
     C = 1.0 + (b - a) * c
 
     if q < 0.5 / C:
