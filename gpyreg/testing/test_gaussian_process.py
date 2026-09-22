@@ -1976,3 +1976,55 @@ def test_robust_cholesky_factors_matrices_cholesky_refuses():
         assert np.allclose(
             T.T @ T, sigma, rtol=0, atol=1e-10 * np.max(np.abs(sigma))
         ), name
+
+
+def test_random_function_on_a_dense_grid():
+    """A predictive covariance on a dense one-dimensional grid is
+    numerically singular, so the draw goes through the eigenvalue
+    fallback. Eigenvalues of rounding size, which such a matrix has of
+    both signs, count as zeros, and the draws are draws: they differ
+    between generators and carry the predictive covariance."""
+    rng_data = np.random.default_rng(77)
+    X = rng_data.uniform(-2, 2, size=(40, 1))
+    y = np.sin(2 * X)
+
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    # [log ell, log sf, log sn, m0, mode location, log scale]
+    hyp = np.array(
+        [[np.log(0.7), np.log(1.2), np.log(1e-3), 0.0, 0.0, np.log(1.5)]]
+    )
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+
+    x_star = np.reshape(np.linspace(-2.5, 2.5, 100), (-1, 1))
+    __, cov = gp.predict_full(x_star)
+    C = (cov[:, :, 0] + cov[:, :, 0].T) / 2
+    with pytest.raises(scipy.linalg.LinAlgError):
+        scipy.linalg.cholesky(C, check_finite=False)
+
+    f_1 = gp.random_function(x_star, rng=np.random.default_rng(1))
+    f_2 = gp.random_function(x_star, rng=np.random.default_rng(2))
+    assert not np.array_equal(f_1, f_2)
+    mu, __ = gp.predict(x_star)
+    assert not np.allclose(f_1, mu)
+
+    rng = np.random.default_rng(11)
+    draws = np.concatenate(
+        [gp.random_function(x_star, rng=rng) for __ in range(1000)], axis=1
+    )
+    empirical = np.cov(draws, ddof=1)
+    assert np.linalg.norm(empirical - C) < 0.2 * np.linalg.norm(C)
+    assert np.allclose(np.mean(draws, 1), np.ravel(mu), rtol=0, atol=0.05)
+
+
+def test_robust_cholesky_refuses_an_indefinite_matrix():
+    """A negative eigenvalue larger than the rounding tolerance means the
+    matrix is no covariance matrix, and no factor of it exists."""
+    sigma = np.array([[1.0, 2.0], [2.0, 1.0]])  # eigenvalues 3 and -1
+    with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
+        gpr.GP._GP__robust_cholesky(sigma)
+    assert "not positive semidefinite" in execinfo.value.args[0]

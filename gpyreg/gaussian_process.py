@@ -2617,7 +2617,18 @@ class GP:
 
     @staticmethod
     def __robust_cholesky(sigma):
-        """Cholesky-like decomposition for a covariance matrix."""
+        """Cholesky-like decomposition for a covariance matrix.
+
+        Returns a factor ``T`` with ``T.T @ T == sigma`` up to rounding,
+        from the eigendecomposition where the direct Cholesky
+        decomposition fails.
+
+        Raises
+        ------
+        LinAlgError
+            Raised when ``sigma`` has a negative eigenvalue beyond the
+            rounding tolerance, so that no such factor exists.
+        """
         try:
             T = sp.linalg.cholesky(sigma, check_finite=False)
         except sp.linalg.LinAlgError:
@@ -2631,17 +2642,32 @@ class GP:
             negidx = U[maxidx, np.arange(U.shape[1])] < 0
             U[:, negidx] *= -1
 
-            # the abs is there to make sure we don't have issues
-            # if np.spacing returns negative values
+            # Which eigenvalues carry the matrix rather than its
+            # rounding (`gplite_rnd.m:102`). The abs is there to make sure
+            # we don't have issues if np.spacing returns negative values.
             tol = np.abs(np.spacing(np.max(D))) * D.shape[0]
             t = np.abs(D) > tol
-            D = D[t]
-            p = np.sum(D < 0)  # negative eigenvalues
 
-            if p == 0:
-                T = np.dot(np.diag(np.sqrt(D)), U[:, t].T)
-            else:
-                T = np.zeros(sigma.shape)
+            # A surviving eigenvalue that is negative but of rounding size
+            # is a zero of a semidefinite matrix: the symmetric solver is
+            # backward stable, so an eigenvalue of a matrix of spectral
+            # norm max|D| carries an error of order n * eps * max|D|, and
+            # the factor of ten leaves room for the constant that bound
+            # hides. A near-singular predictive covariance, the case that
+            # brings a draw here, has such eigenvalues of both signs.
+            rounding = (
+                10 * D.shape[0] * np.finfo(D.dtype).eps * np.max(np.abs(D))
+            )
+            negative = t & (D < 0)
+            if np.any(D[negative] <= -rounding):
+                # Not a covariance matrix: it has no factor.
+                raise sp.linalg.LinAlgError(
+                    "Matrix is not positive semidefinite: its smallest "
+                    f"eigenvalue is {np.min(D):.6g}, beyond the rounding "
+                    f"tolerance {rounding:.6g}."
+                )
+            t &= ~negative
+            T = np.dot(np.diag(np.sqrt(D[t])), U[:, t].T)
 
         return T
 
