@@ -385,6 +385,11 @@ class GP:
             Raise when GP does not have `X` or `y` set yet, or when provided
             bounds are not one of `"recommended"`/`None`, `"current"`, or
             array_like.
+        ValueError
+            Raised when a lower bound given is above the upper bound given
+            for the same hyperparameter. A pair that comes out inverted
+            once the recommendations fill its NaN entries is collapsed
+            onto its lower bound instead.
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
@@ -891,6 +896,14 @@ class GP:
         LinAlgError
             Raised when the Cholesky decomposition failed multiple times even
             by adding numerical stability values to the matrix.
+        ValueError
+            Raised when ``hyp`` is not a 2D array with one column per
+            hyperparameter of the GP.
+        ValueError
+            Raised when ``compute_posterior`` is ``True``, the GP has
+            training data and a new posterior is computed in full, and a
+            hyperparameter is NaN (not set), as it is on a GP whose
+            hyperparameters were never given.
         """
         X_new, y_new, s2_new = self._convert_shapes(X_new, y_new, s2_new)
         # Create local copies so we won't get trouble
@@ -1115,7 +1128,7 @@ class GP:
                     raise ValueError(
                         "Cannot compute the posterior: the hyperparameters "
                         + ", ".join(self.__hyperparameter_names(unset))
-                        + " are not set."
+                        + " are NaN (not set)."
                     )
                 for i in range(0, s_N):
                     self.posteriors[i] = self.__core_computation(
@@ -1243,7 +1256,8 @@ class GP:
         Raises
         ------
         ValueError
-            Raised when the `sampler_name` is not slicesample.
+            Raised when ``n_samples`` is positive and ``sampler_name`` is
+            not ``'slicesample'``, after the optimization.
         """
         # Share one stream between the initial design and the sampler,
         # including when the caller supplies a seed rather than a generator.
@@ -1436,10 +1450,8 @@ class GP:
                     widths_default = np.zeros(shape=PLB.shape)
             else:
                 N = hyp0.shape[0]
-                # The sentinel of an unwritten entry is +inf, as
-                # `gplite_train.m:250` has it: the entries are sorted by
-                # ascending objective below, so an entry that no
-                # evaluation wrote must come last.
+                # The initial value of `gplite_train.m:250`; the loop
+                # writes every entry.
                 nll = np.full((N,), np.inf)
                 for i in range(0, N):
                     nll[i] = objective_f_1(hyp0[i, :])
@@ -1662,7 +1674,7 @@ class GP:
         if cache["any_sb_t"]:
             # The ratio of gamma functions through their logarithms: both
             # overflow from a few hundred degrees of freedom, where the
-            # ratio itself is of order one.
+            # ratio itself is about sqrt(df / 2).
             log_ratio = sp.special.gammaln(
                 0.5 * (df[sb_t_idx] + 1)
             ) - sp.special.gammaln(0.5 * df[sb_t_idx])
@@ -2087,10 +2099,12 @@ class GP:
             Whether to return the log predictive density at the input
             points. The density always carries the observation noise,
             whichever variance ``add_noise`` selects for ``s2``. With
-            ``separate_samples`` ``False`` it is the log density of the
-            Gaussian carrying the mean and the variance of the mixture over
-            the hyperparameter samples, and not the average of the
-            per-sample log densities.
+            ``separate_samples`` ``False`` it is the log density of a
+            Gaussian whose mean is the mean of the per-sample means and
+            whose variance is the mean of the per-sample predictive
+            variances plus the sample variance (``ddof=1``) of the
+            per-sample means, as ``gplite_pred.m`` pools them, and not the
+            average of the per-sample log densities.
         return_cross_covariance : bool, defaults to ``False``
             Whether to append the latent training-to-prediction kernel
             matrices to the return values. The matrices are kept separate for
@@ -2105,9 +2119,11 @@ class GP:
             otherwise it is ``(M, 1)``.
         s2 : ndarray
             Variance at each point: the latent posterior variance, or, with
-            ``add_noise``, that variance plus the observation noise. If we
-            requested separate samples the shape is ``(M, sample_N)`` while
-            otherwise it is ``(M, 1)``.
+            ``add_noise``, that variance plus the observation noise. Pooled
+            over several hyperparameter samples, it is the mean of the
+            per-sample variances plus the sample variance (``ddof=1``) of
+            the per-sample means. If we requested separate samples the
+            shape is ``(M, sample_N)`` while otherwise it is ``(M, 1)``.
         lpd : ndarray, optional
             Log predictive density at each point. Returned when
             ``return_lpd`` is ``True`` and shaped like ``mu``.
