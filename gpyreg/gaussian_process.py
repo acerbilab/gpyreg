@@ -1202,7 +1202,11 @@ class GP:
         step_size = options.get("step_size", None)  # Not used since no MALA
         tol_opt = options.get("tol_opt", 1e-5)
         tol_opt_mcmc = options.get("tol_opt_mcmc", 1e-3)
-        sampler_name = options.get("sampler", "slicesample")
+        # The documented name first, then the undocumented spelling
+        # that PyVBMC writes.
+        sampler_name = options.get(
+            "sampler_name", options.get("sampler", "slicesample")
+        )
         s_N = options.get("n_samples", 10)
         burn_in = options.get("burn", thin * s_N)
         lower_bounds = options.get("lower_bounds", "current")
@@ -1307,7 +1311,7 @@ class GP:
             objective_f_1 = lambda hyp_: self.__gp_obj_fun(
                 hyp_, False, False, cache=design_cache
             )
-            if s_N > 0 and sampler_name != "laplace":
+            if s_N > 0:
                 tol = tol_opt_mcmc
             else:
                 tol = tol_opt

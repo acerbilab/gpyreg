@@ -2431,3 +2431,29 @@ def test_smooth_box_student_t_prior_with_many_degrees_of_freedom(df):
         _reference_log_prior("smoothbox_student_t", params, hyp[3]),
         rtol=1e-12,
     )
+
+
+@pytest.mark.parametrize("key", ["sampler_name", "sampler"])
+def test_fit_reads_the_documented_sampler_option(key):
+    """`fit` documents the sampler under `sampler_name` and read it under
+    `sampler`, so the documented spelling was ignored. Both are read, the
+    documented one first."""
+    X = np.reshape(np.linspace(-2, 2, 10), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    options = {
+        "init_N": 0,
+        "opts_N": 1,
+        "n_samples": 1,
+        "thin": 1,
+        "burn": 2,
+        key: "does_not_exist",
+    }
+    with pytest.raises(ValueError) as execinfo:
+        gp.fit(
+            X=X,
+            y=y,
+            hyp0=np.array([[0.0, 0.0, np.log(0.1), 0.0]]),
+            options=options,
+        )
+    assert "Unknown sampler!" in execinfo.value.args[0]
