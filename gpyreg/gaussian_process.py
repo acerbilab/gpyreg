@@ -918,14 +918,29 @@ class GP:
                         )
 
                 else:  # Low-noise parametrization
-                    alpha_update = np.dot(-L, Ks)
-                    v = -alpha_update / v_star[:, s]
-                    self.posteriors[s].L = np.block(
-                        [
-                            [L + np.dot(v, alpha_update.T), -v],
-                            [-v.T, -1 / v_star[:, s]],
-                        ]
-                    )
+                    # The extension divides by the predictive variance of
+                    # the new point, which `predict` clamps at the noise
+                    # level: a v_star that low carries no information
+                    # about the latent variance, so fall through to a full
+                    # recomputation as the branch above does.
+                    if v_star[0, s] <= sn2_eff:
+                        full_update_s = True
+                        full_updates.append(s)
+                        warnings.warn(
+                            "Rank-one update of the posterior factor "
+                            f"unstable for posterior {s}. Reverting to "
+                            "full update.",
+                            stacklevel=2,
+                        )
+                    else:
+                        alpha_update = np.dot(-L, Ks)
+                        v = -alpha_update / v_star[:, s]
+                        self.posteriors[s].L = np.block(
+                            [
+                                [L + np.dot(v, alpha_update.T), -v],
+                                [-v.T, -1 / v_star[:, s]],
+                            ]
+                        )
 
                 # Finish rank-1 update if computation was stable for posterior
                 # s

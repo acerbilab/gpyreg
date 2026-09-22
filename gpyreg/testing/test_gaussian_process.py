@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -2028,3 +2029,87 @@ def test_robust_cholesky_refuses_an_indefinite_matrix():
     with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
         gpr.GP._GP__robust_cholesky(sigma)
     assert "not positive semidefinite" in execinfo.value.args[0]
+
+
+def _low_noise_rank_one_gp(D=2):
+    """A GP in the low-noise parametrization of the posterior factor: with
+    no constant noise term ``min(sn2)`` is ``eps``, below the 1e-6 the
+    Cholesky representation needs."""
+    return gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=False),
+    )
+
+
+def test_rank_one_update_low_noise_branch():
+    """A well-separated observation appended to a low-noise posterior takes
+    the rank-one shortcut and agrees with a full recomputation."""
+    D = 2
+    rng = np.random.default_rng(3)
+    X = rng.uniform(-3, 3, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    # [log ell (D), log sf, m0]: no noise hyperparameter.
+    hyp = np.array([[0.0, 0.0, 0.0, 0.0]])
+    x_new = np.array([[2.9, -2.9]])
+    y_new = np.sin(x_new[:, 0:1]) + np.cos(x_new[:, 1:2])
+
+    gp = _low_noise_rank_one_gp(D)
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+    assert not gp.posteriors[0].L_chol
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        gp.update(X_new=x_new, y_new=y_new)
+
+    gp_ref = _low_noise_rank_one_gp(D)
+    gp_ref.update(
+        X_new=np.concatenate((X, x_new)),
+        y_new=np.concatenate((y, y_new)),
+        hyp=hyp,
+    )
+    assert not gp_ref.posteriors[0].L_chol
+    assert np.allclose(
+        gp.posteriors[0].alpha, gp_ref.posteriors[0].alpha, rtol=1e-8
+    )
+
+    x_star = rng.uniform(-3, 3, size=(5, D))
+    f_mu, f_s2 = gp.predict(x_star)
+    f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.allclose(f_mu, f_mu_ref, rtol=1e-8, atol=1e-10)
+    assert np.allclose(f_s2, f_s2_ref, rtol=1e-8, atol=1e-10)
+
+
+def test_rank_one_update_low_noise_duplicate_recomputes():
+    """An observation at an existing training input leaves the low-noise
+    rank-one update dividing by a variance the clamp of ``predict``
+    produced, which is no variance: it warns and recomputes in full, as
+    the Cholesky branch does."""
+    D = 2
+    rng = np.random.default_rng(3)
+    X = rng.uniform(-3, 3, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    hyp = np.array([[0.0, 0.0, 0.0, 0.0]])
+    x_new = X[0:1].copy()
+    y_new = y[0:1].copy()
+
+    gp = _low_noise_rank_one_gp(D)
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+    assert not gp.posteriors[0].L_chol
+    with pytest.warns(UserWarning, match="Reverting to full update"):
+        gp.update(X_new=x_new, y_new=y_new)
+
+    gp_ref = _low_noise_rank_one_gp(D)
+    gp_ref.update(
+        X_new=np.concatenate((X, x_new)),
+        y_new=np.concatenate((y, y_new)),
+        hyp=hyp,
+    )
+    assert np.array_equal(gp.posteriors[0].alpha, gp_ref.posteriors[0].alpha)
+    assert np.array_equal(gp.posteriors[0].L, gp_ref.posteriors[0].L)
+
+    x_star = rng.uniform(-3, 3, size=(5, D))
+    f_mu, f_s2 = gp.predict(x_star)
+    f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.array_equal(f_mu, f_mu_ref)
+    assert np.array_equal(f_s2, f_s2_ref)
