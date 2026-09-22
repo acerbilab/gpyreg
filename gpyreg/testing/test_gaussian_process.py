@@ -2295,3 +2295,114 @@ def test_smooth_box_prior_over_a_block(family, D):
     assert returned[0] == family
     for value, expected_value in zip(returned[1], params):
         assert np.all(value == expected_value)
+
+
+def _gp_1d():
+    """A one-dimensional GP with four hyperparameters: two of the kernel,
+    one of the noise and one of the mean."""
+    return gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+
+def _no_priors():
+    return {
+        "covariance_log_lengthscale": None,
+        "covariance_log_outputscale": None,
+        "noise_log_scale": None,
+        "mean_const": None,
+    }
+
+
+@pytest.mark.parametrize("sigma", [np.inf, -np.inf, np.nan, 0.0, -2.0])
+def test_set_priors_refuses_a_scale_that_is_not_positive(sigma):
+    """A prior needs a finite, positive scale; no prior is ``None``."""
+    priors = _no_priors()
+    priors["mean_const"] = ("gaussian", (0.0, sigma))
+    with pytest.raises(ValueError) as execinfo:
+        _gp_1d().set_priors(priors)
+    assert "mean_const" in execinfo.value.args[0]
+    assert "None" in execinfo.value.args[0]
+
+
+def test_set_priors_and_set_bounds_refuse_an_unknown_hyperparameter():
+    """A name outside the model is a mistake, and silently setting no
+    prior on it is what `set_priors`' own docstring promises against."""
+    gp = _gp_1d()
+    priors = _no_priors()
+    priors["not_a_hyperparameter"] = ("gaussian", (0.0, 1.0))
+    with pytest.raises(ValueError) as execinfo:
+        gp.set_priors(priors)
+    assert "not_a_hyperparameter" in execinfo.value.args[0]
+
+    bounds = {name: None for name in _no_priors()}
+    bounds["not_a_hyperparameter"] = (-1.0, 1.0)
+    with pytest.raises(ValueError) as execinfo:
+        gp.set_bounds(bounds)
+    assert "not_a_hyperparameter" in execinfo.value.args[0]
+
+
+def test_get_recommended_bounds_input_checks():
+    """Bounds may be given as any array_like, the message of the upper
+    bounds names them, and an inverted pair the caller gave is refused."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    gp.update(X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]))
+
+    recommended = gp.get_recommended_bounds()
+    for given in ([np.nan] * 4, (np.nan,) * 4):
+        bounds = gp.get_recommended_bounds(given, given)
+        for name, pair in bounds.items():
+            assert np.array_equal(pair[0], recommended[name][0])
+            assert np.array_equal(pair[1], recommended[name][1])
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.get_recommended_bounds(upper_bounds="nonsense")
+    assert "`upper_bounds`" in execinfo.value.args[0]
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.get_recommended_bounds(np.ones(4), -np.ones(4))
+    assert "upper bound" in execinfo.value.args[0]
+
+
+def test_update_without_hyperparameters_raises():
+    """A posterior cannot be computed from hyperparameters that were never
+    set: the message names them instead of leaving NaN factors behind."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    with pytest.raises(ValueError) as execinfo:
+        gp.update(X_new=X, y_new=y)
+    message = execinfo.value.args[0]
+    for name in _no_priors():
+        assert name in message
+
+
+def test_fit_leaves_the_prior_degrees_of_freedom_alone():
+    """``df_base`` fills the degrees of freedom a prior leaves unset for
+    the duration of the fit; the GP keeps the priors the caller set, so a
+    second fit with another value uses it."""
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    priors = _no_priors()
+    priors["covariance_log_outputscale"] = ("student_t", (0.0, 1.0, np.nan))
+    gp.set_priors(priors)
+    df_before = gp.hyper_priors["df"].copy()
+    assert np.all(np.isnan(df_before))
+
+    hyp0 = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+    options = {"init_N": 0, "opts_N": 1, "n_samples": 0}
+
+    results = []
+    for df_base in (7, 400):
+        __, result, __ = gp.fit(
+            X=X, y=y, hyp0=hyp0, options={**options, "df_base": df_base}
+        )
+        assert np.array_equal(gp.hyper_priors["df"], df_before, equal_nan=True)
+        results.append(result.fun)
+    assert results[0] != results[1]

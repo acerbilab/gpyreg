@@ -90,6 +90,22 @@ def _solve_triangular(a, b, trans=0, lower=False):
     raise ValueError(f"illegal value in {-info}-th argument of internal trtrs")
 
 
+def _check_hyperparameter_names(given, hyper_info, argument):
+    """Refuse a dictionary that names a hyperparameter the model has not."""
+    if given is None:
+        return
+    known = {info[0] for info in hyper_info}
+    unknown = sorted(set(given) - known)
+    if unknown:
+        raise ValueError(
+            f"Unknown hyperparameter(s) in `{argument}`: "
+            + ", ".join(unknown)
+            + ". The hyperparameters of this GP are "
+            + ", ".join(info[0] for info in hyper_info)
+            + "."
+        )
+
+
 class GP:
     """
     A single Gaussian Process (GP).
@@ -233,6 +249,9 @@ class GP:
         ValueError
             Raised when `bounds` is missing the entry of an expected
             hyperparameter.
+        ValueError
+            Raised when `bounds` is given, but a specified hyperparameter
+            is unknown.
         """
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -244,6 +263,7 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
+        _check_hyperparameter_names(bounds, hyper_info, "bounds")
         lower_bounds = np.full((hyp_N,), np.nan)
         upper_bounds = np.full((hyp_N,), np.nan)
 
@@ -328,6 +348,15 @@ class GP:
 
         return bounds_dict
 
+    def __hyperparameter_names(self, mask):
+        """The names of the hyperparameter blocks that a boolean mask over
+        the hyperparameter vector touches."""
+        return [
+            name
+            for name, pair in self.bounds_to_dict(mask, mask).items()
+            if np.any(pair[0])
+        ]
+
     def get_recommended_bounds(self, lower_bounds=None, upper_bounds=None):
         """
         Return the recommended hyperparameter lower and upper bounds as a dict.
@@ -382,15 +411,25 @@ class GP:
                 upper_bounds = np.full_like(self.upper_bounds, np.nan)
             else:
                 raise ValueError(
-                    "`lower_bounds` should be 'recommended'/`None`, 'current',"
+                    "`upper_bounds` should be 'recommended'/`None`, 'current',"
                     " or an array."
                 )
         # Otherwise, use provided arrays as bounds, replacing nan values with
-        # recommended bounds, and avoiding mutation:
-        if isinstance(lower_bounds, (list, tuple, np.ndarray)):
-            lower_bounds = lower_bounds.copy()
-        if isinstance(upper_bounds, (list, tuple, np.ndarray)):
-            upper_bounds = upper_bounds.copy()
+        # recommended bounds. `np.array` takes any array_like and copies,
+        # so the caller's own arrays are not written into below.
+        lower_bounds = np.array(lower_bounds, dtype=float)
+        upper_bounds = np.array(upper_bounds, dtype=float)
+
+        # A pair the caller gave inverted is a mistake. A recommended pair
+        # that comes out inverted on a degenerate training set is
+        # collapsed below, as `gplite_train.m:142` collapses it.
+        inverted = lower_bounds > upper_bounds
+        if np.any(inverted):
+            raise ValueError(
+                "Lower bound above upper bound for the hyperparameter(s) "
+                + ", ".join(self.__hyperparameter_names(inverted))
+                + "."
+            )
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
@@ -506,6 +545,9 @@ class GP:
         ValueError
             Raised when ``priors`` is given, but a specified
             hyperparameter is unknown.
+        ValueError
+            Raised when a prior is given a ``sigma`` that is not finite
+            and positive.
         """
         self.no_prior = False
         if priors is None:
@@ -520,6 +562,7 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
+        _check_hyperparameter_names(priors, hyper_info, "priors")
         # Set up a hyperprior dictionary with default values which can
         # be updated individually later.
         hyper_priors = {
@@ -578,6 +621,15 @@ class GP:
                     hyper_priors["df"][i] = df
                 else:
                     raise ValueError("Unknown hyperprior type " + prior_type)
+
+                # Every family is scaled by sigma.
+                scale = hyper_priors["sigma"][i]
+                if not np.all(np.isfinite(scale)) or np.any(scale <= 0.0):
+                    raise ValueError(
+                        f"The prior of {info[0]} needs a finite, positive "
+                        "sigma; no prior is expressed as `None`, not as an "
+                        "infinite sigma."
+                    )
 
             lower += info[1]
 
@@ -1003,6 +1055,13 @@ class GP:
             self.posteriors = np.empty((s_N,), dtype=Posterior)
 
             if compute_posterior and self.X is not None and self.y is not None:
+                unset = np.any(np.isnan(hyp), axis=0)
+                if np.any(unset):
+                    raise ValueError(
+                        "Cannot compute the posterior: the hyperparameters "
+                        + ", ".join(self.__hyperparameter_names(unset))
+                        + " are not set."
+                    )
                 for i in range(0, s_N):
                     self.posteriors[i] = self.__core_computation(
                         hyp[i, :], 0, 0
@@ -1170,225 +1229,239 @@ class GP:
         mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
-        self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
+        # The default degrees of freedom fill what a prior leaves
+        # unset for the duration of the fit alone: the objectives read
+        # the GP's own priors, and the GP keeps the priors the caller
+        # set, so a second fit with another `df_base` uses it
+        # (`gplite_train.m:113-117` builds its own copy the same way).
+        df_given = self.hyper_priors["df"]
+        df_filled = df_given.copy()
+        df_filled[np.isnan(df_filled)] = df_base
+        self.hyper_priors["df"] = df_filled
         self._prior_cache = None  # the prior's type masks depend on df
+        try:
 
-        # Set any unset bounds:
-        use_current_bounds = (
-            isinstance(lower_bounds, str)
-            and lower_bounds == "current"
-            and isinstance(upper_bounds, str)
-            and upper_bounds == "current"
-        )
-        if use_current_bounds and (
-            np.any(np.isnan(self.lower_bounds))
-            or np.any(np.isnan(self.upper_bounds))
-        ):  # If we're using the existing bounds, fill any nan's:
-            self.set_bounds(
-                self.get_recommended_bounds(
-                    self.lower_bounds, self.upper_bounds
+            # Set any unset bounds:
+            use_current_bounds = (
+                isinstance(lower_bounds, str)
+                and lower_bounds == "current"
+                and isinstance(upper_bounds, str)
+                and upper_bounds == "current"
+            )
+            if use_current_bounds and (
+                np.any(np.isnan(self.lower_bounds))
+                or np.any(np.isnan(self.upper_bounds))
+            ):  # If we're using the existing bounds, fill any nan's:
+                self.set_bounds(
+                    self.get_recommended_bounds(
+                        self.lower_bounds, self.upper_bounds
+                    )
                 )
+            else:  # Otherwise set the bounds according to the provided options:
+                self.set_bounds(
+                    self.get_recommended_bounds(lower_bounds, upper_bounds)
+                )
+
+            LB = self.lower_bounds
+            UB = self.upper_bounds
+
+            # Plausible bounds for generation of starting points
+            PLB = np.concatenate(
+                [
+                    cov_bounds_info["PLB"],
+                    noise_bounds_info["PLB"],
+                    mean_bounds_info["PLB"],
+                ]
             )
-        else:  # Otherwise set the bounds according to the provided options:
-            self.set_bounds(
-                self.get_recommended_bounds(lower_bounds, upper_bounds)
+            PUB = np.concatenate(
+                [
+                    cov_bounds_info["PUB"],
+                    noise_bounds_info["PUB"],
+                    mean_bounds_info["PUB"],
+                ]
             )
+            PLB = np.minimum(np.maximum(PLB, LB), UB)
+            PUB = np.maximum(np.minimum(PUB, UB), LB)
 
-        LB = self.lower_bounds
-        UB = self.upper_bounds
+            # If we are not provided with an initial hyperparameter guess then
+            # either use the current hyperparameters if they exist, or use
+            # plausible lower and upper bounds to guess.
+            if hyp0 is None:
+                if self.posteriors is not None:
+                    hyp0 = self.get_hyperparameters(as_array=True)
+                else:
+                    hyp0 = np.reshape(
+                        np.minimum(np.maximum((PLB + PUB) / 2, LB), UB),
+                        (1, -1),
+                    )
+            elif isinstance(hyp0, dict):
+                hyp0 = self.hyperparameters_from_dict(hyp0)
 
-        # Plausible bounds for generation of starting points
-        PLB = np.concatenate(
-            [
-                cov_bounds_info["PLB"],
-                noise_bounds_info["PLB"],
-                mean_bounds_info["PLB"],
-            ]
-        )
-        PUB = np.concatenate(
-            [
-                cov_bounds_info["PUB"],
-                noise_bounds_info["PUB"],
-                mean_bounds_info["PUB"],
-            ]
-        )
-        PLB = np.minimum(np.maximum(PLB, LB), UB)
-        PUB = np.maximum(np.minimum(PUB, UB), LB)
-
-        # If we are not provided with an initial hyperparameter guess then
-        # either use the current hyperparameters if they exist, or use
-        # plausible lower and upper bounds to guess.
-        if hyp0 is None:
-            if self.posteriors is not None:
-                hyp0 = self.get_hyperparameters(as_array=True)
+            ## Hyperparameter optimization
+            # Each no-gradient objective owns one factorization cache for the
+            # whole fit (consecutive evaluations that move only mean-function
+            # hyperparameters reuse the Cholesky factor, see
+            # __core_computation); the gradient objective of the optimizer gets
+            # none, it needs the kernel derivatives.
+            design_cache = {}
+            objective_f_1 = lambda hyp_: self.__gp_obj_fun(
+                hyp_, False, False, cache=design_cache
+            )
+            if s_N > 0 and sampler_name != "laplace":
+                tol = tol_opt_mcmc
             else:
-                hyp0 = np.reshape(
-                    np.minimum(np.maximum((PLB + PUB) / 2, LB), UB), (1, -1)
+                tol = tol_opt
+
+            # First evaluate GP log posterior on an informed space-filling design.
+            t1_s = time.time()
+
+            if init_N > 0:
+                X0, y0 = f_min_fill(
+                    objective_f_1,
+                    hyp0,
+                    LB,
+                    UB,
+                    PLB,
+                    PUB,
+                    self.hyper_priors,
+                    init_N,
+                    init_method,
+                    rng=rng,
                 )
-        elif isinstance(hyp0, dict):
-            hyp0 = self.hyperparameters_from_dict(hyp0)
+                # Make sure we have at least one hyperparameter to use later.
+                hyp = X0[0 : np.maximum(opts_N, 1), :]
 
-        ## Hyperparameter optimization
-        # Each no-gradient objective owns one factorization cache for the
-        # whole fit (consecutive evaluations that move only mean-function
-        # hyperparameters reuse the Cholesky factor, see
-        # __core_computation); the gradient objective of the optimizer gets
-        # none, it needs the kernel derivatives.
-        design_cache = {}
-        objective_f_1 = lambda hyp_: self.__gp_obj_fun(
-            hyp_, False, False, cache=design_cache
-        )
-        if s_N > 0 and sampler_name != "laplace":
-            tol = tol_opt_mcmc
-        else:
-            tol = tol_opt
+                # Extract a good low-noise starting point for the 2nd optimization.
+                if noise_N > 0 and 1 < opts_N < init_N:
+                    xx = X0[opts_N:, :]
+                    noise_y = y0[opts_N:]
+                    noise_params = xx[:, cov_N]
 
-        # First evaluate GP log posterior on an informed space-filling design.
-        t1_s = time.time()
+                    # Order by noise parameter magnitude.
+                    order = np.argsort(noise_params)
+                    xx = xx[order, :]
+                    noise_y = noise_y[order]
+                    # Take the best amongst bottom 20% vectors.
+                    idx_best = np.argmin(
+                        noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
+                    )
+                    hyp[1, :] = xx[idx_best, :]
 
-        if init_N > 0:
-            X0, y0 = f_min_fill(
-                objective_f_1,
-                hyp0,
-                LB,
-                UB,
-                PLB,
-                PUB,
-                self.hyper_priors,
-                init_N,
-                init_method,
-                rng=rng,
-            )
-            # Make sure we have at least one hyperparameter to use later.
-            hyp = X0[0 : np.maximum(opts_N, 1), :]
-
-            # Extract a good low-noise starting point for the 2nd optimization.
-            if noise_N > 0 and 1 < opts_N < init_N:
-                xx = X0[opts_N:, :]
-                noise_y = y0[opts_N:]
-                noise_params = xx[:, cov_N]
-
-                # Order by noise parameter magnitude.
-                order = np.argsort(noise_params)
-                xx = xx[order, :]
-                noise_y = noise_y[order]
-                # Take the best amongst bottom 20% vectors.
-                idx_best = np.argmin(
-                    noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
-                )
-                hyp[1, :] = xx[idx_best, :]
-
-            if init_N > 1:
-                widths_default = np.std(X0, axis=0, ddof=1)
+                if init_N > 1:
+                    widths_default = np.std(X0, axis=0, ddof=1)
+                else:
+                    widths_default = np.zeros(shape=PLB.shape)
             else:
-                widths_default = np.zeros(shape=PLB.shape)
-        else:
-            N = hyp0.shape[0]
-            nll = np.full((N,), -np.inf)
-            for i in range(0, N):
-                nll[i] = objective_f_1(hyp0[i, :])
-            order = np.argsort(nll)
-            hyp = hyp0[order, :]
-            widths_default = PUB - PLB
+                N = hyp0.shape[0]
+                nll = np.full((N,), -np.inf)
+                for i in range(0, N):
+                    nll[i] = objective_f_1(hyp0[i, :])
+                order = np.argsort(nll)
+                hyp = hyp0[order, :]
+                widths_default = PUB - PLB
 
-        # Fix zero widths.
-        idx0 = widths_default == 0
-        if np.any(idx0):
-            if np.shape(hyp)[0] > 1:
-                std_hyp = np.std(hyp, axis=0, ddof=1)
-                widths_default[idx0] = std_hyp[idx0]
-                idx0 = widths_default == 0
-
+            # Fix zero widths.
+            idx0 = widths_default == 0
             if np.any(idx0):
-                widths_default[idx0] = np.minimum(1, UB[idx0] - LB[idx0])
+                if np.shape(hyp)[0] > 1:
+                    std_hyp = np.std(hyp, axis=0, ddof=1)
+                    widths_default[idx0] = std_hyp[idx0]
+                    idx0 = widths_default == 0
 
-        t1 = time.time() - t1_s
+                if np.any(idx0):
+                    widths_default[idx0] = np.minimum(1, UB[idx0] - LB[idx0])
 
-        # Check that hyperparameters are within bounds.
-        # Note that with infinite upper and lower bounds we have to be careful
-        # with spacing since it returns NaN. Furthermore, if LB == UB then
-        # we have to be careful about the lower bound not being larger than
-        # the upper bounds. Also, copy is necessary to avoid LB or UB
-        # getting modified.
-        eps_LB = np.reshape(LB.copy(), (1, -1))
-        eps_UB = np.reshape(UB.copy(), (1, -1))
-        LB_idx = (eps_LB != eps_UB) & np.isfinite(eps_LB)
-        UB_idx = (eps_LB != eps_UB) & np.isfinite(eps_UB)
-        # np.spacing could return negative numbers so use nextafter
-        eps_LB[LB_idx] = np.nextafter(eps_LB[LB_idx], np.inf)
-        eps_UB[UB_idx] = np.nextafter(eps_UB[UB_idx], -np.inf)
-        hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
+            t1 = time.time() - t1_s
 
-        # Perform optimization from most promising opts_N hyperparameter
-        # vectors.
-        objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
-        nll = np.full((np.maximum(opts_N, 1),), np.inf)
-        opt_results = []
+            # Check that hyperparameters are within bounds.
+            # Note that with infinite upper and lower bounds we have to be careful
+            # with spacing since it returns NaN. Furthermore, if LB == UB then
+            # we have to be careful about the lower bound not being larger than
+            # the upper bounds. Also, copy is necessary to avoid LB or UB
+            # getting modified.
+            eps_LB = np.reshape(LB.copy(), (1, -1))
+            eps_UB = np.reshape(UB.copy(), (1, -1))
+            LB_idx = (eps_LB != eps_UB) & np.isfinite(eps_LB)
+            UB_idx = (eps_LB != eps_UB) & np.isfinite(eps_UB)
+            # np.spacing could return negative numbers so use nextafter
+            eps_LB[LB_idx] = np.nextafter(eps_LB[LB_idx], np.inf)
+            eps_UB[UB_idx] = np.nextafter(eps_UB[UB_idx], -np.inf)
+            hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
-        t2_s = time.time()
-        # Make sure we don't overshoot.
-        opts_N = np.minimum(opts_N, hyp.shape[0])
-        for i in range(0, opts_N):
-            res = sp.optimize.minimize(
-                fun=objective_f_2,
-                x0=hyp[i, :],
-                jac=True,
-                bounds=list(zip(LB, UB)),
-                tol=tol,
+            # Perform optimization from most promising opts_N hyperparameter
+            # vectors.
+            objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
+            nll = np.full((np.maximum(opts_N, 1),), np.inf)
+            opt_results = []
+
+            t2_s = time.time()
+            # Make sure we don't overshoot.
+            opts_N = np.minimum(opts_N, hyp.shape[0])
+            for i in range(0, opts_N):
+                res = sp.optimize.minimize(
+                    fun=objective_f_2,
+                    x0=hyp[i, :],
+                    jac=True,
+                    bounds=list(zip(LB, UB)),
+                    tol=tol,
+                )
+                opt_results.append(res)
+                hyp[i, :] = res.x
+                nll[i] = res.fun
+
+            # Take the best hyperparameter vector.
+            if opts_N > 0:
+                optimize_result = opt_results[np.argmin(nll)]
+                hyp_start = hyp[np.argmin(nll), :].copy()
+            else:
+                optimize_result = None
+                hyp_start = hyp[0, :].copy()
+            t2 = time.time() - t2_s
+
+            # In case n_samples is 0, just return the optimized hyperparameter
+            # result.
+            if s_N == 0:
+                hyp_start = np.reshape(hyp_start, (1, -1))
+                self.update(hyp=hyp_start)
+                return hyp_start, optimize_result, None
+
+            ## Sample from best hyperparameter vector using slice sampling
+
+            t3_s = time.time()
+            # Effective number of samples (thin after)
+            eff_s_N = s_N * thin
+
+            if sampler_name != "slicesample":
+                raise ValueError("Unknown sampler!")
+
+            sample_cache = {}
+            sample_f = lambda hyp_: self.__gp_obj_fun(
+                hyp_, False, True, cache=sample_cache
             )
-            opt_results.append(res)
-            hyp[i, :] = res.x
-            nll[i] = res.fun
+            options = {"display": "off", "diagnostics": False}
+            if widths is None:
+                widths = widths_default
+            else:
+                widths = np.minimum(widths, widths_default)
+            slicer = SliceSampler(
+                sample_f, hyp_start, widths, LB, UB, options, rng=rng
+            )
+            sampling_result = slicer.sample(eff_s_N, burn=burn_in)
 
-        # Take the best hyperparameter vector.
-        if opts_N > 0:
-            optimize_result = opt_results[np.argmin(nll)]
-            hyp_start = hyp[np.argmin(nll), :].copy()
-        else:
-            optimize_result = None
-            hyp_start = hyp[0, :].copy()
-        t2 = time.time() - t2_s
+            # Thin samples
+            hyp_pre_thin = sampling_result["samples"]
+            hyp = hyp_pre_thin[thin - 1 :: thin, :]
 
-        # In case n_samples is 0, just return the optimized hyperparameter
-        # result.
-        if s_N == 0:
-            hyp_start = np.reshape(hyp_start, (1, -1))
-            self.update(hyp=hyp_start)
-            return hyp_start, optimize_result, None
+            t3 = time.time() - t3_s
+            # print(t1, t2, t3)
 
-        ## Sample from best hyperparameter vector using slice sampling
-
-        t3_s = time.time()
-        # Effective number of samples (thin after)
-        eff_s_N = s_N * thin
-
-        if sampler_name != "slicesample":
-            raise ValueError("Unknown sampler!")
-
-        sample_cache = {}
-        sample_f = lambda hyp_: self.__gp_obj_fun(
-            hyp_, False, True, cache=sample_cache
-        )
-        options = {"display": "off", "diagnostics": False}
-        if widths is None:
-            widths = widths_default
-        else:
-            widths = np.minimum(widths, widths_default)
-        slicer = SliceSampler(
-            sample_f, hyp_start, widths, LB, UB, options, rng=rng
-        )
-        sampling_result = slicer.sample(eff_s_N, burn=burn_in)
-
-        # Thin samples
-        hyp_pre_thin = sampling_result["samples"]
-        hyp = hyp_pre_thin[thin - 1 :: thin, :]
-
-        t3 = time.time() - t3_s
-        # print(t1, t2, t3)
-
-        # Recompute GP with finalized hyperparameters.
-        self.update(hyp=hyp)
-        return hyp, optimize_result, sampling_result
+            # Recompute GP with finalized hyperparameters.
+            self.update(hyp=hyp)
+            return hyp, optimize_result, sampling_result
+        finally:
+            self.hyper_priors["df"] = df_given
+            self._prior_cache = None
+            self.__recompute_normalization_constants()
 
     def __recompute_normalization_constants(self):
         self.normalization_constants = np.full(self.lower_bounds.shape, 1.0)
