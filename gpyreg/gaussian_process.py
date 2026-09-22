@@ -3200,7 +3200,7 @@ class GP:
         elif s2 is None:
             s2 = None  # noiseless case
         else:
-            raise ValueError(
+            raise TypeError(
                 "s2 type need to be "
                 "Union[np.ndarray, numbers.Number, None]."
             )

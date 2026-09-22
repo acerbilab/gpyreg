@@ -2813,7 +2813,8 @@ def test_quad_input_checks():
 def test_convert_shapes_input_checks():
     """A variance given as a number of any kind is one variance for every
     input; an array carries one row per input, as `gplite_pred.m:16-23`
-    requires."""
+    requires. A variance of another type is a ``TypeError``, a wrong row
+    count a ``ValueError``."""
     N = 5
     gp = _gp_1d()
     X = np.ones((N, 1))
@@ -2827,8 +2828,9 @@ def test_convert_shapes_input_checks():
         gp._convert_shapes(X, None, np.ones((1, N)))
     assert "rows" in execinfo.value.args[0]
 
-    with pytest.raises(ValueError):
-        gp._convert_shapes(X, None, "nonsense")
+    for s2 in ("nonsense", [1.0] * N):
+        with pytest.raises(TypeError):
+            gp._convert_shapes(X, None, s2)
 
     gp3 = gpr.GP(
         D=3,
