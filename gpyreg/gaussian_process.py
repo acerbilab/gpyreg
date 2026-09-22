@@ -2803,9 +2803,15 @@ class GP:
         Raises
         ------
         LinAlgError
-            Raised when the covariance of the draw has a negative
-            eigenvalue beyond the rounding of the prior variance at
-            ``X_star``, so that it is no covariance matrix.
+            Raised when the covariance of the draw, as computed, has a
+            negative eigenvalue beyond the rounding of the prior variance
+            at ``X_star``.
+        LinAlgError
+            Raised when the posterior holds the negative inverse of the
+            training covariance, as it does where the smallest noise
+            variance at the training inputs is below 1e-6, and the
+            Cholesky decomposition of that covariance fails even after
+            its noise is multiplied tenfold, up to ten times.
         """
         rng = resolve_rng(rng)
         N_star = X_star.shape[0]
@@ -2853,10 +2859,23 @@ class GP:
                     trans=1,
                     check_finite=False,
                 )
-                C = K_star - np.dot(V.T, V)  # Predictive variances
             else:
-                LKs = np.dot(L, Ks)
-                C = K_star + np.dot(Ks.T, LKs)
+                # The posterior holds the explicit inverse
+                # -inv(K + sn2_mult * diag(sn2)), whose rounding grows as
+                # the noise shrinks, and a covariance formed from it would
+                # carry that rounding. Factor the matrix itself instead,
+                # with the kernel, noise and multiplier of the posterior.
+                K = self.covariance.compute(hyp[0:cov_N], self.X)
+                sn2 = self.noise.compute(
+                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
+                )
+                L_K, __, __ = self.__training_cholesky(
+                    K, sn2, False, self.posteriors[s].sn2_mult
+                )
+                V = sp.linalg.solve_triangular(
+                    L_K, Ks, trans=1, check_finite=False
+                )
+            C = K_star - np.dot(V.T, V)  # Predictive variances
 
         # Enforce symmetry if lost due to numerical errors.
         C = (C + C.T) / 2
@@ -2957,6 +2976,91 @@ class GP:
 
         return T
 
+    @staticmethod
+    def __training_cholesky(K, sn2, L_chol, sn2_mult=1):
+        """Cholesky factor of the training covariance with its noise.
+
+        Factors ``(K + sn2_mult * diag(sn2)) / sl``, multiplying
+        ``sn2_mult`` by ten after each failed attempt, up to ten attempts.
+
+        Parameters
+        ==========
+        K : ndarray, shape (N, N)
+            The kernel matrix at the training inputs.
+        sn2 : float or ndarray, shape (N, 1)
+            The noise variance at the training inputs.
+        L_chol : bool
+            Whether the matrix is scaled by ``sl = min(sn2) * sn2_mult``
+            before it is factored (the Cholesky representation of the
+            posterior) or not (``sl = 1``, the matrix whose negative
+            inverse the low-noise representation holds).
+        sn2_mult : int, defaults to 1
+            The noise multiplier of the first attempt.
+
+        Returns
+        =======
+        L : ndarray, shape (N, N)
+            The upper triangular Cholesky factor.
+        sl : float
+            The scale the matrix was divided by before it was factored.
+        sn2_mult : int
+            The noise multiplier of the attempt that succeeded.
+
+        Raises
+        ======
+        LinAlgError
+            Raised when every attempt failed.
+        """
+        N = K.shape[0]
+        L = None
+        # The noise enters on the diagonal only: adding it in place to
+        # a copy gives the entries of `K / sl + diag(...)` exactly
+        # (adding 0.0 off the diagonal leaves an entry unchanged)
+        # without forming and adding an N x N identity on every
+        # evaluation. The copy is made C-contiguous, the layout the
+        # old sum with a C-ordered identity produced (the factorization
+        # scipy computes depends on the layout at rounding level).
+        # Use float64 so custom float32 kernels do not lose small
+        # diagonal noise that the old sum with an identity preserved.
+        if L_chol:
+            if np.isscalar(sn2):
+                sn2_div = sn2
+                sn2_diag = 1.0
+            else:
+                sn2_div = np.min(sn2)
+                sn2_diag = sn2.ravel() / sn2_div
+            for i in range(0, 10):
+                try:  # Cholesky decomposition until it works
+                    A = np.ascontiguousarray(
+                        K / (sn2_div * sn2_mult), dtype=np.float64
+                    )
+                    A.flat[:: N + 1] += sn2_diag
+                    L = sp.linalg.cholesky(A, check_finite=False)
+                except sp.linalg.LinAlgError:
+                    sn2_mult *= 10
+                    continue
+                break
+            sl = sn2_div * sn2_mult
+        else:
+            sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
+
+            for i in range(0, 10):
+                try:
+                    A = np.array(K, dtype=np.float64, order="C")
+                    A.flat[:: N + 1] += sn2_mult * sn2_diag
+                    L = sp.linalg.cholesky(A, check_finite=False)
+                except sp.linalg.LinAlgError:
+                    sn2_mult *= 10
+                    continue
+                break
+            sl = 1
+
+        if L is None:
+            raise sp.linalg.LinAlgError(
+                "Singular matrix for L Cholesky decomposition"
+            )
+        return L, sl, sn2_mult
+
     def __core_computation(
         self, hyp, compute_nlZ, compute_nlZ_grad, cache=None
     ):
@@ -3032,58 +3136,8 @@ class GP:
         if hit:
             L, sl, logdet = cache["L"], cache["sl"], cache["logdet"]
         else:
-            sn2_mult = 1  # Effective noise variance multiplier
-
             L_chol = np.min(sn2) >= 1e-6
-            L = None
-            # The noise enters on the diagonal only: adding it in place to
-            # a copy gives the entries of `K / sl + diag(...)` exactly
-            # (adding 0.0 off the diagonal leaves an entry unchanged)
-            # without forming and adding an N x N identity on every
-            # evaluation. The copy is made C-contiguous, the layout the
-            # old sum with a C-ordered identity produced (the factorization
-            # scipy computes depends on the layout at rounding level).
-            # Use float64 so custom float32 kernels do not lose small
-            # diagonal noise that the old sum with an identity preserved.
-            if L_chol:
-                if np.isscalar(sn2):
-                    sn2_div = sn2
-                    sn2_diag = 1.0
-                else:
-                    sn2_div = np.min(sn2)
-                    sn2_diag = sn2.ravel() / sn2_div
-                for i in range(0, 10):
-                    try:  # Cholesky decomposition until it works
-                        A = np.ascontiguousarray(
-                            K / (sn2_div * sn2_mult), dtype=np.float64
-                        )
-                        A.flat[:: N + 1] += sn2_diag
-                        L = sp.linalg.cholesky(A, check_finite=False)
-                    except sp.linalg.LinAlgError:
-                        sn2_mult *= 10
-                        continue
-                    break
-                sl = sn2_div * sn2_mult
-            else:
-                sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
-
-                for i in range(0, 10):
-                    try:
-                        A = np.array(K, dtype=np.float64, order="C")
-                        A.flat[:: N + 1] += sn2_mult * sn2_diag
-                        L = sp.linalg.cholesky(A, check_finite=False)
-                    except sp.linalg.LinAlgError:
-                        sn2_mult *= 10
-                        continue
-                    break
-                sl = 1
-
-            # Every attempt failed: report that, before the low-noise
-            # branch tries to invert the factor it does not have.
-            if L is None:
-                raise sp.linalg.LinAlgError(
-                    "Singular matrix for L Cholesky decomposition"
-                )
+            L, sl, sn2_mult = self.__training_cholesky(K, sn2, L_chol)
 
             if L_chol:
                 pL = L

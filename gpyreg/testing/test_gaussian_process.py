@@ -2019,17 +2019,10 @@ def test_robust_cholesky_factors_matrices_cholesky_refuses():
         ), name
 
 
-@pytest.mark.parametrize("grid", [(-2.5, 2.5), (-1.0, 1.0)])
-def test_random_function_on_a_dense_grid(grid):
-    """A predictive covariance on a dense one-dimensional grid is
-    numerically singular, so the draw goes through the eigenvalue
-    fallback. Eigenvalues of rounding size, which such a matrix has of
-    both signs, count as zeros, and the draws are draws: they differ
-    between generators and carry the predictive covariance. The
-    covariance is the prior covariance minus what the data explain, so
-    its rounding is that of the prior variance: on the grid inside the
-    data, where the largest eigenvalue is five orders of magnitude below
-    the prior variance, the negative eigenvalues are still rounding."""
+def _dense_grid_gp(hyp):
+    """The GP of the dense-grid draws: 40 points of ``sin(2 x)`` on
+    [-2, 2], with the hyperparameters ``hyp``, one row per sample, in the
+    order [log ell, log sf, log sn, m0, mode location, log scale]."""
     rng_data = np.random.default_rng(77)
     X = rng_data.uniform(-2, 2, size=(40, 1))
     y = np.sin(2 * X)
@@ -2040,23 +2033,66 @@ def test_random_function_on_a_dense_grid(grid):
         mean=gpr.mean_functions.NegativeQuadratic(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
-    # [log ell, log sf, log sn, m0, mode location, log scale]
-    hyp = np.array(
-        [[np.log(0.7), np.log(1.2), np.log(1e-3), 0.0, 0.0, np.log(1.5)]]
-    )
     gp.update(X_new=X, y_new=y, hyp=hyp)
+    return gp
+
+
+def _predictive_covariance(gp, x_star, s=0):
+    """The predictive covariance of hyperparameter sample ``s`` at
+    ``x_star``, solved against a Cholesky factor of the training
+    covariance with the noise the posterior was computed with."""
+    posterior = gp.posteriors[s]
+    cov_N = gp.covariance.hyperparameter_count(gp.D)
+    noise_N = gp.noise.hyperparameter_count()
+    hyp_cov = posterior.hyp[:cov_N]
+    hyp_noise = posterior.hyp[cov_N : cov_N + noise_N]
+    K = gp.covariance.compute(hyp_cov, gp.X)
+    sn2 = gp.noise.compute(hyp_noise, gp.X, gp.y, gp.s2)
+    K_noisy = K + posterior.sn2_mult * sn2 * np.eye(gp.X.shape[0])
+    Ks = gp.covariance.compute(hyp_cov, gp.X, X_star=x_star)
+    factor = scipy.linalg.cho_factor(K_noisy)
+    C = gp.covariance.compute(hyp_cov, x_star) - Ks.T @ scipy.linalg.cho_solve(
+        factor, Ks
+    )
+    return (C + C.T) / 2
+
+
+@pytest.mark.parametrize(
+    "noise_sd, cholesky_factor", [(2e-3, True), (1e-4, False), (1e-6, False)]
+)
+@pytest.mark.parametrize("grid", [(-2.5, 2.5), (-1.0, 1.0)])
+def test_random_function_on_a_dense_grid(grid, noise_sd, cholesky_factor):
+    """A predictive covariance on a dense one-dimensional grid is
+    numerically singular, so the draw goes through the eigenvalue
+    fallback. Eigenvalues of rounding size, which such a matrix has of
+    both signs, count as zeros, and the draws are draws: they differ
+    between generators and carry the predictive covariance. The
+    covariance is the prior covariance minus what the data explain, so
+    its rounding is that of the prior variance: on the grid inside the
+    data, where the largest eigenvalue is four orders of magnitude or more
+    below the prior variance, the negative eigenvalues are still rounding.
+    This holds in both representations of the posterior: the Cholesky
+    factor of the training covariance, and, below a noise variance of
+    1e-6, the negative inverse, from which the predictive covariance would
+    carry a rounding error that grows as the noise shrinks. The grid on
+    [-2.5, 2.5] reaches past the data on both sides."""
+    hyp = np.array(
+        [[np.log(0.7), np.log(1.2), np.log(noise_sd), 0.0, 0.0, np.log(1.5)]]
+    )
+    gp = _dense_grid_gp(hyp)
+    if cholesky_factor:
+        assert gp.posteriors[0].L_chol
+    else:
+        assert not gp.posteriors[0].L_chol
 
     x_star = np.reshape(np.linspace(*grid, 100), (-1, 1))
-    __, cov = gp.predict_full(x_star)
-    C = (cov[:, :, 0] + cov[:, :, 0].T) / 2
+    C = _predictive_covariance(gp, x_star)
     with pytest.raises(scipy.linalg.LinAlgError):
         scipy.linalg.cholesky(C, check_finite=False)
 
     f_1 = gp.random_function(x_star, rng=np.random.default_rng(1))
     f_2 = gp.random_function(x_star, rng=np.random.default_rng(2))
     assert not np.array_equal(f_1, f_2)
-    mu, __ = gp.predict(x_star)
-    assert not np.allclose(f_1, mu)
 
     rng = np.random.default_rng(11)
     draws = np.concatenate(
@@ -2064,7 +2100,78 @@ def test_random_function_on_a_dense_grid(grid):
     )
     empirical = np.cov(draws, ddof=1)
     assert np.linalg.norm(empirical - C) < 0.2 * np.linalg.norm(C)
-    assert np.allclose(np.mean(draws, 1), np.ravel(mu), rtol=0, atol=0.05)
+    mu, __ = gp.predict(x_star)
+    sd_max = np.sqrt(np.max(np.diag(C)))
+    assert np.allclose(
+        np.mean(draws, 1), np.ravel(mu), rtol=0, atol=0.15 * sd_max
+    )
+
+
+@pytest.mark.parametrize(
+    "noise_sds, cholesky_factor",
+    [((1e-2, 1e-1), True), ((1e-4, 1e-6), False)],
+)
+def test_random_function_draws_from_one_hyperparameter_sample(
+    noise_sds, cholesky_factor
+):
+    """With several hyperparameter samples, each draw comes from the
+    posterior of one of them, in either representation of the posterior,
+    and ``add_noise`` adds the observation noise of that sample. The same
+    generator state draws the same sample and the same function with and
+    without the noise, so their difference is the noise alone; the noise
+    variances of the two samples are a hundred times apart or more, so the
+    noise of a draw tells which sample it came from."""
+    hyp = np.array(
+        [
+            [np.log(ell), np.log(sf), np.log(sd), 0.0, 0.0, np.log(1.5)]
+            for ell, sf, sd in zip((0.7, 0.9), (1.2, 1.0), noise_sds)
+        ]
+    )
+    gp = _dense_grid_gp(hyp)
+    for posterior in gp.posteriors:
+        if cholesky_factor:
+            assert posterior.L_chol
+        else:
+            assert not posterior.L_chol
+
+    x_star = np.reshape(np.linspace(-2.5, 2.5, 30), (-1, 1))
+    functions, noise = [], []
+    for seed in range(1000):
+        f = gp.random_function(x_star, rng=np.random.default_rng(seed))
+        y = gp.random_function(
+            x_star, add_noise=True, rng=np.random.default_rng(seed)
+        )
+        functions.append(f)
+        noise.append(y - f)
+    functions = np.concatenate(functions, axis=1)
+    noise = np.concatenate(noise, axis=1)
+
+    noise_variances = np.array(
+        [
+            np.exp(2 * posterior.hyp[2]) * posterior.sn2_mult
+            for posterior in gp.posteriors
+        ]
+    )
+    log_ratios = np.log(np.mean(noise**2, axis=0)[:, None] / noise_variances)
+    drawn = np.argmin(np.abs(log_ratios), axis=1)
+    assert np.all(np.abs(log_ratios[np.arange(1000), drawn]) < np.log(5))
+
+    mu, __ = gp.predict(x_star, separate_samples=True)
+    for s in range(2):
+        assert 300 < np.sum(drawn == s) < 700
+        assert np.mean(noise[:, drawn == s] ** 2) == pytest.approx(
+            noise_variances[s], rel=0.1
+        )
+        C = _predictive_covariance(gp, x_star, s)
+        empirical = np.cov(functions[:, drawn == s], ddof=1)
+        assert np.linalg.norm(empirical - C) < 0.2 * np.linalg.norm(C)
+        sd_max = np.sqrt(np.max(np.diag(C)))
+        assert np.allclose(
+            np.mean(functions[:, drawn == s], 1),
+            mu[:, s],
+            rtol=0,
+            atol=0.15 * sd_max,
+        )
 
 
 def test_robust_cholesky_refuses_an_indefinite_matrix():
