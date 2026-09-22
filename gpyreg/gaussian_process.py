@@ -1298,6 +1298,17 @@ class GP:
             )
             PLB = np.minimum(np.maximum(PLB, LB), UB)
             PUB = np.maximum(np.minimum(PUB, UB), LB)
+            # The two clips move the plausible bounds independently, so a
+            # plausible box that lies outside the hard box comes back
+            # inverted: with training targets whose standard deviation is
+            # below the lower bound of the noise, the noise's plausible
+            # lower bound is clipped down to the hard upper bound and its
+            # plausible upper bound stays under that. The space-filling
+            # design needs the pair ordered, so an inverted one collapses
+            # onto its upper bound, which the clip left inside the hard
+            # box.
+            inverted = PLB > PUB
+            PLB[inverted] = PUB[inverted]
 
             # If we are not provided with an initial hyperparameter guess then
             # either use the current hyperparameters if they exist, or use

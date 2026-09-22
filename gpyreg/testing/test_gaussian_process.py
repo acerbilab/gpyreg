@@ -2691,3 +2691,24 @@ def test_update_checks_the_hyperparameter_width():
 
     gp.update(hyp=np.zeros((2, 4)))
     assert np.size(gp.posteriors) == 2
+
+
+def test_fit_with_targets_of_a_tiny_range():
+    """Targets whose standard deviation falls below the lower bound of the
+    noise put the noise's plausible box outside its hard box. The two
+    clips into the hard box then move the plausible bounds independently
+    and can cross them, and the space-filling design needs
+    ``PLB <= PUB``."""
+    rng = np.random.default_rng(2)
+    X = rng.uniform(-2, 2, size=(20, 1))
+    y = 1.0 + 1e-4 * rng.random((20, 1))
+
+    gp = _gp_1d()
+    hyp, __, __ = gp.fit(
+        X=X,
+        y=y,
+        options={"n_samples": 0, "opts_N": 1, "init_N": 16},
+        rng=np.random.default_rng(3),
+    )
+    assert np.all(np.isfinite(hyp))
+    assert np.all(gp.lower_bounds <= gp.upper_bounds)
