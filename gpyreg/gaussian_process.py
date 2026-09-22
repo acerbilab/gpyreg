@@ -1808,6 +1808,12 @@ class GP:
         log prior for given hyperparameters (that is, the unnormalized log
         posterior).
 
+        Each hyperparameter's prior is renormalized over its bounds, so the
+        value carries a constant that a hand-computed sum of the log
+        marginal likelihood and the prior densities does not. The constant
+        does not depend on the hyperparameters, and is zero for a
+        hyperparameter with no bounds.
+
         Parameters
         ==========
         hyp : object
@@ -1896,8 +1902,9 @@ class GP:
             True values at the points.
         s2_star : ndarray, shape (M, 1), optional
             Noise variance at the points.
-        add_noise : bool, defaults to True
-            Whether to add noise to the prediction results.
+        add_noise : bool, defaults to ``False``
+            Whether to add the observation noise, which enters on the
+            diagonal, to the returned covariance.
 
         Returns
         =======
@@ -1905,7 +1912,10 @@ class GP:
             Posterior mean at the requested points for each hyperparameter
             sample.
         cov : ndarray, shape (M, M, sample_N)
-            Covariance matrix for each hyperparameter sample.
+            Covariance matrix for each hyperparameter sample. Its diagonal
+            is not clamped at zero, unlike the variances
+            :py:func:`predict` returns, so on a nearly singular posterior
+            an entry can come out slightly negative.
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
         s_N = self.posteriors.size
@@ -1995,7 +2005,7 @@ class GP:
         return_cross_covariance: bool = False,
     ):
         """
-        Compute the GP posterior mean and noise variance at given points.
+        Compute the GP posterior mean and variance at given points.
 
         Parameters
         ==========
@@ -2011,9 +2021,13 @@ class GP:
             Whether to return the results separately for each hyperparameter
             sample or averaged.
         return_lpd : bool, defaults to ``False``
-            Whether to return the log predictive density at the input points.
-            If separate_samples is ``False``, returns the lpd of the
-            corresponding mean approximation.
+            Whether to return the log predictive density at the input
+            points. The density always carries the observation noise,
+            whichever variance ``add_noise`` selects for ``s2``. With
+            ``separate_samples`` ``False`` it is the log density of the
+            Gaussian carrying the mean and the variance of the mixture over
+            the hyperparameter samples, and not the average of the
+            per-sample log densities.
         return_cross_covariance : bool, defaults to ``False``
             Whether to append the latent training-to-prediction kernel
             matrices to the return values. The matrices are kept separate for
@@ -2027,8 +2041,9 @@ class GP:
             separate samples the shape is ``(M, sample_N)`` while
             otherwise it is ``(M, 1)``.
         s2 : ndarray
-            Noise variance at each point. If we requested
-            separate samples the shape is ``(M, sample_N)`` while
+            Variance at each point: the latent posterior variance, or, with
+            ``add_noise``, that variance plus the observation noise. If we
+            requested separate samples the shape is ``(M, sample_N)`` while
             otherwise it is ``(M, 1)``.
         lpd : ndarray, optional
             Log predictive density at each point. Returned when
@@ -2238,7 +2253,7 @@ class GP:
         Returns
         =======
         F : ndarray
-            The conputed integrals in an array with shape ``(N, 1)`` if
+            The computed integrals in an array with shape ``(N, 1)`` if
             samples are averaged and shape ``(N, hyp_samples)`` if
             requested separately.
         F_var : ndarray, optional
@@ -2426,7 +2441,6 @@ class GP:
 
         return F
 
-    # sigma doesn't work, requires gplite_quad implementation
     # quantile doesn't work, requires gplite_qpred implementation
     def plot(
         self,
