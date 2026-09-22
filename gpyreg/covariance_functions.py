@@ -85,7 +85,7 @@ class AbstractKernel(ABC):
         -------
         K : ndarray
             The covariance matrix which is by default of shape ``(N, N)``. If
-            ``compute_diag = True`` the shape is ``(N,)``.
+            ``compute_diag = True`` the shape is ``(N, 1)``.
         dK : ndarray, shape (N, N, cov_N), optional
             The gradient of the covariance matrix with respect to the
             hyperparameters.

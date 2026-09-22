@@ -12,6 +12,11 @@ class GaussianNoise:
     Total noise variance is is obtained by summing the independent
     contribution of each noise feature.
 
+    With ``constant_add = False`` the constant contribution is not zero
+    but ``np.spacing(1)``, about 2.2e-16: a nugget that keeps a covariance
+    matrix with no other noise factorizable. ``gplite_noisefun.m`` has the
+    same nugget.
+
     Parameters
     ==========
     constant_add : bool, defaults to False

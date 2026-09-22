@@ -67,6 +67,7 @@ The primary entry point for users is the :ref:`GP Class<\`\`GP\`\`>`, used to co
    release_notes
    gaussian_process
    covariance_functions
+   isotropic_covariance_functions
    mean_functions
    noise_functions
    slice_sample
