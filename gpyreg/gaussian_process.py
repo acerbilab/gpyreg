@@ -810,8 +810,10 @@ class GP:
 
         # Check whether to do a rank-1 update. The shortcut extends the
         # existing posteriors, so it applies only while their
-        # hyperparameters stay in place: replacement hyperparameters need
-        # a full recomputation.
+        # hyperparameters stay in place (replacement hyperparameters need
+        # a full recomputation) and only while they carry their factors:
+        # after `clean` or an update with `compute_posterior=False` there
+        # is nothing to extend.
         rank_one_update = False
         if X_new is not None and y_new is not None and compute_posterior:
             if (
@@ -820,6 +822,8 @@ class GP:
                 and X_new.shape[0] == 1
                 and y_new.shape[0] == 1
                 and hyp is None
+                and self.posteriors is not None
+                and self.posteriors[0].alpha is not None
             ):
                 rank_one_update = True
         full_updates = []  # Keep track of unstable rank-1 updates

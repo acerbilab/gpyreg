@@ -2113,3 +2113,46 @@ def test_rank_one_update_low_noise_duplicate_recomputes():
     f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
     assert np.array_equal(f_mu, f_mu_ref)
     assert np.array_equal(f_s2, f_s2_ref)
+
+
+@pytest.mark.parametrize("state", ["cleaned", "no_posterior"])
+def test_single_point_update_without_posterior_factors(state):
+    """The rank-one shortcut extends the stored factors, so a GP that
+    carries none -- after ``clean`` or after an update with
+    ``compute_posterior=False`` -- recomputes in full instead."""
+    N = 10
+    D = 2
+    rng = np.random.default_rng(9)
+    X = rng.uniform(-3, 3, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.0]])
+    x_new = rng.uniform(-3, 3, size=(1, D))
+    y_new = np.sin(x_new[:, 0:1]) + np.cos(x_new[:, 1:2])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    gp = make_gp()
+    if state == "cleaned":
+        gp.update(X_new=X, y_new=y, hyp=hyp)
+        gp.clean()
+    else:
+        gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=False)
+    assert gp.posteriors[0].alpha is None
+
+    gp.update(X_new=x_new, y_new=y_new)
+    assert gp.posteriors[0].alpha is not None
+
+    gp_ref = make_gp()
+    gp_ref.update(
+        X_new=np.concatenate((X, x_new)),
+        y_new=np.concatenate((y, y_new)),
+        hyp=hyp,
+    )
+    assert np.array_equal(gp.posteriors[0].alpha, gp_ref.posteriors[0].alpha)
+    assert np.array_equal(gp.posteriors[0].L, gp_ref.posteriors[0].L)
