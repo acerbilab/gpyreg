@@ -4,10 +4,8 @@ Release notes
 1.3.0 (unreleased)
 ------------------
 
-The first eight points move numbers that a 1.2.1 user can observe at the
-defaults of what they name, and the five after them do so in the cases
-they repair; the rest repair calls that raised, refuse inputs that were
-taken in silence, remove one thing and document.
+A point marked **Upgrading** says what a script written for 1.2.1 may have
+to change.
 
 * The recommended bounds of the hyperparameters take the statistics of
   the training inputs per input dimension. The starting value of each
@@ -20,28 +18,37 @@ taken in silence, remove one thing and document.
   every dimension, which mixes the locations of the dimensions with their
   spreads: where the dimensions lie apart, every recommendation came out
   as wide as the widest gap between them. The per-dimension statistics
-  are those of MATLAB's gplite. A :meth:`gpyreg.GP.fit` that starts from
-  the recommendation, or leaves the bounds of the mean to it, sees its
-  hyperparameter samples move; the widths beside the length scales were
-  per dimension already.
+  are those of MATLAB's gplite. A :meth:`gpyreg.GP.fit` with that mean
+  function takes its plausible box from the recommendation, and its hard
+  box wherever the caller leaves it unset, so its space-filling design,
+  its default starting point and its slice sampler change, and its
+  hyperparameters move; a fit that starts from given hyperparameters
+  (``hyp0``, or those the GP already has), with no space-filling design
+  (``init_N = 0``) and no hyperparameter samples (``n_samples = 0``),
+  changes only where its start or its optimizer meets a hard bound that
+  moved. ``fit`` does not start from the recommended length scales, which
+  reach a caller that reads them from ``get_bounds_info``; the bounds of
+  the length scales were per dimension already.
 * The recommended bounds and starting length scale of the isotropic
   kernels take the means of the logarithms of the per-dimension widths
   and standard deviations, as MATLAB's gplite does, where they took the
   logarithm of the mean width and the standard deviation pooled over all
   entries of ``X``; a fit with
   :class:`gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic`
-  or :class:`gpyreg.isotropic_covariance_functions.MaternIsotropic` starts
-  from a different design and feasible set than in 1.2.1.
+  or :class:`gpyreg.isotropic_covariance_functions.MaternIsotropic` takes
+  a different plausible box for the length scale than in 1.2.1, and a
+  different hard box wherever the caller leaves it unset.
 * :meth:`gpyreg.GP.fit` takes its starting points as a copy of the
   space-filling design, so the default widths of the slice sampler are
-  the standard deviation of the design as it was drawn; a script that
-  calls ``fit`` at the default ``opts_N = 3`` sees its sampled
-  hyperparameters move.
+  the standard deviation of the design as it was drawn; a fit that draws
+  hyperparameter samples with a noise hyperparameter and
+  ``1 < opts_N < init_N``, as at the defaults, sees its samples move.
 * The plausible upper bound of the shape parameter of
   :class:`gpyreg.covariance_functions.RationalQuadraticARD` is its own
   (5) and the output scale keeps the range of the targets; the shape's
-  line wrote into the output scale's slot. The space-filling design of a
-  fit with that kernel changes.
+  line wrote into the output scale's slot. The plausible box of a fit
+  with that kernel changes, and with it the space-filling design and the
+  default starting point.
 * Slice sampling with a burn-in of two or three iterations no longer
   returns the same point once per requested sample: a coordinate whose
   burn-in variance estimate is not positive keeps the width it has
@@ -55,8 +62,8 @@ taken in silence, remove one thing and document.
   1 can be fitted: the gradient with respect to the length scale is zero,
   not NaN, where two inputs coincide, so the gradient of the marginal
   likelihood is finite.
-* A training set whose targets are all equal is given a range of one,
-  with a warning, instead of bounds of ``-inf`` that ended
+* A training set whose targets are all equal and finite is given a range
+  of one, with a warning, instead of bounds of ``-inf`` that ended
   :meth:`gpyreg.GP.fit` with ``KeyError: (-inf, -inf)``; such a fit now
   completes.
 * :meth:`gpyreg.GP.quad` with ``compute_var=True`` normalizes by the
@@ -68,13 +75,16 @@ taken in silence, remove one thing and document.
   covariance is numerically singular, as it is on a dense
   one-dimensional grid: eigenvalues that are negative but of rounding
   size count as the zeros they are, where the draw used to collapse onto
-  the predictive mean without a word, and a negative eigenvalue beyond
-  the rounding band raises ``LinAlgError``. The eigenvalue fallback also
-  fixes the signs of whole eigenvectors and uses the symmetric
-  eigensolver, so the factor it builds is a factor of the matrix it was
-  given; a draw at closely spaced or duplicated test points came from
-  the wrong covariance before. Draws through this path change for a
-  given generator.
+  the predictive mean without a word. The rounding is measured against
+  the prior variance at the test points, from which the predictive
+  covariance is formed by subtraction, so a grid inside the training data
+  draws as well; a matrix with a negative eigenvalue beyond that band is
+  no covariance matrix, and the draw raises ``LinAlgError``. The
+  eigenvalue fallback also fixes the signs of whole eigenvectors and uses
+  the symmetric eigensolver, so the factor it builds is a factor of the
+  matrix it was given; a draw at closely spaced or duplicated test points
+  came from the wrong covariance before. Draws through this path change
+  for a given generator.
 * :meth:`gpyreg.GP.predict_full` with ``add_noise=True`` adds the
   observation noise on the diagonal; with a noise that varies from point
   to point the returned matrix was neither symmetric nor a covariance
@@ -82,37 +92,53 @@ taken in silence, remove one thing and document.
   function is unaffected.
 * A hyperprior whose degrees of freedom are infinite or NaN is the
   Gaussian family it names, MATLAB's ``HPRIOR.nu = Inf`` convention,
-  where it used to contribute no prior at all; and a smooth-box prior set
-  on a block of several hyperparameters has one normalization constant
-  per coordinate of the block, where it doubled the log density with two
-  coordinates on different sides of the box and raised with three.
-  :meth:`gpyreg.GP.get_priors` returns such a prior instead of raising.
+  where it used to contribute no prior at all; :meth:`gpyreg.GP.fit`
+  fills NaN degrees of freedom with its option ``df_base`` for its own
+  duration (below). A smooth-box prior set on a block of several
+  hyperparameters has one normalization constant per coordinate of the
+  block, where it doubled the log density with two coordinates on
+  different sides of the box and raised with three.
+  :meth:`gpyreg.GP.get_priors` returns, in the form
+  :meth:`gpyreg.GP.set_priors` reads back, such a smooth-box prior, where
+  it raised, and a prior with NaN degrees of freedom or a block with a
+  coordinate that has no prior, where it returned ``None``; so
+  ``set_priors(get_priors())`` keeps them.
 * A single-observation :meth:`gpyreg.GP.update` of a posterior in the
   low-noise representation falls through to a full recomputation, with a
-  warning, where the predictive variance of the new point is at or below
-  what the variance clamp can produce, an observation at an existing
-  training input for one, as the Cholesky representation already did for
-  its own stability test.
-* :meth:`gpyreg.GP.fit` no longer leaves the plausible bounds inverted
-  where the plausible box lies outside the hard box, which made the
-  space-filling design fail an internal assertion for training targets
-  whose standard deviation falls below the lower bound of the noise.
+  warning, where rounding drives the latent variance of the new point to
+  zero or below, as it can for an observation at an existing training
+  input, and its predictive variance is the noise alone; the Cholesky
+  representation already did so for its own stability test.
+* :meth:`gpyreg.GP.fit` collapses an inverted plausible pair onto its
+  upper bound, inside the hard box, before the space-filling design,
+  which needs the pair ordered. For training targets whose standard
+  deviation is below 1e-3 (the noise's plausible lower bound) and whose
+  range is above 1e-6 (below that the hard pair collapses first), the
+  noise's recommended plausible pair is inverted, and in 1.2.1 a fit with
+  a space-filling design whose noise has no prior raised
+  ``AssertionError``.
 * The convergence diagnostics of :class:`gpyreg.slice_sample.SliceSampler`
-  report a parameter whose recorded chain did not move as undefined
-  (``exit_flag`` -3, ``R`` and ``eff_N`` NaN, and the "did not move"
-  message) whatever value it is frozen at; before, this held only for a
-  constant whose mean is exact.
+  recognize a parameter whose recorded chain did not move by its range,
+  whatever value it is frozen at: ``R`` and ``eff_N`` are NaN for it, and
+  for a free parameter ``exit_flag`` is -3, with the "did not move"
+  message. Before, this held only for a constant whose mean is exact, and
+  a parameter fixed by ``LB == UB`` at, say, 0.3 reported finite ``R``
+  and ``eff_N`` that were rounding noise.
 * The normalization constant of a smooth-box Student's t prior, and the
   cumulative distribution and quantile functions of that distribution,
   are computed through the logarithms of the gamma functions, so degrees
-  of freedom above about 340 no longer make the log posterior, or the
-  space-filling design, NaN.
+  of freedom above about 340 no longer make the log posterior NaN.
 * :meth:`gpyreg.GP.log_likelihood` and :meth:`gpyreg.GP.log_posterior`
   accept the dictionary of hyperparameters their docstrings document.
 * :meth:`gpyreg.GP.fit` reads the sampler under ``sampler_name``, the
   name it documents, as well as under ``sampler``, and fills ``df_base``
-  into a copy of the priors, so a fitted GP keeps the priors the caller
-  set and a second fit with another value uses it.
+  into a copy of the priors for its own duration, so a fitted GP keeps
+  the priors the caller set and a second fit with another value uses it.
+  A prior left with NaN degrees of freedom therefore reads as Gaussian
+  outside the fit, in :meth:`gpyreg.GP.log_posterior` after it for one,
+  where 1.2.1 wrote ``df_base`` into the GP's priors and read a Student's
+  t from then on. **Upgrading:** a script that relies on that Student's t
+  after the fit gives the prior its degrees of freedom.
 * A single-observation :meth:`gpyreg.GP.update` on a GP that carries no
   posterior factors, after :meth:`gpyreg.GP.clean` or after an update
   with ``compute_posterior=False``, recomputes the posterior in full
@@ -120,49 +146,85 @@ taken in silence, remove one thing and document.
 * The gradient of the marginal likelihood no longer raises where the
   noise function carries a scale for a user-provided variance that is
   never given.
-* Inputs that were taken in silence are refused with a message: a prior
-  needs a finite, positive ``sigma`` (no prior is written as ``None``, not
-  as an infinite scale); :meth:`gpyreg.GP.set_priors` and
-  :meth:`gpyreg.GP.set_bounds` reject a hyperparameter name the model
-  has not; :meth:`gpyreg.GP.get_recommended_bounds` takes any array_like
-  and rejects a bound pair given inverted; :meth:`gpyreg.GP.update` with
+* :meth:`gpyreg.GP.quad` reads a one-dimensional ``mu`` or ``sigma`` of
+  length ``D`` as one measure in ``D`` dimensions, as MATLAB's gplite
+  does, where 1.2.1 raised.
+* Inputs that were taken in silence are refused with a message: a
+  coordinate that has a prior needs a finite, positive ``sigma`` (a
+  hyperparameter without a prior is written as ``None``, and a coordinate
+  of a block without one as NaN location and ``sigma``, as 1.2.1 accepted
+  it); :meth:`gpyreg.GP.set_priors` and :meth:`gpyreg.GP.set_bounds`
+  reject a hyperparameter name the model has not;
+  :meth:`gpyreg.GP.get_recommended_bounds` takes any array_like and
+  rejects a bound pair given inverted, and so does :meth:`gpyreg.GP.fit`,
+  which fills its bounds through it; :meth:`gpyreg.GP.update` with
   ``hyp`` checks the width of the hyperparameter row, and with
-  ``compute_posterior=True`` refuses hyperparameters that were never
-  set, naming them; :meth:`gpyreg.GP.quad` refuses a GP without training
+  ``compute_posterior=True`` refuses hyperparameters that are NaN (never
+  set), naming them; :meth:`gpyreg.GP.quad` refuses a GP without training
   data or posterior factors, a mean function it cannot place, and a
   measure that has not one column per input dimension; a noise variance
   may be any number or 0-d array, while an array whose row count is not
   that of the inputs is refused; and
   :meth:`gpyreg.slice_sample.SliceSampler.sample` refuses a ``thin`` or
-  ``burn`` that is not a whole number with ``ValueError`` instead of
-  raising ``TypeError`` from ``range``. A failed Cholesky decomposition
-  reports ``LinAlgError`` in both noise representations, where the
-  low-noise one raised ``TypeError``. **Upgrading:** a script that passes
-  a fractional ``thin`` or ``burn`` must round it; a whole number of any
-  type is still accepted.
+  ``burn`` that is not a whole number, an infinite one included, with
+  ``ValueError`` instead of raising ``TypeError`` from ``range``. A
+  failed Cholesky decomposition reports ``LinAlgError`` in both noise
+  representations, where the low-noise one raised ``TypeError``, and the
+  checks of the shape of the inputs raise ``ValueError`` where they raised
+  ``AssertionError``. **Upgrading:** each refusal can stop a script that
+  ran under 1.2.1, which changes as follows:
+
+  - a name the model has not, which set nothing, is left out;
+  - a prior whose ``sigma`` is infinite, zero or negative, or NaN beside
+    a location, is given a positive ``sigma``, or is replaced by ``None``
+    where no prior is meant (1.2.1 took the absolute value of a negative
+    ``sigma`` in the log prior);
+  - a bound pair given inverted, which 1.2.1 collapsed onto its lower
+    bound, is given in order (equal bounds fix a hyperparameter);
+  - ``update(hyp=...)`` is given one column per hyperparameter of the
+    GP, where 1.2.1 stored a row of another width and read it by offset;
+  - ``gp.update(X_new=X, y_new=y)`` on a GP whose hyperparameters were
+    never set, which 1.2.1 completed with NaN posterior factors that a
+    following ``gp.fit()`` replaced, passes ``compute_posterior=False``,
+    or the data go to ``gp.fit(X, y)`` directly;
+  - ``quad`` with another mean function, whose integral 1.2.1 computed
+    as if that mean were a constant equal to its first hyperparameter,
+    has no replacement;
+  - a noise variance given as a row of ``N`` is given as a column;
+  - a fractional ``thin`` or ``burn`` is rounded; a whole number of any
+    type is still accepted.
+
 * The covariance kernels refuse ``compute(compute_diag=True,
   compute_grad=True)`` with ``ValueError``. **Upgrading:** that
   combination returned the diagonal beside the gradient of the full
   matrix, a pair that meant nothing; ask for the two separately.
 * The undocumented Metropolis step of
-  :class:`gpyreg.slice_sample.SliceSampler` is removed. **Upgrading:** it
-  never ran (its option key was misspelled), and the attributes
-  ``metropolis_pdf``, ``metropolis_rnd`` and ``metropolis_flag`` no longer
-  exist, so a script that set them must drop them.
+  :class:`gpyreg.slice_sample.SliceSampler` is removed, with its options
+  and the attributes ``metropolis_pdf``, ``metropolis_rnd`` and
+  ``metropolis_flag``. **Upgrading:** its options never turned the step
+  on (their key was misspelled), but setting the three attributes
+  directly did run it; a script that sets them now samples without the
+  step, with no error.
 * ``uuinv`` returns NaN for a ``p`` outside [0, 1] in every case, not only
   in the general one, and its documentation states the mixture it
   implements: the weight outside the plausible box is spread over the
   two tails in proportion to their lengths.
 * Documentation: the isotropic kernels have a page;
   ``AbstractKernel.compute`` documents the ``(N, 1)`` shape of the
-  diagonal it returns; the default of ``add_noise`` of
+  diagonal it returns; :class:`gpyreg.noise_functions.GaussianNoise`
+  documents the ``np.spacing(1)`` nugget it keeps with
+  ``constant_add=False``; the default of ``add_noise`` of
   :meth:`gpyreg.GP.predict_full`, that its diagonal is not clamped and
   can be negative on a nearly singular posterior; which variance
-  :meth:`gpyreg.GP.predict` returns by default; that the log predictive
+  :meth:`gpyreg.GP.predict` returns by default, and how it pools the
+  variances of several hyperparameter samples; that the log predictive
   density always carries the observation noise and over several
-  hyperparameter samples is the density of the moment-matched Gaussian;
-  and that :meth:`gpyreg.GP.log_posterior` renormalizes each prior over
-  its bounds.
+  hyperparameter samples is the density of the Gaussian with the pooled
+  mean and variance; that :meth:`gpyreg.GP.log_posterior` renormalizes
+  each prior over its bounds; what NaN degrees of freedom of a prior
+  mean, in :meth:`gpyreg.GP.set_priors` and in the ``df_base`` option of
+  :meth:`gpyreg.GP.fit`; and, in the docstring of the sampler's effective
+  sample size, that its autocorrelations are paired from lag 0.
 
 1.2.1 (2026-09-14)
 ------------------
