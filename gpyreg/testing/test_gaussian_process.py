@@ -2252,3 +2252,46 @@ def test_log_prior_matches_the_documented_densities():
             gp.hyper_priors["df"][2] = df  # the smooth box
             log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
             assert np.isclose(log_prior, expected, rtol=1e-12)
+
+
+@pytest.mark.parametrize("family", ["smoothbox", "smoothbox_student_t"])
+@pytest.mark.parametrize("D", [2, 3])
+def test_smooth_box_prior_over_a_block(family, D):
+    """A smooth-box prior set on a block of several hyperparameters has one
+    normalization constant per coordinate of the block, whichever side of
+    the box each coordinate falls on."""
+    params = (
+        (-1.0, 1.0, 0.7) if family == "smoothbox" else (-1.0, 1.0, 0.7, 4.0)
+    )
+    priors = {
+        "covariance_log_lengthscale": (family, params),
+        "covariance_log_outputscale": None,
+        "noise_log_scale": None,
+        "mean_const": None,
+    }
+
+    X = np.reshape(np.linspace(-2, 2, 6 * D), (-1, D))
+    y = np.sum(np.sin(X), 1)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    # The lengthscales fall below the box, on the plateau and above it.
+    lengthscales = np.array([-1.5, 0.2, 1.4])[:D]
+    hyp = np.concatenate((lengthscales, [0.0, np.log(0.1), 0.0]))
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    gp.set_priors(priors)
+
+    expected = sum(
+        _reference_log_prior(family, params, x) for x in lengthscales
+    )
+    log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+    assert np.isclose(log_prior, expected, rtol=1e-12)
+
+    returned = gp.get_priors()["covariance_log_lengthscale"]
+    assert returned[0] == family
+    for value, expected_value in zip(returned[1], params):
+        assert np.all(value == expected_value)

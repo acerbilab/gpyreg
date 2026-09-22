@@ -463,10 +463,10 @@ class GP:
                 and np.all(np.isfinite(b[i]))
                 and np.all(np.isfinite(sigma[i]))
             ):
-                if df[i] == 0 or df[i] == np.inf:
+                if np.all(df[i] == 0) or np.all(df[i] == np.inf):
                     prior_type = "smoothbox"
                     prior_params = (a[i], b[i], sigma[i])
-                elif df[i] > 0:
+                elif np.all(df[i] > 0):
                     prior_type = "smoothbox_student_t"
                     prior_params = (a[i], b[i], sigma[i], df[i])
             elif np.all(np.isfinite(mu[i])) and np.all(np.isfinite(sigma[i])):
@@ -1559,15 +1559,20 @@ class GP:
             ) ** 2
 
             if np.any(sb_idx_b | sb_idx_a):
+                tmp_idx = sb_idx_b | sb_idx_a
                 lp -= 0.5 * np.sum(
                     np.log(
-                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
+                        C[tmp_idx[sb_idx]] ** 2
+                        * 2
+                        * np.pi
+                        * sigma[tmp_idx] ** 2
                     )
-                    + z2_tmp[sb_idx_b | sb_idx_a]
+                    + z2_tmp[tmp_idx]
                 )
             if np.any(sb_idx_btw):
                 lp -= np.sum(
-                    np.log(C * sigma[sb_idx_btw]) + np.log(np.sqrt(2 * np.pi))
+                    np.log(C[sb_idx_btw[sb_idx]] * sigma[sb_idx_btw])
+                    + np.log(np.sqrt(2 * np.pi))
                 )
 
             if compute_grad:
@@ -1604,7 +1609,7 @@ class GP:
                 )
                 lp += np.sum(
                     -0.5 * np.log(np.pi * df[tmp_idx])
-                    - np.log(C * sigma[tmp_idx])
+                    - np.log(C[tmp_idx[sb_t_idx]] * sigma[tmp_idx])
                     - 0.5
                     * (df[tmp_idx] + 1)
                     * np.log1p(z2_tmp[tmp_idx] / df[tmp_idx])
@@ -1617,7 +1622,7 @@ class GP:
                 )
                 lp += np.sum(
                     -0.5 * np.log(np.pi * df[tmp_idx])
-                    - np.log(C * sigma[tmp_idx])
+                    - np.log(C[tmp_idx[sb_t_idx]] * sigma[tmp_idx])
                 )
 
             if compute_grad:
