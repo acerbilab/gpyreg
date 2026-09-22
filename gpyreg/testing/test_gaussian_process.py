@@ -1109,12 +1109,13 @@ def test_fitting():
     noise_N = gp.noise.hyperparameter_count()
 
     N_s = 1
-    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    rng = np.random.default_rng(6)
+    hyp = rng.standard_normal((N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.3
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X, add_noise=True)
+    y = gp.random_function(X, add_noise=True, rng=rng)
     gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
 
     gp1 = gpr.GP(
@@ -1125,7 +1126,7 @@ def test_fitting():
     )
 
     gp_train = {"n_samples": 0}
-    hyp2, _, _ = gp1.fit(X=X, y=y, options=gp_train)
+    hyp2, _, _ = gp1.fit(X=X, y=y, options=gp_train, rng=rng)
 
     assert np.all(np.abs(hyp - hyp2)[0] < 0.5)
 
