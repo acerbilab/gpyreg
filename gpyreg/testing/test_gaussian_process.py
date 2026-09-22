@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.linalg
+import scipy.special
 import scipy.stats
 from scipy.integrate import quad
 
@@ -2156,3 +2157,98 @@ def test_single_point_update_without_posterior_factors(state):
     )
     assert np.array_equal(gp.posteriors[0].alpha, gp_ref.posteriors[0].alpha)
     assert np.array_equal(gp.posteriors[0].L, gp_ref.posteriors[0].L)
+
+
+def _reference_log_prior(kind, params, x):
+    """The hyperprior densities of ``set_priors``, written from their
+    definitions: a Gaussian and a Student's t, and their smooth-box
+    counterparts, uniform on ``[a, b]`` with tails of scale ``sigma``."""
+    if kind == "gaussian":
+        mu, sigma = params
+        return scipy.stats.norm.logpdf(x, loc=mu, scale=sigma)
+    if kind == "student_t":
+        mu, sigma, df = params
+        return scipy.stats.t.logpdf(x, df, loc=mu, scale=sigma)
+    a, b, sigma = params[0], params[1], params[2]
+    z = 0.0
+    if x < a:
+        z = (x - a) / sigma
+    elif x > b:
+        z = (x - b) / sigma
+    if kind == "smoothbox":
+        # The plateau has the density of the tails at their peak, so the
+        # normalizer is the plateau's length in units of that peak plus one.
+        C = 1.0 + (b - a) / (sigma * np.sqrt(2 * np.pi))
+        return -np.log(C * sigma * np.sqrt(2 * np.pi)) - 0.5 * z**2
+    if kind == "smoothbox_student_t":
+        df = params[3]
+        peak = np.exp(
+            scipy.special.gammaln(0.5 * (df + 1))
+            - scipy.special.gammaln(0.5 * df)
+        ) / (sigma * np.sqrt(df * np.pi))
+        C = 1.0 + (b - a) * peak
+        return np.log(peak / C) - 0.5 * (df + 1) * np.log1p(z**2 / df)
+    raise ValueError("unknown prior " + kind)
+
+
+def test_log_prior_matches_the_documented_densities():
+    """``log_posterior`` minus ``log_likelihood`` is the log hyperprior:
+    the documented Gaussian, Student's t and smooth-box densities, with an
+    infinite or missing number of degrees of freedom naming the Gaussian
+    families as ``gplite_nlZ.m`` documents."""
+    D = 1
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+
+    # In the order of the hyperparameter array: covariance, noise, mean.
+    priors = {
+        "covariance_log_lengthscale": ("gaussian", (0.3, 1.2)),
+        "covariance_log_outputscale": ("student_t", (-0.2, 0.8, 5.0)),
+        "noise_log_scale": ("smoothbox", (-1.0, 1.0, 0.7)),
+        "mean_const": ("smoothbox_student_t", (-2.0, 0.5, 0.9, 4.0)),
+    }
+
+    # The reference densities are normalized, which fixes their constants
+    # independently of gpyreg.
+    for kind, params in priors.values():
+        mass, __ = quad(
+            lambda t: np.exp(_reference_log_prior(kind, params, t)),
+            -np.inf,
+            np.inf,
+        )
+        assert np.isclose(mass, 1.0, rtol=1e-6), kind
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    # The smooth-box coordinates are the last two: inside their boxes in
+    # the first vector, in either tail in the second.
+    for hyp in (
+        np.array([0.5, -0.4, 0.2, -0.3]),
+        np.array([-1.1, 1.3, -1.5, 0.9]),
+    ):
+        gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+        expected = sum(
+            _reference_log_prior(kind, params, x)
+            for (kind, params), x in zip(priors.values(), hyp)
+        )
+        # No bounds are set, so no prior is truncated and the
+        # renormalization over the bounds is zero.
+        gp.set_priors(priors)
+        assert np.all(np.isnan(gp.lower_bounds))
+        log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+        assert np.isclose(log_prior, expected, rtol=1e-12)
+
+        # A Gaussian and a smooth box are also written with an infinite
+        # number of degrees of freedom, and `fit` leaves NaN where it has
+        # no default to fill: both name the same density.
+        for df in (np.inf, np.nan):
+            gp.set_priors(priors)
+            gp.hyper_priors["df"][0] = df  # the Gaussian
+            gp.hyper_priors["df"][2] = df  # the smooth box
+            log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+            assert np.isclose(log_prior, expected, rtol=1e-12)

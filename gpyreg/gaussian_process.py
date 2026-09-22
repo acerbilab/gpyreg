@@ -554,7 +554,8 @@ class GP:
                     mu, sigma = prior_params
                     hyper_priors["mu"][i] = mu
                     hyper_priors["sigma"][i] = sigma
-                    # Implicit flag for gaussian, is set to inf later.
+                    # Zero degrees of freedom flag the Gaussian
+                    # families; an infinite number does too.
                     hyper_priors["df"][i] = 0
                 elif prior_type == "student_t":
                     mu, sigma, df = prior_params
@@ -566,14 +567,14 @@ class GP:
                     hyper_priors["a"][i] = a
                     hyper_priors["b"][i] = b
                     hyper_priors["sigma"][i] = sigma
-                    # Implicit flag for gaussian, is set to inf later.
+                    # Zero degrees of freedom flag the Gaussian
+                    # families; an infinite number does too.
                     hyper_priors["df"][i] = 0
                 elif prior_type == "smoothbox_student_t":
                     a, b, sigma, df = prior_params
                     hyper_priors["a"][i] = a
                     hyper_priors["b"][i] = b
                     hyper_priors["sigma"][i] = sigma
-                    # Implicit flag for gaussian, is set to inf later.
                     hyper_priors["df"][i] = df
                 else:
                     raise ValueError("Unknown hyperprior type " + prior_type)
@@ -1457,7 +1458,7 @@ class GP:
         sb_idx = (
             np.isfinite(a)
             & np.isfinite(b)
-            & (df == 0 | ~np.isfinite(df))
+            & ((df == 0) | ~np.isfinite(df))
             & ~np.isfinite(mu)
             & np.isfinite(sigma)
         )
@@ -1473,7 +1474,7 @@ class GP:
         g_idx = (
             ~u_idx
             & ~sb_idx
-            & (df == 0 | ~np.isfinite(df))
+            & ((df == 0) | ~np.isfinite(df))
             & np.isfinite(sigma)
         )
         t_idx = ~u_idx & ~sb_t_idx & (df > 0) & np.isfinite(df)
