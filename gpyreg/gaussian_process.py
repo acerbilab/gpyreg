@@ -2748,7 +2748,6 @@ class GP:
                         continue
                     break
                 sl = sn2_div * sn2_mult
-                pL = L
             else:
                 sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
 
@@ -2762,19 +2761,24 @@ class GP:
                         continue
                     break
                 sl = 1
-                if not compute_nlZ:
-                    pL = sp.linalg.solve_triangular(
-                        -L,
-                        sp.linalg.solve_triangular(
-                            L, np.eye(N), trans=1.0, check_finite=False
-                        ),
-                        trans=0,
-                        check_finite=False,
-                    )
 
+            # Every attempt failed: report that, before the low-noise
+            # branch tries to invert the factor it does not have.
             if L is None:
                 raise sp.linalg.LinAlgError(
                     "Singular matrix for L Cholesky decomposition"
+                )
+
+            if L_chol:
+                pL = L
+            elif not compute_nlZ:
+                pL = sp.linalg.solve_triangular(
+                    -L,
+                    sp.linalg.solve_triangular(
+                        L, np.eye(N), trans=1.0, check_finite=False
+                    ),
+                    trans=0,
+                    check_finite=False,
                 )
             logdet = None
 

@@ -1907,3 +1907,41 @@ def test_predict_full_add_noise_per_point():
     added = C - cov_latent[:, :, 0]
     assert np.allclose(added, np.diag(np.diag(added)), rtol=0, atol=1e-14)
     assert np.allclose(np.diag(added), np.ravel(s2_star) + 0.04)
+
+
+def test_failed_factorization_raises_linalgerror():
+    """A training covariance that stays singular after every retry of the
+    noise inflation reports a ``LinAlgError`` in both noise
+    parametrizations, the low-noise one included."""
+    D = 2
+    rng = np.random.default_rng(1)
+    X = rng.uniform(-1, 1, size=(40, D))
+    y = np.sum(X, 1).reshape(-1, 1)
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.NegativeQuadratic(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    # [log ell (D), log sf, log sn, m0, mode location (D), log scale (D)]
+    hyp = np.zeros(3 * D + 3)
+    hyp[0:D] = np.log(1e5)
+    hyp[D] = 20.0
+    hyp[2 * D + 3 :] = np.log(3.0)
+
+    # min(sn2) < 1e-6: the low-noise parametrization.
+    hyp[D + 1] = np.log(1e-7)
+    with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
+        make_gp().update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert "Singular matrix" in execinfo.value.args[0]
+
+    # And the Cholesky parametrization, for contrast.
+    hyp[0:D] = np.log(1e6)
+    hyp[D] = 25.0
+    hyp[D + 1] = np.log(3e-3)
+    with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
+        make_gp().update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert "Singular matrix" in execinfo.value.args[0]
