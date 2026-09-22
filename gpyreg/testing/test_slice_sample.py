@@ -376,7 +376,12 @@ def test_list_bounds_detect_fixed_parameter():
 
 
 def test_normal():
-    slicer = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    slicer = SliceSampler(
+        norm.logpdf,
+        np.array([0.5]),
+        options=options,
+        rng=np.random.default_rng(0),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.abs(norm.mean() - np.mean(samples)) < threshold
@@ -389,7 +394,12 @@ def test_normal_step_out():
         "diagnostics": True,
         "step_out": True,
     }
-    slicer = SliceSampler(norm.logpdf, np.array([0.5]), options=new_options)
+    slicer = SliceSampler(
+        norm.logpdf,
+        np.array([0.5]),
+        options=new_options,
+        rng=np.random.default_rng(1),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.abs(norm.mean() - np.mean(samples)) < threshold
@@ -422,7 +432,12 @@ def test_normal_mixture():
     rv2 = norm(6, 2)
     pdf = lambda x: p * rv1.pdf(x) + (1 - p) * rv2.pdf(x)
     logpdf = lambda x: np.log(pdf(x))  # if pdf(x) > np.spacing(0) else -np.inf
-    slicer = SliceSampler(logpdf, np.array([0.5]), options=options)
+    slicer = SliceSampler(
+        logpdf,
+        np.array([0.5]),
+        options=options,
+        rng=np.random.default_rng(2),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.abs((1 - p) * 6 - np.mean(samples)) < threshold
@@ -432,7 +447,11 @@ def test_normal_mixture():
 
 def test_exponential():
     slicer = SliceSampler(
-        expon.logpdf, np.array([0.5]), LB=0.0, options=options
+        expon.logpdf,
+        np.array([0.5]),
+        LB=0.0,
+        options=options,
+        rng=np.random.default_rng(3),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -444,7 +463,12 @@ def test_exponential():
 
 def test_uniform():
     slicer = SliceSampler(
-        uniform.logpdf, np.array([0.5]), LB=0.0, UB=1.0, options=options
+        uniform.logpdf,
+        np.array([0.5]),
+        LB=0.0,
+        UB=1.0,
+        options=options,
+        rng=np.random.default_rng(4),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -456,7 +480,12 @@ def test_beta():
     a, b = 2.31, 0.627
     rv = beta(a, b)
     slicer = SliceSampler(
-        rv.logpdf, np.array([0.5]), LB=0.0, UB=1.0, options=options
+        rv.logpdf,
+        np.array([0.5]),
+        LB=0.0,
+        UB=1.0,
+        options=options,
+        rng=np.random.default_rng(5),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -471,7 +500,10 @@ def test_multivariate_normal():
     )
     rv = multivariate_normal(mean, cov)
     slicer = SliceSampler(
-        rv.logpdf, np.array([0.5, -0.5, 1.0]), options=options
+        rv.logpdf,
+        np.array([0.5, -0.5, 1.0]),
+        options=options,
+        rng=np.random.default_rng(6),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -483,7 +515,12 @@ def test_multivariate_t():
     x = [1.0, -0.5]
     loc = [[2.1, 0.3], [0.3, 1.5]]
     rv = multivariate_t(x, loc, df=3)
-    slicer = SliceSampler(rv.logpdf, np.array([0.5, 0.5]), options=options)
+    slicer = SliceSampler(
+        rv.logpdf,
+        np.array([0.5, 0.5]),
+        options=options,
+        rng=np.random.default_rng(7),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.all(np.abs(x - np.mean(samples, axis=0)) < threshold)
