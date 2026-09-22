@@ -638,7 +638,8 @@ def test_update_aligns_user_provided_noise():
 def test_split_update():
     N = 20
     D = 2
-    X = np.random.standard_normal(size=(N, D))
+    rng = np.random.default_rng(17)
+    X = rng.standard_normal((N, D))
     s2 = np.full((N, 1), 0.05)
 
     gp = gpr.GP(
@@ -652,13 +653,13 @@ def test_split_update():
     mean_N = gp.mean.hyperparameter_count(D)
     noise_N = gp.noise.hyperparameter_count()
 
-    N_s = np.random.randint(1, 3)
-    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    N_s = 2
+    hyp = rng.standard_normal((N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.2
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X)
+    y = gp.random_function(X, rng=rng)
 
     gp.update(X_new=X, y_new=y, s2_new=s2, compute_posterior=True)
 
@@ -1055,25 +1056,40 @@ def test_fitting_options():
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
+    hyp_N = (
+        gp.covariance.hyperparameter_count(D)
+        + gp.noise.hyperparameter_count()
+        + gp.mean.hyperparameter_count(D)
+    )
 
-    gp_train_1 = {"opts_N": 0}
-    gp_train_2 = {"n_samples": 0}
-    gp_train_3 = {"init_N": 0}
-    gp_train_4 = {"opts_N": 0, "n_samples": 0}
-    gp_train_5 = {"n_samples": 0, "init_N": 0}
-    gp_train_6 = {"opts_N": 0, "init_N": 0}
-    gp_train_7 = {"opts_N": 0, "n_samples": 0, "init_N": 0}
-    gp_train_8 = {"init_N": 1}
-
-    # Test that all these at least can be run in a row.
-    gp.fit(X=X, y=y, options=gp_train_1)
-    gp.fit(X=X, y=y, options=gp_train_2)
-    gp.fit(X=X, y=y, options=gp_train_3)
-    gp.fit(X=X, y=y, options=gp_train_4)
-    gp.fit(X=X, y=y, options=gp_train_5)
-    gp.fit(X=X, y=y, options=gp_train_6)
-    gp.fit(X=X, y=y, options=gp_train_7)
-    gp.fit(X=X, y=y, options=gp_train_8)
+    # Every combination of the three sizes that can be switched off, run
+    # in a row on one GP. `n_samples` decides how many hyperparameter
+    # vectors come back, `opts_N` whether an optimization result does, and
+    # `n_samples` again whether a sampling result does.
+    cases = [
+        ({"opts_N": 0}, 10, False, True),
+        ({"n_samples": 0}, 1, True, False),
+        ({"init_N": 0}, 10, True, True),
+        ({"opts_N": 0, "n_samples": 0}, 1, False, False),
+        ({"n_samples": 0, "init_N": 0}, 1, True, False),
+        ({"opts_N": 0, "init_N": 0}, 10, False, True),
+        ({"opts_N": 0, "n_samples": 0, "init_N": 0}, 1, False, False),
+        ({"init_N": 1}, 10, True, True),
+    ]
+    for options, rows, optimized, sampled in cases:
+        hyp, optimize_result, sampling_result = gp.fit(
+            X=X, y=y, options=options
+        )
+        assert hyp.shape == (rows, hyp_N), options
+        assert np.all(np.isfinite(hyp)), options
+        assert (optimize_result is not None) is optimized, options
+        assert (sampling_result is not None) is sampled, options
+        if sampled:
+            assert sampling_result["samples"].shape[1] == hyp_N, options
+        assert np.size(gp.posteriors) == rows, options
+        assert np.array_equal(
+            gp.get_hyperparameters(as_array=True), hyp
+        ), options
 
 
 def test_fitting():
