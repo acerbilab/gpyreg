@@ -32,6 +32,7 @@ def _equal_targets(N=12):
     [
         SquaredExponential(),
         Matern(3),
+        RationalQuadraticARD(),
         SquaredExponentialIsotropic(),
         MaternIsotropic(3),
         ConstantMean(),
@@ -59,23 +60,6 @@ def test_equal_targets_give_usable_bounds(component):
     assert np.all(info["PUB"] <= info["UB"])
     assert np.all(info["LB"] <= info["x0"])
     assert np.all(info["x0"] <= info["UB"])
-
-
-def test_equal_targets_give_a_usable_output_scale_for_rational_quadratic():
-    """The rational quadratic kernel carries its own copy of the recipe, so
-    its output scale, the block that comes from the targets, is checked
-    separately."""
-    X = _inputs()
-    y = _equal_targets(X.shape[0])
-    D = X.shape[1]
-
-    with pytest.warns(UserWarning, match="all equal"):
-        info = RationalQuadraticARD().get_bounds_info(X, y)
-
-    for key in ("LB", "UB", "PLB", "PUB", "x0"):
-        assert np.isfinite(info[key][D]), key
-    assert info["LB"][D] <= info["PLB"][D]
-    assert info["LB"][D] <= info["x0"][D] <= info["UB"][D]
 
 
 def test_fit_on_equal_targets_completes():

@@ -453,7 +453,7 @@ class RationalQuadraticARD(AbstractKernel):
         lower_bounds[-1] = -5.0
         upper_bounds[-1] = 5
         plausible_lower_bounds[-1] = -5.0
-        plausible_upper_bounds[D] = 5.0
+        plausible_upper_bounds[-1] = 5.0
         plausible_x0[-1] = 1.0
 
         # Plausible starting point

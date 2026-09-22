@@ -224,3 +224,21 @@ def _test_kernel_gradient_(
 
 
 test_simple_rational_quad_ard()
+
+
+def test_rational_quad_ard_plausible_upper_bounds():
+    """The plausible upper bound of the output scale is the range of the
+    targets and the shape's is 5, its own hard upper bound. The shape's
+    line wrote into the output scale's slot, which left the shape's
+    plausible upper bound at infinity and lost the output scale's."""
+    rq_ard = RationalQuadraticARD()
+    rng = np.random.default_rng(0)
+    D = 3
+    X = rng.uniform(-1.0, 1.0, (20, D))
+    y = rng.normal(size=(20, 1))
+
+    info = rq_ard.get_bounds_info(X, y)
+
+    assert np.all(np.isfinite(info["PUB"]))
+    assert info["PUB"][D] == np.log(np.max(y) - np.min(y))
+    assert info["PUB"][D + 1] == 5.0
