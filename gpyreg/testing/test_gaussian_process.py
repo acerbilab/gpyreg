@@ -2020,12 +2020,17 @@ def test_robust_cholesky_factors_matrices_cholesky_refuses():
         ), name
 
 
-def test_random_function_on_a_dense_grid():
+@pytest.mark.parametrize("grid", [(-2.5, 2.5), (-1.0, 1.0)])
+def test_random_function_on_a_dense_grid(grid):
     """A predictive covariance on a dense one-dimensional grid is
     numerically singular, so the draw goes through the eigenvalue
     fallback. Eigenvalues of rounding size, which such a matrix has of
     both signs, count as zeros, and the draws are draws: they differ
-    between generators and carry the predictive covariance."""
+    between generators and carry the predictive covariance. The
+    covariance is the prior covariance minus what the data explain, so
+    its rounding is that of the prior variance: on the grid inside the
+    data, where the largest eigenvalue is five orders of magnitude below
+    the prior variance, the negative eigenvalues are still rounding."""
     rng_data = np.random.default_rng(77)
     X = rng_data.uniform(-2, 2, size=(40, 1))
     y = np.sin(2 * X)
@@ -2042,7 +2047,7 @@ def test_random_function_on_a_dense_grid():
     )
     gp.update(X_new=X, y_new=y, hyp=hyp)
 
-    x_star = np.reshape(np.linspace(-2.5, 2.5, 100), (-1, 1))
+    x_star = np.reshape(np.linspace(*grid, 100), (-1, 1))
     __, cov = gp.predict_full(x_star)
     C = (cov[:, :, 0] + cov[:, :, 0].T) / 2
     with pytest.raises(scipy.linalg.LinAlgError):
@@ -2065,11 +2070,32 @@ def test_random_function_on_a_dense_grid():
 
 def test_robust_cholesky_refuses_an_indefinite_matrix():
     """A negative eigenvalue larger than the rounding tolerance means the
-    matrix is no covariance matrix, and no factor of it exists."""
+    matrix is no covariance matrix, and no factor of it exists. The
+    tolerance is measured against the scale of the terms that formed the
+    matrix where the caller gives it, and against the largest eigenvalue
+    otherwise."""
+    robust_cholesky = gpr.GP._GP__robust_cholesky
     sigma = np.array([[1.0, 2.0], [2.0, 1.0]])  # eigenvalues 3 and -1
-    with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
-        gpr.GP._GP__robust_cholesky(sigma)
-    assert "not positive semidefinite" in execinfo.value.args[0]
+    for scale in (None, 10.0):
+        with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
+            robust_cholesky(sigma, scale=scale)
+        assert "not positive semidefinite" in execinfo.value.args[0]
+
+    # A matrix formed by cancellation from terms of order one, whose
+    # largest eigenvalue is 1e-5: a negative eigenvalue of -1e-15 is
+    # rounding of those terms, one of -1e-11 is not.
+    Q, __ = np.linalg.qr(np.random.default_rng(5).standard_normal((3, 3)))
+    for smallest, refused in ((-1e-15, False), (-1e-11, True)):
+        sigma = Q @ np.diag([1e-5, 1e-6, smallest]) @ Q.T
+        sigma = (sigma + sigma.T) / 2
+        with pytest.raises(scipy.linalg.LinAlgError):
+            robust_cholesky(sigma)
+        if refused:
+            with pytest.raises(scipy.linalg.LinAlgError):
+                robust_cholesky(sigma, scale=1.44)
+        else:
+            T = robust_cholesky(sigma, scale=1.44)
+            assert np.allclose(T.T @ T, sigma, rtol=0, atol=1e-14)
 
 
 def _low_noise_rank_one_gp(D=2):

@@ -2758,6 +2758,13 @@ class GP:
         =======
         f_star : ndarray, shape (M, 1)
             The values of the drawn function at the requested points.
+
+        Raises
+        ------
+        LinAlgError
+            Raised when the covariance of the draw has a negative
+            eigenvalue beyond the rounding of the prior variance at
+            ``X_star``, so that it is no covariance matrix.
         """
         rng = resolve_rng(rng)
         N_star = X_star.shape[0]
@@ -2813,8 +2820,13 @@ class GP:
         # Enforce symmetry if lost due to numerical errors.
         C = (C + C.T) / 2
 
-        # Draw random function
-        T = self.__robust_cholesky(C)
+        # Draw random function. The predictive covariance is the prior
+        # covariance minus what the data explain, so its rounding is
+        # that of the prior variance at the test points, however small
+        # the difference. The observation noise is drawn apart, below.
+        T = self.__robust_cholesky(
+            C, scale=np.max(np.diag(K_star), initial=0.0)
+        )
         f_star = np.dot(T.T, rng.standard_normal((T.shape[0], 1))) + f_mu
 
         # Add observation noise.
@@ -2835,12 +2847,22 @@ class GP:
         return f_star
 
     @staticmethod
-    def __robust_cholesky(sigma):
+    def __robust_cholesky(sigma, scale=None):
         """Cholesky-like decomposition for a covariance matrix.
 
         Returns a factor ``T`` with ``T.T @ T == sigma`` up to rounding,
         from the eigendecomposition where the direct Cholesky
         decomposition fails.
+
+        Parameters
+        ==========
+        sigma : ndarray, shape (n, n)
+            The covariance matrix.
+        scale : float, optional
+            The magnitude of the terms that formed ``sigma``, which sets
+            the rounding tolerance where ``sigma`` is a difference of
+            larger terms. Defaults to the largest absolute eigenvalue of
+            ``sigma``, which also bounds the tolerance from below.
 
         Raises
         ------
@@ -2872,11 +2894,15 @@ class GP:
             # backward stable, so an eigenvalue of a matrix of spectral
             # norm max|D| carries an error of order n * eps * max|D|, and
             # the factor of ten leaves room for the constant that bound
-            # hides. A near-singular predictive covariance, the case that
-            # brings a draw here, has such eigenvalues of both signs.
-            rounding = (
-                10 * D.shape[0] * np.finfo(D.dtype).eps * np.max(np.abs(D))
-            )
+            # hides. A matrix formed as the difference of larger terms
+            # carries the rounding of those terms, of order n * eps *
+            # scale, however small the difference. A near-singular
+            # predictive covariance, the case that brings a draw here,
+            # has such eigenvalues of both signs.
+            magnitude = np.max(np.abs(D))
+            if scale is not None:
+                magnitude = max(magnitude, scale)
+            rounding = 10 * D.shape[0] * np.finfo(D.dtype).eps * magnitude
             negative = t & (D < 0)
             if np.any(D[negative] <= -rounding):
                 # Not a covariance matrix: it has no factor.
