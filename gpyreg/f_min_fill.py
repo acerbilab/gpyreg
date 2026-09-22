@@ -127,11 +127,13 @@ def f_min_fill(
                         # Mixture of uniforms
                         # (full bounds and plausible bounds)
 
-                        # Half of the draws of each coordinate without a
-                        # prior from inside the plausible box. The
-                        # coordinates that have a prior take the Student's
-                        # t branch below, so the fraction of whole design
-                        # points inside the plausible box is another one.
+                        # The fraction w of the draws of each coordinate
+                        # without a prior from inside its plausible
+                        # interval, so that half of the design points lie
+                        # inside the plausible box when no coordinate has
+                        # a prior and every bound is finite. Coordinates
+                        # with a prior take the branches of the priors
+                        # below.
                         w = 0.5 ** (1 / n_vars)
 
                         sX[:, i] = uuinv(
