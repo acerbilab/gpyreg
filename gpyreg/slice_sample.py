@@ -351,13 +351,24 @@ class SliceSampler:
             else:
                 burn = round(N / 3)
 
-        # Sanity checks
-        if not np.isscalar(thin) or thin <= 0 or thin != np.floor(thin):
+        # Sanity checks. Infinity equals its own floor, hence the test of
+        # finiteness.
+        if (
+            not np.isscalar(thin)
+            or not np.isfinite(thin)
+            or thin <= 0
+            or thin != np.floor(thin)
+        ):
             raise ValueError(
                 "The thinning factor option needs to be a positive integer."
             )
 
-        if not np.isscalar(burn) or burn < 0 or burn != np.floor(burn):
+        if (
+            not np.isscalar(burn)
+            or not np.isfinite(burn)
+            or burn < 0
+            or burn != np.floor(burn)
+        ):
             raise ValueError(
                 "The burn-in samples option needs to be a non-negative "
                 "integer."
