@@ -1780,7 +1780,8 @@ class GP:
             The gradient with respect to hyperparameters.
         """
         if isinstance(hyp, dict):
-            hyp = self.hyperparameters_from_dict(hyp)
+            # One dictionary is one row of the array form.
+            hyp = self.hyperparameters_from_dict(hyp)[0]
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(hyp, True, False)
             return -nlZ, -dnlZ
@@ -1812,7 +1813,8 @@ class GP:
             by adding numerical stability values to the matrix.
         """
         if isinstance(hyp, dict):
-            hyp = self.hyperparameters_from_dict(hyp)
+            # One dictionary is one row of the array form.
+            hyp = self.hyperparameters_from_dict(hyp)[0]
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(hyp, True, True)
             return -nlZ, -dnlZ

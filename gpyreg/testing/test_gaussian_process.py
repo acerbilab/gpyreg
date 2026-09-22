@@ -2457,3 +2457,18 @@ def test_fit_reads_the_documented_sampler_option(key):
             options=options,
         )
     assert "Unknown sampler!" in execinfo.value.args[0]
+
+
+def test_log_likelihood_and_posterior_take_a_dictionary():
+    """Both methods document a dictionary of hyperparameters, which
+    `hyperparameters_from_dict` returns as one row of an array."""
+    gp, hyp = _small_gp_with_priors(seed=4)
+    hyp = np.ravel(hyp)
+    as_dict = gp.hyperparameters_to_dict(hyp)[0]
+
+    for method in (gp.log_likelihood, gp.log_posterior):
+        assert np.array_equal(method(as_dict), method(hyp))
+        value, gradient = method(as_dict, compute_grad=True)
+        value_ref, gradient_ref = method(hyp, compute_grad=True)
+        assert np.array_equal(value, value_ref)
+        assert np.array_equal(gradient, gradient_ref)
