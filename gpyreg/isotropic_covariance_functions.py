@@ -1,7 +1,12 @@
 import numpy as np
 from scipy.spatial.distance import cdist, pdist, squareform
 
-from .covariance_functions import AbstractKernel, Matern, SquaredExponential
+from .covariance_functions import (
+    AbstractKernel,
+    Matern,
+    SquaredExponential,
+    _target_spread,
+)
 
 
 class AbstractIsotropicKernel(AbstractKernel):
@@ -235,7 +240,7 @@ def _isotropic_bounds_info_helper(cov_N, X, y):
     max_width = np.max(width)
     if np.size(y) <= 1:
         y = np.array([0, 1])
-    height = np.max(y) - np.min(y)
+    height, y_std = _target_spread(y)
 
     lower_bounds[0 : cov_N - 1] = np.log(min_width) + np.log(tol)
     upper_bounds[0 : cov_N - 1] = np.log(max_width * 10)
@@ -249,7 +254,7 @@ def _isotropic_bounds_info_helper(cov_N, X, y):
     upper_bounds[cov_N - 1] = np.log(height * 10)
     plausible_lower_bounds[cov_N - 1] = np.log(height) + 0.5 * np.log(tol)
     plausible_upper_bounds[cov_N - 1] = np.log(height)
-    plausible_x0[cov_N - 1] = np.log(np.std(y, ddof=1))
+    plausible_x0[cov_N - 1] = np.log(y_std)
 
     # Plausible starting point
     i_nan = np.isnan(plausible_x0)

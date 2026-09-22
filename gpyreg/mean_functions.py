@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from gpyreg.covariance_functions import _target_spread
+
 
 class ZeroMean:
     """Zero mean function."""
@@ -488,7 +490,7 @@ def _bounds_info_helper(mean_N, X, y, idx):
     w = np.max(X) - np.min(X)
     if np.size(y) <= 1:
         y = np.array([0, 1])
-    h = np.max(y) - np.min(y)
+    h, _ = _target_spread(y)
 
     if idx == 0:
         pass

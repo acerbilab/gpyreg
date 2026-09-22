@@ -1,9 +1,51 @@
 """Module for different covariance functions used by Gaussian Processes."""
 
+import warnings
 from abc import ABC, abstractmethod
 
 import numpy as np
 from scipy.spatial.distance import cdist, pdist, squareform
+
+
+def _target_spread(y: np.ndarray):
+    """Return the range and the standard deviation of the training targets.
+
+    The recommended bounds of every component take the scale of the
+    targets from these two numbers. Targets that are all equal have
+    neither: the range is zero, its logarithm is ``-inf``, and the bounds
+    built from it are unusable (the output scale of a kernel gets the pair
+    ``(-inf, -inf)``, which L-BFGS-B refuses). Such a training set is
+    given the scale of a unit range instead, with a warning, as both
+    gpyreg and gplite already do for a single target. The other statistics
+    of the targets, their location among them, are left alone.
+
+    Parameters
+    ----------
+    y : ndarray
+        The training targets.
+
+    Returns
+    -------
+    height : float
+        The range of the targets, or one where they are all equal.
+    y_std : float
+        Their standard deviation, or that of a unit range where they are
+        all equal.
+    """
+    height = np.max(y) - np.min(y)
+    if height > 0:
+        return height, np.std(y, ddof=1)
+
+    warnings.warn(
+        "The training targets are all equal, so they have no scale for "
+        "the recommended bounds to take: a range of one is assumed "
+        "instead."
+    )
+    unit_range = np.array([0.0, 1.0])
+    return (
+        np.max(unit_range) - np.min(unit_range),
+        np.std(unit_range, ddof=1),
+    )
 
 
 class AbstractKernel(ABC):
@@ -392,7 +434,7 @@ class RationalQuadraticARD(AbstractKernel):
         width = np.max(X, axis=0) - np.min(X, axis=0)
         if np.size(y) <= 1:
             y = np.array([0, 1])
-        height = np.max(y) - np.min(y)
+        height, y_std = _target_spread(y)
 
         lower_bounds[0:D] = np.log(width) + np.log(tol)
         upper_bounds[0:D] = np.log(width * 10)
@@ -404,7 +446,7 @@ class RationalQuadraticARD(AbstractKernel):
         upper_bounds[D] = np.log(height * 10)
         plausible_lower_bounds[D] = np.log(height) + 0.5 * np.log(tol)
         plausible_upper_bounds[D] = np.log(height)
-        plausible_x0[D] = np.log(np.std(y, ddof=1))
+        plausible_x0[D] = np.log(y_std)
 
         # Initialization of the covariance_log_shape hyperparameter (like in
         # BADS)
@@ -442,7 +484,7 @@ def _bounds_info_helper(cov_N, X, y):
     width = np.max(X, axis=0) - np.min(X, axis=0)
     if np.size(y) <= 1:
         y = np.array([0, 1])
-    height = np.max(y) - np.min(y)
+    height, y_std = _target_spread(y)
 
     lower_bounds[0:D] = np.log(width) + np.log(tol)
     upper_bounds[0:D] = np.log(width * 10)
@@ -454,7 +496,7 @@ def _bounds_info_helper(cov_N, X, y):
     upper_bounds[D] = np.log(height * 10)
     plausible_lower_bounds[D] = np.log(height) + 0.5 * np.log(tol)
     plausible_upper_bounds[D] = np.log(height)
-    plausible_x0[D] = np.log(np.std(y, ddof=1))
+    plausible_x0[D] = np.log(y_std)
 
     # Plausible starting point
     i_nan = np.isnan(plausible_x0)

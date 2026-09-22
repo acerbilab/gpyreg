@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from gpyreg.covariance_functions import _target_spread
+
 
 class GaussianNoise:
     """
@@ -121,7 +123,7 @@ class GaussianNoise:
 
         if np.size(y) <= 1:
             y = np.array([0, 1])
-        height = np.max(y) - np.min(y)
+        height, y_std = _target_spread(y)
 
         i = 0
         # Base constant noise
@@ -130,7 +132,7 @@ class GaussianNoise:
             lower_bounds[i] = np.log(tol)
             upper_bounds[i] = np.log(height)
             plausible_lower_bounds[i] = 0.5 * np.log(tol)
-            plausible_upper_bounds[i] = np.log(np.std(y, ddof=1))
+            plausible_upper_bounds[i] = np.log(y_std)
             plausible_x0[i] = np.log(1e-3)
             i += 1
 
