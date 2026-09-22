@@ -316,9 +316,8 @@ class SliceSampler:
                 points.
             **R** : array_like
                 Estimate of the potential scale reduction factor for each
-                sampled parameter. It is not finite for a parameter whose
-                chain is constant within each half of the sampled
-                sequence, which includes a parameter fixed by
+                sampled parameter. It is NaN for a parameter whose chain
+                did not move, which includes a parameter fixed by
                 ``LB == UB``, and NaN everywhere when there were too few
                 recorded samples to run the diagnostics.
             **eff_N** : array_like
@@ -678,15 +677,22 @@ class SliceSampler:
         R = self.__gelman_rubin(split_samples)
         eff_N = self.__effective_n(split_samples)
 
+        # A parameter whose recorded chain did not move has no variance to
+        # compare, so both statistics are rounding noise of its constant
+        # value: whether they come out non-finite depends on whether the
+        # mean of that value is exact. Recognize such a chain by its range
+        # and report both statistics as undefined.
+        frozen = np.ptp(samples, axis=0) == 0
+        R[frozen] = np.nan
+        eff_N[frozen] = np.nan
+
         # A parameter with LB == UB is fixed and never moves, so its
         # diagnostics are undefined by construction and say nothing about
-        # convergence. A parameter that is free to move but whose
-        # diagnostics are not finite has a chain that stayed constant
-        # within each half of the sequence, which is a failure:
-        # comparisons against NaN are all False, so without the explicit
-        # check below such a chain would pass every test.
+        # convergence. A parameter that is free to move and did not move is
+        # a failure: comparisons against NaN are all False, so without the
+        # explicit check below such a chain would pass every test.
         free = self.LB != self.UB
-        undefined = free & ~(np.isfinite(R) & np.isfinite(eff_N))
+        undefined = free & frozen
         checked = free & ~undefined
 
         diag_msg = None
@@ -886,8 +892,14 @@ class SliceSampler:
         -----
         The integrated autocorrelation time is estimated with Geyer's
         initial positive sequence: the autocorrelation estimates are summed
-        in consecutive pairs, and the first pair whose sum is not positive
-        ends the sum. The estimate is then floored at
+        in consecutive pairs starting from lag 0, so that the first pair is
+        ``(rho_0, rho_1)`` with ``rho_0 = 1``, and the first pair whose sum
+        is not positive ends the sum. BDA3 and Stan pair the estimates the
+        same way but take that first pair unconditionally, testing from
+        ``(rho_2, rho_3)`` on; the two give the same estimate, because a
+        first pair that is not positive means ``rho_1 <= -1`` and leaves
+        both integrated times non-positive, hence both replaced by the
+        floor below. The estimate is then floored at
         ``1 / log10(m * n)``, as in Stan and ArviZ, so that the effective
         sample size is positive and at most ``m * n * log10(m * n)``. An
         effective sample size larger than the number of draws is a valid

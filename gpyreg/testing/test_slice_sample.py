@@ -207,11 +207,18 @@ def test_short_chain_diagnostics_do_not_claim_success():
     assert np.all(np.isfinite(eff_N))
 
 
-def test_constant_trace_in_a_free_parameter_fails_the_diagnostics(caplog):
+@pytest.mark.parametrize("constant", [0.0, 1.0, 0.3, 1e-3, -7.0, np.log(10)])
+def test_constant_trace_in_a_free_parameter_fails_the_diagnostics(
+    caplog, constant
+):
     """A parameter that is free to move but whose chain stayed put has
-    undefined diagnostics, which must not pass as convergence."""
+    undefined diagnostics, which must not pass as convergence.
+
+    Whether the estimates come out non-finite depends on the rounding of
+    the constant's own mean, so the chain is recognized by its range.
+    """
     sampler = _diagnostics_sampler()
-    samples = np.zeros((20, 1))
+    samples = np.full((20, 1), constant)
 
     with caplog.at_level(logging.INFO, logger="SliceSampler"):
         exit_flag, R, eff_N = sampler._SliceSampler__diagnose(samples)
@@ -222,21 +229,22 @@ def test_constant_trace_in_a_free_parameter_fails_the_diagnostics(caplog):
     assert "did not move" in caplog.text
 
 
-def test_fixed_parameter_is_left_out_of_the_diagnostics():
+@pytest.mark.parametrize("constant", [0.0, 1.0, 0.3])
+def test_fixed_parameter_is_left_out_of_the_diagnostics(constant):
     """A parameter fixed by LB == UB has no diagnostics to report, and the
     checks look only at the parameter that is actually sampled."""
     rv = multivariate_normal(np.zeros(2), np.eye(2))
     sampler = SliceSampler(
         rv.logpdf,
-        np.array([0.0, 1.0]),
-        LB=np.array([-np.inf, 1.0]),
-        UB=np.array([np.inf, 1.0]),
+        np.array([0.0, constant]),
+        LB=np.array([-np.inf, constant]),
+        UB=np.array([np.inf, constant]),
         options=options,
         rng=np.random.default_rng(2),
     )
     res = sampler.sample(200)
 
-    assert np.all(res["samples"][:, 1] == 1.0)
+    assert np.all(res["samples"][:, 1] == constant)
     assert np.isnan(res["R"][1])
     assert np.isnan(res["eff_N"][1])
     assert np.isfinite(res["R"][0])
@@ -285,7 +293,9 @@ def _geyer_effective_n_reference(split):
     Estimates the autocorrelations from the split-chain variance and the
     variogram, sums them in consecutive pairs while the pair sum is
     positive, and floors the integrated autocorrelation time at
-    ``1 / log10(m * n)``.
+    ``1 / log10(m * n)``. The pairs start at lag 0, the convention of the
+    estimator under test, so this is a second reading of the estimator's
+    definition and not an external check of the convention itself.
     """
     m, n = split.shape
     chain_means = split.mean(axis=1)
