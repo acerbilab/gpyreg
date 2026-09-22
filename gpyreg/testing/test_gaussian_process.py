@@ -2406,3 +2406,28 @@ def test_fit_leaves_the_prior_degrees_of_freedom_alone():
         assert np.array_equal(gp.hyper_priors["df"], df_before, equal_nan=True)
         results.append(result.fun)
     assert results[0] != results[1]
+
+
+@pytest.mark.parametrize("df", [5.0, 400.0])
+def test_smooth_box_student_t_prior_with_many_degrees_of_freedom(df):
+    """The normalizer of the smooth-box Student's t is a ratio of gamma
+    functions, both of which overflow from a few hundred degrees of
+    freedom; the log prior stays finite and keeps its value."""
+    params = (-1.0, 1.0, 0.7, df)
+    priors = _no_priors()
+    priors["mean_const"] = ("smoothbox_student_t", params)
+
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    hyp = np.array([0.0, 0.0, np.log(0.1), 1.4])  # above the box
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    gp.set_priors(priors)
+
+    log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+    assert np.isfinite(log_prior)
+    assert np.isclose(
+        log_prior,
+        _reference_log_prior("smoothbox_student_t", params, hyp[3]),
+        rtol=1e-12,
+    )

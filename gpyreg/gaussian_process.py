@@ -1353,7 +1353,11 @@ class GP:
                     widths_default = np.zeros(shape=PLB.shape)
             else:
                 N = hyp0.shape[0]
-                nll = np.full((N,), -np.inf)
+                # The sentinel of an unwritten entry is +inf, as
+                # `gplite_train.m:250` has it: the entries are sorted by
+                # ascending objective below, so an entry that no
+                # evaluation wrote must come last.
+                nll = np.full((N,), np.inf)
                 for i in range(0, N):
                     nll[i] = objective_f_1(hyp0[i, :])
                 order = np.argsort(nll)
@@ -1573,13 +1577,15 @@ class GP:
                 sigma[sb_idx] * np.sqrt(2 * np.pi)
             )
         if cache["any_sb_t"]:
-            cache["C_sb_t"] = 1.0 + (
-                b[sb_t_idx] - a[sb_t_idx]
-            ) * sp.special.gamma(0.5 * (df[sb_t_idx] + 1)) / (
-                sp.special.gamma(0.5 * df[sb_t_idx])
-                * sigma[sb_t_idx]
-                * np.sqrt(df[sb_t_idx] * np.pi)
-            )
+            # The ratio of gamma functions through their logarithms: both
+            # overflow from a few hundred degrees of freedom, where the
+            # ratio itself is of order one.
+            log_ratio = sp.special.gammaln(
+                0.5 * (df[sb_t_idx] + 1)
+            ) - sp.special.gammaln(0.5 * df[sb_t_idx])
+            cache["C_sb_t"] = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * np.exp(
+                log_ratio
+            ) / (sigma[sb_t_idx] * np.sqrt(df[sb_t_idx] * np.pi))
         self._prior_cache = cache
         return cache
 
