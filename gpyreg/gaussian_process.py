@@ -1332,8 +1332,12 @@ class GP:
                     init_method,
                     rng=rng,
                 )
-                # Make sure we have at least one hyperparameter to use later.
-                hyp = X0[0 : np.maximum(opts_N, 1), :]
+                # Make sure we have at least one hyperparameter to use
+                # later. A copy: the low-noise starting point below is
+                # written into these rows, and the sampler widths are the
+                # standard deviation of the design as it was returned
+                # (`gplite_train.m:206-207`).
+                hyp = X0[0 : np.maximum(opts_N, 1), :].copy()
 
                 # Extract a good low-noise starting point for the 2nd optimization.
                 if noise_N > 0 and 1 < opts_N < init_N:

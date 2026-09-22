@@ -2472,3 +2472,47 @@ def test_log_likelihood_and_posterior_take_a_dictionary():
         value_ref, gradient_ref = method(hyp, compute_grad=True)
         assert np.array_equal(value, value_ref)
         assert np.array_equal(gradient, gradient_ref)
+
+
+def test_fit_does_not_write_into_the_space_filling_design(monkeypatch):
+    """The low-noise starting point is written into the array of starting
+    points, which was a view of the design, so the sampler widths are the
+    standard deviation of the design as `f_min_fill` returned it."""
+    from gpyreg import gaussian_process as gp_module
+
+    records = {}
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        records["design"] = X0
+        records["as_returned"] = X0.copy()
+        return X0, y0
+
+    class RecordingSliceSampler(gp_module.SliceSampler):
+        def __init__(self, f, x0, widths, *args, **kwargs):
+            records["widths"] = np.array(widths, copy=True)
+            super().__init__(f, x0, widths, *args, **kwargs)
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+    monkeypatch.setattr(gp_module, "SliceSampler", RecordingSliceSampler)
+
+    X = np.reshape(np.linspace(-3, 3, 20), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    gp.fit(
+        X=X,
+        y=y,
+        options={
+            "opts_N": 3,
+            "init_N": 64,
+            "n_samples": 2,
+            "thin": 1,
+            "burn": 2,
+        },
+        rng=np.random.default_rng(0),
+    )
+    assert np.array_equal(records["design"], records["as_returned"])
+    assert np.allclose(
+        records["widths"], np.std(records["as_returned"], axis=0, ddof=1)
+    )
