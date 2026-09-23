@@ -99,7 +99,13 @@ to change.
   not a whole number greater than zero, where a whole float, a fraction or
   a bool raised ``TypeError`` and zero returned an empty chain; it refuses
   a bool as ``thin`` or ``burn`` as well, which ran as the integer it
-  stands for.
+  stands for. The counts of ``fit`` and of ``sample``, ``thin`` and
+  ``burn`` included, take a 0-d array that holds a whole number as that
+  number, and refuse one that holds anything else as they refuse what it
+  holds. An array holding an integer ran as that integer, except as
+  ``thin`` or ``burn`` of ``sample``, and so as ``burn`` of ``fit``, which
+  ``sample`` refused; one holding a whole float raised ``TypeError``, or
+  that refusal.
   **Upgrading:** a script that passes a negative ``opts_N`` or ``init_N``
   passes ``0``; one that passes a bool as a count passes the integer; and
   one that asks ``sample`` for zero samples does not call it.

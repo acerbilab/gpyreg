@@ -1354,8 +1354,8 @@ class GP:
         options : dict, optional
             A dictionary of options for training. The counts among them,
             ``opts_N``, ``init_N``, ``n_samples`` and ``thin``, are whole
-            numbers of an integer or a float type (2.0 is taken as 2). The
-            possible options are:
+            numbers of an integer or a float type (2.0 is taken as 2), or
+            0-d arrays that hold one. The possible options are:
 
                 **opts_N** : int, defaults to 3
                     Number of hyperparameter optimization runs.
@@ -1373,8 +1373,7 @@ class GP:
                     Number of hyperparameters to sample.
                 **thin** : int, defaults to 5
                     Thinning parameter for slice sampling: one sample in
-                    ``thin`` is kept. A whole number greater than zero, of
-                    an integer or a float type (2.0 is taken as 2).
+                    ``thin`` is kept. A whole number greater than zero.
                 **burn** : int, defaults to ``thin * n_samples``
                     Burn parameter for slice sampling.
                 **lower_bounds** : str or ndarray, defaults to "current"

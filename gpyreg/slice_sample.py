@@ -16,23 +16,32 @@ from gpyreg.rng import resolve_rng
 _MIN_SPLIT_SAMPLES = 4
 
 
+def _scalar(value):
+    """Return the scalar that a 0-d array holds, and any other value as it
+    is."""
+    if isinstance(value, np.ndarray) and value.ndim == 0:
+        return value[()]
+    return value
+
+
 def _whole_number(value, what, minimum):
     """Return ``value`` as an ``int`` where it is a whole number of at least
-    ``minimum``, of an integer or a float type (2.0 is taken as 2), and
-    refuse any other value, a bool included, with a ``ValueError`` whose
-    message starts with ``what``."""
+    ``minimum``, of an integer or a float type (2.0 is taken as 2), or a
+    0-d array that holds one, and refuse any other value, a bool included,
+    with a ``ValueError`` whose message starts with ``what``."""
+    number = _scalar(value)
     if (
-        isinstance(value, (bool, np.bool_))
-        or not isinstance(value, numbers.Real)
-        or not np.isfinite(value)
-        or value != np.floor(value)
-        or value < minimum
+        isinstance(number, (bool, np.bool_))
+        or not isinstance(number, numbers.Real)
+        or not np.isfinite(number)
+        or number != np.floor(number)
+        or number < minimum
     ):
         raise ValueError(
             f"{what} needs to be a whole number of at least {minimum}, of an "
             f"integer or a float type, not {value!r}."
         )
-    return int(value)
+    return int(number)
 
 
 class SliceSampler:
@@ -279,13 +288,16 @@ class SliceSampler:
         ----------
         N : int
             The number of samples to return, a whole number greater than
-            zero of an integer or a float type (2.0 is taken as 2).
+            zero of an integer or a float type (2.0 is taken as 2), or a
+            0-d array that holds one.
         thin : int, optional
             The thinning parameter will omit ``thin-1`` out of ``thin`` values
-            in the generated sequence (after burn-in).
+            in the generated sequence (after burn-in). A whole number
+            greater than zero, taken as ``N`` is.
         burn : int, optional
             The burn parameter omits the first ``burn`` points before starting
-            recording points for the generated sequence.
+            recording points for the generated sequence, a whole number of
+            at least zero, taken as ``N`` is.
             In case this is the first time sampling, the default value of burn
             is ``round(N/3)`` (that is, one third of the number of recorded
             samples), while otherwise it is 0.
@@ -379,8 +391,11 @@ class SliceSampler:
             else:
                 burn = round(N / 3)
 
-        # Sanity checks. Infinity equals its own floor, hence the test of
+        # Sanity checks. A 0-d array is read as the scalar it holds, as it
+        # is for N. Infinity equals its own floor, hence the test of
         # finiteness; a bool is no count, as it is none for N.
+        thin = _scalar(thin)
+        burn = _scalar(burn)
         if (
             isinstance(thin, (bool, np.bool_))
             or not np.isscalar(thin)

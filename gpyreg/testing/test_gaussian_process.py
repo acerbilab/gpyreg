@@ -1114,11 +1114,15 @@ def _fit_with_thin(gp, thin, n_samples=2):
     return hyp
 
 
-@pytest.mark.parametrize("thin", [2.0, np.int64(2), np.float64(2.0)])
+@pytest.mark.parametrize(
+    "thin",
+    [2.0, np.int64(2), np.float64(2.0), np.array(2), np.array(2.0)],
+)
 def test_fit_takes_a_whole_thin_of_any_type(thin):
     """The thinning factor is a count, which ``fit`` takes as a whole number
-    of an integer or a float type, as ``SliceSampler.sample`` takes it. A
-    whole float raised ``TypeError`` from the fit's own use of it."""
+    of an integer or a float type, or a 0-d array that holds one, as
+    ``SliceSampler.sample`` takes it. A whole float raised ``TypeError``
+    from the fit's own use of it, and so did a 0-d array holding one."""
     hyp = _fit_with_thin(_gp_1d(), thin)
     hyp_int = _fit_with_thin(_gp_1d(), 2)
     assert hyp.shape[0] == 2
@@ -1127,7 +1131,9 @@ def test_fit_takes_a_whole_thin_of_any_type(thin):
 
 @pytest.mark.parametrize("n_samples", [0, 2])
 @pytest.mark.parametrize(
-    "thin", [2.5, 0, 0.0, -1, -2.0, True, np.inf, np.nan, "2"]
+    "thin",
+    [2.5, 0, 0.0, -1, -2.0, True, np.inf, np.nan, "2"]
+    + [np.array(2.5), np.array(0), np.array(True), np.array(np.nan)],
 )
 def test_fit_refuses_a_thin_that_is_not_a_positive_whole_number(
     thin, n_samples
@@ -1165,21 +1171,31 @@ def _fit_with_counts(gp, **counts):
         ("init_N", np.float64(8.0)),
         ("init_N", 0.0),
         ("init_N", np.int64(16)),
+        ("n_samples", np.array(2)),
+        ("n_samples", np.array(3.0)),
+        ("opts_N", np.array(2)),
+        ("init_N", np.array(16)),
+        ("init_N", np.array(8.0)),
     ],
 )
 def test_fit_takes_whole_counts_of_any_type(name, whole):
     """The options ``n_samples``, ``opts_N`` and ``init_N`` are counts,
-    which ``fit`` takes as whole numbers of an integer or a float type, as
-    it takes ``thin``; the fit is that of the integer. A whole float raised
-    ``TypeError`` from the fit's own use of it (``0.0`` passed for
-    ``n_samples`` and ``init_N``, which the fit compares with zero)."""
+    which ``fit`` takes as whole numbers of an integer or a float type, or
+    0-d arrays that hold one, as it takes ``thin``; the fit is that of the
+    integer. A whole float raised ``TypeError`` from the fit's own use of
+    it (``0.0`` passed for ``n_samples`` and ``init_N``, which the fit
+    compares with zero), and so did a 0-d array holding one."""
     hyp = _fit_with_counts(_gp_1d(), **{name: whole})
     hyp_int = _fit_with_counts(_gp_1d(), **{name: int(whole)})
     assert np.array_equal(hyp, hyp_int)
 
 
 @pytest.mark.parametrize("name", ["n_samples", "opts_N", "init_N"])
-@pytest.mark.parametrize("value", [2.5, -1, -1.0, True, np.inf, np.nan, "2"])
+@pytest.mark.parametrize(
+    "value",
+    [2.5, -1, -1.0, True, np.inf, np.nan, "2"]
+    + [np.array(2.5), np.array(-1), np.array(True), np.array(np.inf)],
+)
 def test_fit_refuses_counts_that_are_not_whole_numbers(name, value):
     """A count that is not a whole number of at least zero is refused
     before the fit changes anything. A fraction raised ``TypeError`` or
