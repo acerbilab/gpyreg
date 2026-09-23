@@ -6,7 +6,13 @@ import pytest
 import scipy.stats
 from scipy.integrate import quad
 
-from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, smoothbox_sf, uuinv
+from gpyreg.f_min_fill import (
+    smoothbox_cdf,
+    smoothbox_isf,
+    smoothbox_ppf,
+    smoothbox_sf,
+    uuinv,
+)
 
 
 def pdf(x, sigma, a, b):
@@ -84,6 +90,28 @@ def test_sf():
         assert np.isclose(
             sf, smoothbox_cdf(a + b - x, sigma, a, b), rtol=1e-12
         )
+
+
+def test_isf():
+    """The inverse survival function inverts the survival function below,
+    on and above the box, and far above it, where one minus the
+    probability of the upper tail rounds to one."""
+    sigma = 3
+    a = -2
+    b = 3
+
+    for x in np.linspace(-15, 15, 301):
+        assert np.isclose(
+            smoothbox_isf(smoothbox_sf(x, sigma, a, b), sigma, a, b),
+            x,
+            rtol=1e-10,
+            atol=1e-10,
+        )
+
+    for x in (b + 20 * sigma, b + 30 * sigma):
+        p = smoothbox_sf(x, sigma, a, b)
+        assert 1.0 - p == 1.0
+        assert np.isclose(smoothbox_isf(p, sigma, a, b), x, rtol=1e-12)
 
 
 def test_ppf_limits():

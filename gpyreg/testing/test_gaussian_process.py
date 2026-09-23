@@ -2922,6 +2922,98 @@ def test_prior_mass_from_the_centre_down(family):
         assert gp.normalization_constants[3] == cdf(upper) - cdf(lower)
 
 
+@pytest.mark.parametrize(
+    "mu, df, a, b, bounds",
+    [
+        (0.0, 0.0, np.nan, np.nan, (9.0, 10.0)),
+        (0.0, 3.0, np.nan, np.nan, (1e6, 2e6)),
+        (np.nan, 0.0, -0.5, 0.5, (9.5, 10.5)),
+        (np.nan, 3.0, -0.5, 0.5, (1e6, 2e6)),
+    ],
+)
+def test_space_filling_design_in_the_upper_tail(mu, df, a, b, bounds):
+    """The space-filling design maps its unit-cube draws through the
+    prior truncated to the bounds. With both bounds far in the upper tail
+    of the prior, the design is the mirror image of the design between the
+    mirrored bounds in the lower tail, since each prior here (a Gaussian, a
+    Student's t and their smooth boxes) is symmetric about zero and the
+    draws of one coordinate of the unscrambled Sobol sequence are
+    symmetric about one half. The cumulative distribution function rounds
+    to one at both bounds of the upper tail, and a design mapped through it
+    lies at infinity."""
+    from gpyreg.f_min_fill import f_min_fill
+
+    hprior = {
+        "mu": np.array([mu]),
+        "sigma": np.array([1.0]),
+        "df": np.array([df]),
+        "a": np.array([a]),
+        "b": np.array([b]),
+    }
+    designs = []
+    for lower, upper in (bounds, (-bounds[1], -bounds[0])):
+        LB, UB = np.array([lower]), np.array([upper])
+        X, __ = f_min_fill(
+            lambda x: 0.0,
+            np.array([[0.5 * (lower + upper)]]),
+            LB,
+            UB,
+            LB,
+            UB,
+            hprior,
+            64,
+            rng=np.random.default_rng(0),
+        )
+        designs.append(np.sort(X[:, 0]))
+
+    assert np.all((designs[0] >= bounds[0]) & (designs[0] <= bounds[1]))
+    assert np.allclose(designs[0], -designs[1][::-1], rtol=1e-10, atol=0.0)
+
+
+def test_fit_with_samples_in_the_upper_tail_of_a_prior(monkeypatch):
+    """A fit with hyperparameter samples, where both bounds of the constant
+    mean lie far in the upper tail of its Gaussian prior, completes as the
+    mirrored fit in the lower tail does: its space-filling design is the
+    mirror image of the other's, and its samples lie inside the bounds. A
+    design at infinity gave the slice sampler a width of NaN."""
+    from gpyreg import gaussian_process as gp_module
+
+    designs = []
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        designs.append(np.sort(X0[:, 3]))
+        return X0, y0
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
+    X = np.reshape(np.linspace(-1, 1, 12), (-1, 1))
+    priors = _no_priors()
+    priors["mean_const"] = ("gaussian", (0.0, 1.0))
+    for sign in (1.0, -1.0):
+        # The targets follow the constant mean into the tail, and change
+        # sign with it, so that the two posteriors mirror each other.
+        y = sign * (9.5 + np.sin(2 * X))
+        gp = _gp_1d()
+        gp.X, gp.y, gp.s2 = gp._convert_shapes(X, y, None)
+        gp_bounds = gp.get_recommended_bounds()
+        gp_bounds["mean_const"] = (
+            np.array([min(9.0 * sign, 10.0 * sign)]),
+            np.array([max(9.0 * sign, 10.0 * sign)]),
+        )
+        gp.set_bounds(gp_bounds)
+        gp.set_priors(priors)
+        hyp, __, __ = gp.fit(
+            options={"n_samples": 3, "init_N": 64, "opts_N": 2},
+            rng=np.random.default_rng(0),
+        )
+        assert np.all(np.isfinite(hyp))
+        assert np.all((9.0 <= sign * hyp[:, 3]) & (sign * hyp[:, 3] <= 10.0))
+
+    assert np.allclose(designs[0], -designs[1][::-1], rtol=1e-10, atol=0.0)
+
+
 @pytest.mark.parametrize("key", ["sampler_name", "sampler"])
 def test_fit_reads_the_documented_sampler_option(key):
     """`fit` documents the sampler under `sampler_name` and read it under

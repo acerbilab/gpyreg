@@ -25,6 +25,17 @@ to change.
   is the same as before, to the last bit. ``gpyreg.f_min_fill`` has the
   survival functions of the two smooth-box families, ``smoothbox_sf`` and
   ``smoothbox_student_t_sf``.
+* The space-filling design of :meth:`gpyreg.GP.fit` draws the starting
+  values of a hyperparameter whose bounds both lie above the centre of its
+  prior through the survival function of the prior and its inverse, where
+  it drew them through the cumulative distribution function and the
+  percent point function. With both bounds far in the upper tail, every
+  point of that design lay at infinity, and a fit with hyperparameter
+  samples raised ``ValueError`` because the widths of the slice sampler
+  were NaN. Where the lower bound is not above the centre, the design is
+  the same as before, to the last bit. ``gpyreg.f_min_fill`` has the
+  inverse survival functions of the two smooth-box families,
+  ``smoothbox_isf`` and ``smoothbox_student_t_isf``.
 * :meth:`gpyreg.GP.set_priors` refuses, with a message that says what is
   wrong, a coordinate whose ``sigma`` is finite beside a location that is
   not: an infinite or NaN ``mu`` of a Gaussian or Student's t prior, or an
