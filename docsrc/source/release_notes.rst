@@ -44,6 +44,12 @@ to change.
   block without a prior under that family's name, not ``None``; a script
   that writes priors into ``hyper_priors`` directly sets them through
   ``set_priors`` instead.
+* :meth:`gpyreg.GP.set_bounds` refuses with ``ValueError`` a lower bound
+  above the upper bound of the same hyperparameter, naming it, as
+  :meth:`gpyreg.GP.get_recommended_bounds` and :meth:`gpyreg.GP.fit`
+  already did, and leaves the bounds as they were. It stored the inverted
+  pair, which the next ``fit`` refused. **Upgrading:** a script that set
+  an inverted pair and never fitted gives the pair in order.
 
 1.3.1 (2026-09-23)
 ------------------

@@ -2998,6 +2998,38 @@ def test_get_recommended_bounds_input_checks():
     assert "upper bound" in execinfo.value.args[0]
 
 
+def test_set_bounds_refuses_an_inverted_pair():
+    """``set_bounds`` refuses a lower bound above its upper bound, naming
+    the hyperparameter, as ``get_recommended_bounds`` and ``fit`` refuse
+    it, and leaves the bounds as they were; equal bounds, which fix a
+    hyperparameter, are taken. It stored the inverted pair, which the
+    next ``fit`` refused."""
+    gp = _gp_2d()
+    bounds = {name: None for name in _no_priors()}
+    bounds["mean_const"] = (-1.0, 1.0)
+    gp.set_bounds(bounds)
+    lower_bounds = gp.lower_bounds.copy()
+    upper_bounds = gp.upper_bounds.copy()
+
+    inverted = dict(bounds)
+    inverted["covariance_log_lengthscale"] = ([0.0, 2.0], [1.0, 1.0])
+    with pytest.raises(ValueError) as execinfo:
+        gp.set_bounds(inverted)
+
+    message = execinfo.value.args[0]
+    assert "Lower bound above upper bound" in message
+    assert "covariance_log_lengthscale" in message
+    assert "mean_const" not in message
+    assert np.array_equal(gp.lower_bounds, lower_bounds, equal_nan=True)
+    assert np.array_equal(gp.upper_bounds, upper_bounds, equal_nan=True)
+
+    fixed = dict(bounds)
+    fixed["covariance_log_lengthscale"] = (1.0, 1.0)
+    gp.set_bounds(fixed)
+    assert np.all(gp.lower_bounds[:2] == 1.0)
+    assert np.all(gp.upper_bounds[:2] == 1.0)
+
+
 def test_update_without_hyperparameters_raises():
     """A posterior cannot be computed from hyperparameters that were never
     set: the message names them instead of leaving NaN factors behind."""

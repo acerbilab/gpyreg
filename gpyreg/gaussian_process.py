@@ -333,6 +333,9 @@ class GP:
         ValueError
             Raised when `bounds` is given, but a specified hyperparameter
             is unknown.
+        ValueError
+            Raised when a lower bound is above the upper bound of the same
+            hyperparameter. Equal bounds fix a hyperparameter.
         """
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -369,6 +372,16 @@ class GP:
                 upper_bounds[i] = ub
 
             lower += info[1]
+
+        # An inverted pair is a mistake, as `get_recommended_bounds` and
+        # `fit` hold it to be.
+        inverted = lower_bounds > upper_bounds
+        if np.any(inverted):
+            raise ValueError(
+                "Lower bound above upper bound for the hyperparameter(s) "
+                + ", ".join(self.__hyperparameter_names(inverted))
+                + "."
+            )
 
         # Only set the bounds here due to exceptions
         # so that we don't only update say half of the bounds.
