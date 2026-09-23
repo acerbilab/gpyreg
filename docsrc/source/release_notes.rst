@@ -1,6 +1,17 @@
 Release notes
 =============
 
+1.3.1 (unreleased)
+------------------
+
+* The gradient of the log prior is zero, not NaN, for a hyperparameter
+  whose lower and upper bounds are equal and that has no prior, or a
+  smooth-box prior whose box holds its value. The NaN reached
+  :meth:`gpyreg.GP.log_posterior` with ``compute_grad=True``, and, where
+  another hyperparameter has a prior, the optimizer of
+  :meth:`gpyreg.GP.fit`, which stopped within an iteration, short of the
+  optimum.
+
 1.3.0 (2026-09-23)
 ------------------
 

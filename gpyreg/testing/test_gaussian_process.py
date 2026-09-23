@@ -888,18 +888,23 @@ def test_quadrature_with_noise_fitting():
 @pytest.mark.filterwarnings(
     """ignore:Matplotlib is currently using agg:UserWarning"""
 )
-def test_fitting_with_fixed_bounds():
+@pytest.mark.parametrize(
+    "mean_prior",
+    [
+        None,
+        ("smoothbox", (0.0, 1.0, 0.5)),
+        ("smoothbox_student_t", (0.0, 1.0, 0.5, 3.0)),
+    ],
+)
+def test_fitting_with_fixed_bounds(mean_prior):
+    """A hyperparameter whose two bounds are equal keeps its value. Its
+    entry of the gradient of the log prior is that of its own prior, which
+    is zero without a prior and inside a smooth box, so the optimizer takes
+    the other hyperparameters to a stationary point."""
     N = 20
     D = 1
     X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
     y = 1 + np.sin(X)
-
-    gp = gpr.GP(
-        D=D,
-        covariance=gpr.covariance_functions.Matern(3),
-        mean=gpr.mean_functions.ConstantMean(),
-        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
-    )
 
     gp_bounds = {
         "covariance_log_outputscale": (-np.inf, np.inf),
@@ -912,17 +917,38 @@ def test_fitting_with_fixed_bounds():
         "covariance_log_outputscale": None,
         "covariance_log_lengthscale": None,
         "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
-        "mean_const": None,
+        "mean_const": mean_prior,
     }
 
-    gp.set_priors(gp_priors)
-    gp.set_bounds(gp_bounds)
+    def make_gp():
+        gp = gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.Matern(3),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+        gp.set_priors(gp_priors)
+        gp.set_bounds(gp_bounds)
+        return gp
 
+    gp = make_gp()
     assert gp.get_bounds() == gp_bounds
 
     hyp, _, _ = gp.fit(X=X, y=y)
 
     assert np.all(hyp[:, 3] == 0.5)
+
+    # The optimum alone, where the gradient of the free hyperparameters
+    # vanishes to the optimizer's tolerance.
+    gp = make_gp()
+    hyp, _, _ = gp.fit(
+        X=X, y=y, options={"n_samples": 0}, rng=np.random.default_rng(0)
+    )
+    assert hyp[0, 3] == 0.5
+    __, gradient = gp.log_posterior(hyp[0], compute_grad=True)
+    __, gradient_likelihood = gp.log_likelihood(hyp[0], compute_grad=True)
+    assert gradient[3] == gradient_likelihood[3]
+    assert np.all(np.abs(gradient[:3]) < 1e-2)
 
     # gp.plot()
 

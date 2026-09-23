@@ -1712,12 +1712,15 @@ class GP:
         z2 = np.zeros(hyp.shape)
         z2[gt_idx] = ((hyp[gt_idx] - mu[gt_idx]) / sigma[gt_idx]) ** 2
 
-        # Fixed prior
+        # A coordinate whose bounds are equal has no density off its
+        # value. Its entry of the gradient is that of its own prior,
+        # written below, and stays zero where the prior leaves it unset (no
+        # prior, or a value inside a smooth box), as in
+        # `gplite_hypprior.m`, whose gradient starts at zero and has no
+        # branch for such coordinates.
         if masks["any_f"]:
             if np.any(hyp[f_idx] != lb[f_idx]):
                 lp = -np.inf
-            if compute_grad:
-                dlp[f_idx] = np.nan
 
         # Smooth box prior
         if masks["any_sb"]:
