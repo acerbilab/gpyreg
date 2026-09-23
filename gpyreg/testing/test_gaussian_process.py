@@ -309,10 +309,12 @@ def test_cleaning():
 @pytest.mark.filterwarnings(
     """ignore:Matplotlib is currently using agg:UserWarning"""
 )
-def test_gp_gradient_computations():
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_gp_gradient_computations(seed):
+    rng = np.random.default_rng(seed)
     N = 20
     D = 2
-    X = np.random.standard_normal(size=(N, D))
+    X = rng.standard_normal(size=(N, D))
 
     gp = gpr.GP(
         D=D,
@@ -325,13 +327,13 @@ def test_gp_gradient_computations():
     mean_N = gp.mean.hyperparameter_count(D)
     noise_N = gp.noise.hyperparameter_count()
 
-    N_s = np.random.randint(1, 3)
-    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    N_s = rng.integers(1, 3)
+    hyp = rng.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.2
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X)
+    y = gp.random_function(X, rng=rng)
 
     gp.update(X_new=X, y_new=y)
 
@@ -345,7 +347,7 @@ def test_gp_gradient_computations():
             check_grad(
                 f,
                 f_grad,
-                hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size)),
+                hyp0 * np.exp(0.1 * rng.uniform(size=hyp0.size)),
             ),
             0.0,
             atol=1e-6,
@@ -353,28 +355,28 @@ def test_gp_gradient_computations():
     )
 
     # Check GP hyperparameters log prior gradient computation.
-    hyp1 = hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size))
-    prior_types = np.random.permutation(range(0, 5))
+    hyp1 = hyp0 * np.exp(0.1 * rng.uniform(size=hyp0.size))
+    prior_types = rng.permutation(range(0, 5))
     for i in range(0, cov_N + mean_N + noise_N):
         prior_type = prior_types[i]
         if prior_type == 1:  # 'gaussian'
-            gp.hyper_priors["mu"][i] = np.random.standard_normal()
-            gp.hyper_priors["sigma"][i] = np.exp(np.random.standard_normal())
+            gp.hyper_priors["mu"][i] = rng.standard_normal()
+            gp.hyper_priors["sigma"][i] = np.exp(rng.standard_normal())
             gp.hyper_priors["df"][i] = 0
         elif prior_type == 2:  #'student_t'
-            gp.hyper_priors["mu"][i] = np.random.standard_normal()
-            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
-            gp.hyper_priors["df"][i] = np.exp(np.random.standard_normal())
+            gp.hyper_priors["mu"][i] = rng.standard_normal()
+            gp.hyper_priors["sigma"][i] = rng.standard_normal()
+            gp.hyper_priors["df"][i] = np.exp(rng.standard_normal())
         elif prior_type == 3:  # 'smoothbox'
             gp.hyper_priors["a"][i] = -3
             gp.hyper_priors["b"][i] = 3
-            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
+            gp.hyper_priors["sigma"][i] = rng.standard_normal()
             gp.hyper_priors["df"][i] = 0
         elif prior_type == 4:  # 'smoothbox_student_t'
             gp.hyper_priors["a"][i] = -3
             gp.hyper_priors["b"][i] = 3
-            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
-            gp.hyper_priors["df"][i] = np.exp(np.random.standard_normal())
+            gp.hyper_priors["sigma"][i] = rng.standard_normal()
+            gp.hyper_priors["df"][i] = np.exp(rng.standard_normal())
         else:  # None
             pass
 
@@ -888,18 +890,23 @@ def test_quadrature_with_noise_fitting():
 @pytest.mark.filterwarnings(
     """ignore:Matplotlib is currently using agg:UserWarning"""
 )
-def test_fitting_with_fixed_bounds():
+@pytest.mark.parametrize(
+    "mean_prior",
+    [
+        None,
+        ("smoothbox", (0.0, 1.0, 0.5)),
+        ("smoothbox_student_t", (0.0, 1.0, 0.5, 3.0)),
+    ],
+)
+def test_fitting_with_fixed_bounds(mean_prior):
+    """A hyperparameter whose two bounds are equal keeps its value. Its
+    entry of the gradient of the log prior is that of its own prior, which
+    is zero without a prior and inside a smooth box, so the optimizer takes
+    the other hyperparameters to a stationary point."""
     N = 20
     D = 1
     X = np.reshape(np.linspace(-10, 10, N), (-1, 1))
     y = 1 + np.sin(X)
-
-    gp = gpr.GP(
-        D=D,
-        covariance=gpr.covariance_functions.Matern(3),
-        mean=gpr.mean_functions.ConstantMean(),
-        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
-    )
 
     gp_bounds = {
         "covariance_log_outputscale": (-np.inf, np.inf),
@@ -912,17 +919,38 @@ def test_fitting_with_fixed_bounds():
         "covariance_log_outputscale": None,
         "covariance_log_lengthscale": None,
         "noise_log_scale": ("gaussian", (np.log(1e-3), 1.0)),
-        "mean_const": None,
+        "mean_const": mean_prior,
     }
 
-    gp.set_priors(gp_priors)
-    gp.set_bounds(gp_bounds)
+    def make_gp():
+        gp = gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.Matern(3),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+        gp.set_priors(gp_priors)
+        gp.set_bounds(gp_bounds)
+        return gp
 
+    gp = make_gp()
     assert gp.get_bounds() == gp_bounds
 
     hyp, _, _ = gp.fit(X=X, y=y)
 
     assert np.all(hyp[:, 3] == 0.5)
+
+    # The optimum alone, where the gradient of the free hyperparameters
+    # vanishes to the optimizer's tolerance.
+    gp = make_gp()
+    hyp, _, _ = gp.fit(
+        X=X, y=y, options={"n_samples": 0}, rng=np.random.default_rng(0)
+    )
+    assert hyp[0, 3] == 0.5
+    __, gradient = gp.log_posterior(hyp[0], compute_grad=True)
+    __, gradient_likelihood = gp.log_likelihood(hyp[0], compute_grad=True)
+    assert gradient[3] == gradient_likelihood[3]
+    assert np.all(np.abs(gradient[:3]) < 1e-2)
 
     # gp.plot()
 
@@ -2594,6 +2622,19 @@ def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
         ("gaussian", ([np.nan, 0.3], [np.nan, 1.2])),
         ("student_t", ([np.nan, 0.3], [np.nan, 1.2], [np.nan, 3.0])),
         ("smoothbox", ([np.nan, -1.0], [np.nan, 1.0], [np.nan, 0.7])),
+        (
+            "smoothbox_student_t",
+            ([np.nan, -1.0], [np.nan, 1.0], [np.nan, 0.7], [np.nan, 4.0]),
+        ),
+        # A prior of each family on the whole block.
+        ("gaussian", (0.3, 1.2)),
+        ("student_t", (0.3, 1.2, 3.0)),
+        ("smoothbox", (-1.0, 1.0, 0.7)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, 4.0)),
+        # Smooth boxes of zero width, on the whole block and on one
+        # coordinate.
+        ("smoothbox", (0.5, 0.5, 0.7)),
+        ("smoothbox_student_t", ([-1.0, 0.5], [1.0, 0.5], 0.7, 4.0)),
     ],
 )
 def test_get_priors_returns_what_set_priors_reads_back(family, params):
@@ -2661,6 +2702,110 @@ def test_set_priors_refuses_a_nan_scale_beside_a_location(family, params):
     assert "covariance_log_lengthscale" in message
     assert "NaN" in message
     assert "infinite" not in message
+
+
+@pytest.mark.parametrize(
+    "family, params, problem",
+    [
+        ("gaussian", (np.inf, 1.0), "infinite mu"),
+        ("gaussian", (-np.inf, 1.0), "infinite mu"),
+        ("gaussian", (np.nan, 1.0), "NaN mu"),
+        ("student_t", (np.inf, 1.0, 3.0), "infinite mu"),
+        ("student_t", (np.nan, 1.0, 3.0), "NaN mu"),
+        ("smoothbox", (0.0, np.inf, 1.0), "infinite end"),
+        ("smoothbox", (-np.inf, 0.0, 1.0), "infinite end"),
+        ("smoothbox", (np.nan, 0.0, 1.0), "NaN end"),
+        ("smoothbox", (np.nan, np.nan, 1.0), "NaN end"),
+        ("smoothbox_student_t", (0.0, np.inf, 1.0, 3.0), "infinite end"),
+        ("smoothbox_student_t", (np.nan, 1.0, 1.0, 3.0), "NaN end"),
+    ],
+)
+def test_set_priors_refuses_a_location_that_is_not_finite(
+    family, params, problem
+):
+    """A coordinate that has a prior needs a finite location (``mu``, or
+    both ends of a smooth box) beside its finite ``sigma``, as it needs a
+    finite, positive ``sigma``: the log posterior of such a prior is NaN
+    or infinite. The message names the hyperparameter and what is wrong
+    with its location."""
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+    with pytest.raises(ValueError) as execinfo:
+        _gp_1d().set_priors(priors)
+    message = execinfo.value.args[0]
+    assert "mean_const" in message
+    assert problem in message
+    assert "None" in message
+
+
+def test_set_priors_refuses_a_location_that_is_not_finite_in_a_block():
+    """In a block, a coordinate whose location and ``sigma`` are both NaN
+    has no prior, and another coordinate with an infinite location is
+    refused."""
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (
+        "gaussian",
+        (np.array([np.nan, np.inf]), np.array([np.nan, 1.0])),
+    )
+    with pytest.raises(ValueError) as execinfo:
+        _gp_2d().set_priors(priors)
+    message = execinfo.value.args[0]
+    assert "covariance_log_lengthscale" in message
+    assert "infinite mu" in message
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
+        ("smoothbox", (1.0, -1.0, 0.7)),
+        ("smoothbox_student_t", (3.0, -3.0, 0.7, 4.0)),
+        # One coordinate of a block, beside a coordinate without a prior.
+        ("smoothbox", ([np.nan, 1.0], [np.nan, 0.9], [np.nan, 0.7])),
+    ],
+)
+def test_set_priors_refuses_an_inverted_smooth_box(family, params):
+    """A smooth box needs its lower end ``a`` at or below its upper end
+    ``b``: an inverted box has a normalizer below one, or negative, and a
+    log prior that is wrong or NaN. The message names the hyperparameter
+    and says what is wrong with its box."""
+    priors = _no_priors()
+    if np.ndim(params[0]) == 0:
+        priors["mean_const"] = (family, params)
+        name, gp = "mean_const", _gp_1d()
+    else:
+        priors["covariance_log_lengthscale"] = (family, params)
+        name, gp = "covariance_log_lengthscale", _gp_2d()
+    with pytest.raises(ValueError) as execinfo:
+        gp.set_priors(priors)
+    message = execinfo.value.args[0]
+    assert name in message
+    assert "above its upper end" in message
+    assert "None" in message
+
+
+@pytest.mark.parametrize("family", ["smoothbox", "smoothbox_student_t"])
+def test_smooth_box_of_zero_width(family):
+    """A smooth box whose two ends are equal has no plateau and is the
+    Gaussian, or the Student's t, centred at that point with the box's
+    scale; ``set_priors`` takes it, and the log prior is that density."""
+    if family == "smoothbox":
+        params = (0.5, 0.5, 0.7)
+        density = scipy.stats.norm(loc=0.5, scale=0.7)
+    else:
+        params = (0.5, 0.5, 0.7, 4.0)
+        density = scipy.stats.t(4.0, loc=0.5, scale=0.7)
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    gp = _gp_1d()
+    hyp = np.array([0.0, 0.0, np.log(0.1), 0.0])
+    gp.update(X_new=X, y_new=np.sin(X), hyp=hyp[None, :])
+    gp.set_priors(priors)
+    for mean_const in (-0.4, 0.5, 1.9):
+        hyp[3] = mean_const
+        log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+        assert np.isclose(log_prior, density.logpdf(mean_const), rtol=1e-12)
 
 
 def test_set_priors_and_set_bounds_refuse_an_unknown_hyperparameter():
@@ -2766,6 +2911,326 @@ def test_smooth_box_student_t_prior_with_many_degrees_of_freedom(df):
         _reference_log_prior("smoothbox_student_t", params, hyp[3]),
         rtol=1e-12,
     )
+
+
+@pytest.mark.parametrize(
+    "family, params, bounds",
+    [
+        ("gaussian", (0.0, 1.0), (9.0, 10.0)),
+        ("student_t", (0.0, 1.0, 3.0), (1e6, 2e6)),
+        ("smoothbox", (-0.5, 0.5, 1.0), (9.5, 10.5)),
+        ("smoothbox_student_t", (-0.5, 0.5, 1.0, 3.0), (1e6, 2e6)),
+    ],
+)
+def test_prior_mass_in_the_upper_tail(family, params, bounds):
+    """The mass of a prior between two bounds far in its upper tail, by
+    which the log prior is renormalized, is that between the mirrored
+    bounds in its lower tail, since each prior here is symmetric about
+    zero. The cumulative distribution function rounds to one at both
+    bounds of the upper tail, so a mass taken as the difference of its two
+    values is zero and the log posterior infinite."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+
+    masses = []
+    log_priors = []
+    for lower, upper in (bounds, (-bounds[1], -bounds[0])):
+        # The targets follow the constant mean into the tail, so that the
+        # log likelihood stays of the size of the log prior.
+        m0 = 0.5 * (lower + upper)
+        hyp = np.array([0.0, 0.0, np.log(0.1), m0])
+        gp = _gp_1d()
+        gp.update(X_new=X, y_new=np.sin(X) + m0, hyp=hyp[None, :])
+        gp_bounds = {name: (-np.inf, np.inf) for name in priors}
+        gp_bounds["mean_const"] = (lower, upper)
+        gp.set_bounds(gp_bounds)
+        gp.set_priors(priors)
+        masses.append(gp.normalization_constants[3])
+        log_priors.append(gp.log_posterior(hyp) - gp.log_likelihood(hyp))
+
+    assert masses[0] > 0.0
+    assert np.isclose(masses[0], masses[1], rtol=1e-12)
+    assert np.isfinite(log_priors[0])
+    assert np.isclose(log_priors[0], log_priors[1], rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "family", ["gaussian", "student_t", "smoothbox", "smoothbox_student_t"]
+)
+def test_prior_mass_from_the_centre_down(family):
+    """Where the lower bound is not above the centre of the prior (``mu``,
+    or the middle of the box), as for every prior that PyVBMC sets, the
+    mass inside the bounds is the difference of the cumulative
+    distribution function at the two bounds, bit for bit. The lower bound
+    here is at the centre and below it."""
+    from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_student_t_cdf
+
+    mu, sigma, df, a, b = 0.3, 1.2, 3.0, -1.0, 1.6
+    centre = mu
+    if family == "gaussian":
+        params = (mu, sigma)
+        cdf = lambda x: scipy.stats.norm.cdf(x, loc=mu, scale=sigma)
+    elif family == "student_t":
+        params = (mu, sigma, df)
+        cdf = lambda x: scipy.stats.t.cdf(x, df, loc=mu, scale=sigma)
+    elif family == "smoothbox":
+        params = (a, b, sigma)
+        cdf = lambda x: smoothbox_cdf(x, sigma, a, b)
+        centre = 0.5 * (a + b)
+    else:
+        params = (a, b, sigma, df)
+        cdf = lambda x: smoothbox_student_t_cdf(x, df, sigma, a, b)
+        centre = 0.5 * (a + b)
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+
+    for lower, upper in (
+        (centre, 4.0),
+        (centre - 1.3, 4.0),
+        (-5.0, -1.0),
+        (centre, np.inf),
+    ):
+        gp = _gp_1d()
+        gp_bounds = {name: (-np.inf, np.inf) for name in priors}
+        gp_bounds["mean_const"] = (lower, upper)
+        gp.set_bounds(gp_bounds)
+        gp.set_priors(priors)
+        assert gp.normalization_constants[3] == cdf(upper) - cdf(lower)
+
+
+@pytest.mark.parametrize(
+    "mu, df, a, b, bounds",
+    [
+        (0.0, 0.0, np.nan, np.nan, (9.0, 10.0)),
+        (0.0, 3.0, np.nan, np.nan, (1e6, 2e6)),
+        (np.nan, 0.0, -0.5, 0.5, (9.5, 10.5)),
+        (np.nan, 3.0, -0.5, 0.5, (1e6, 2e6)),
+    ],
+)
+def test_space_filling_design_in_the_upper_tail(mu, df, a, b, bounds):
+    """The space-filling design maps its unit-cube draws through the
+    prior truncated to the bounds. With both bounds far in the upper tail
+    of the prior, the design is the mirror image of the design between the
+    mirrored bounds in the lower tail, since each prior here (a Gaussian, a
+    Student's t and their smooth boxes) is symmetric about zero and the
+    draws of one coordinate of the unscrambled Sobol sequence are
+    symmetric about one half. The cumulative distribution function rounds
+    to one at both bounds of the upper tail, and a design mapped through it
+    lies at infinity."""
+    from gpyreg.f_min_fill import f_min_fill
+
+    hprior = {
+        "mu": np.array([mu]),
+        "sigma": np.array([1.0]),
+        "df": np.array([df]),
+        "a": np.array([a]),
+        "b": np.array([b]),
+    }
+    designs = []
+    for lower, upper in (bounds, (-bounds[1], -bounds[0])):
+        LB, UB = np.array([lower]), np.array([upper])
+        X, __ = f_min_fill(
+            lambda x: 0.0,
+            np.array([[0.5 * (lower + upper)]]),
+            LB,
+            UB,
+            LB,
+            UB,
+            hprior,
+            64,
+            rng=np.random.default_rng(0),
+        )
+        designs.append(np.sort(X[:, 0]))
+
+    assert np.all((designs[0] >= bounds[0]) & (designs[0] <= bounds[1]))
+    assert np.allclose(designs[0], -designs[1][::-1], rtol=1e-10, atol=0.0)
+
+
+def test_fit_with_samples_in_the_upper_tail_of_a_prior(monkeypatch):
+    """A fit with hyperparameter samples, where both bounds of the constant
+    mean lie far in the upper tail of its Gaussian prior, completes as the
+    mirrored fit in the lower tail does: its space-filling design is the
+    mirror image of the other's, and its samples lie inside the bounds. A
+    design at infinity gave the slice sampler a width of NaN."""
+    from gpyreg import gaussian_process as gp_module
+
+    designs = []
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        designs.append(np.sort(X0[:, 3]))
+        return X0, y0
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
+    X = np.reshape(np.linspace(-1, 1, 12), (-1, 1))
+    priors = _no_priors()
+    priors["mean_const"] = ("gaussian", (0.0, 1.0))
+    for sign in (1.0, -1.0):
+        # The targets follow the constant mean into the tail, and change
+        # sign with it, so that the two posteriors mirror each other.
+        y = sign * (9.5 + np.sin(2 * X))
+        gp = _gp_1d()
+        gp.X, gp.y, gp.s2 = gp._convert_shapes(X, y, None)
+        gp_bounds = gp.get_recommended_bounds()
+        gp_bounds["mean_const"] = (
+            np.array([min(9.0 * sign, 10.0 * sign)]),
+            np.array([max(9.0 * sign, 10.0 * sign)]),
+        )
+        gp.set_bounds(gp_bounds)
+        gp.set_priors(priors)
+        hyp, __, __ = gp.fit(
+            options={"n_samples": 3, "init_N": 64, "opts_N": 2},
+            rng=np.random.default_rng(0),
+        )
+        assert np.all(np.isfinite(hyp))
+        assert np.all((9.0 <= sign * hyp[:, 3]) & (sign * hyp[:, 3] <= 10.0))
+
+    assert np.allclose(designs[0], -designs[1][::-1], rtol=1e-10, atol=0.0)
+
+
+@pytest.mark.parametrize("below_centre", [0.0, 1.8])
+@pytest.mark.parametrize(
+    "family", ["gaussian", "student_t", "smoothbox", "smoothbox_student_t"]
+)
+def test_space_filling_design_from_the_centre_down(family, below_centre):
+    """Where the lower bound is not above the centre of the prior (``mu``,
+    or the middle of the box), as for every prior that PyVBMC sets (the
+    lower bound of its noise prior is the prior's centre), the
+    space-filling design maps its unit-cube draws through the cumulative
+    distribution function of the prior at the two bounds and its percent
+    point function, bit for bit. The lower bound here is at the centre and
+    below it."""
+    from gpyreg.f_min_fill import (
+        f_min_fill,
+        smoothbox_cdf,
+        smoothbox_ppf,
+        smoothbox_student_t_cdf,
+        smoothbox_student_t_ppf,
+    )
+
+    mu, sigma, a, b = 0.3, 1.2, -1.0, 1.6
+    df = 3.0 if family.endswith("student_t") else 0.0
+    smooth_box = family.startswith("smoothbox")
+    centre = 0.5 * (a + b) if smooth_box else mu
+    hprior = {
+        "mu": np.array([np.nan if smooth_box else mu]),
+        "sigma": np.array([sigma]),
+        "df": np.array([df]),
+        "a": np.array([a if smooth_box else np.nan]),
+        "b": np.array([b if smooth_box else np.nan]),
+    }
+    LB, UB = np.array([centre - below_centre]), np.array([4.0])
+    N = 257
+    x0 = np.array([[1.0]])
+    X, __ = f_min_fill(
+        lambda x: x[0],
+        x0,
+        LB,
+        UB,
+        LB,
+        UB,
+        hprior,
+        N,
+        rng=np.random.default_rng(0),
+    )
+
+    # The draws of `f_min_fill`: the unscrambled Sobol sequence without its
+    # first point (a single column, which the shuffle leaves alone).
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        S = scipy.stats.qmc.Sobol(d=1, scramble=False).random(n=N)[1:, 0]
+    if family == "gaussian":
+        cdf_lb = scipy.stats.norm.cdf((LB[0] - mu) / sigma)
+        cdf_ub = scipy.stats.norm.cdf((UB[0] - mu) / sigma)
+        expected = (
+            scipy.stats.norm.ppf(cdf_lb + (cdf_ub - cdf_lb) * S) * sigma + mu
+        )
+    elif family == "student_t":
+        cdf_lb = scipy.stats.t.cdf((LB[0] - mu) / sigma, df)
+        cdf_ub = scipy.stats.t.cdf((UB[0] - mu) / sigma, df)
+        expected = (
+            scipy.stats.t.ppf(cdf_lb + (cdf_ub - cdf_lb) * S, df) * sigma + mu
+        )
+    elif family == "smoothbox":
+        cdf_lb = smoothbox_cdf(LB[0], sigma, a, b)
+        cdf_ub = smoothbox_cdf(UB[0], sigma, a, b)
+        expected = np.array(
+            [
+                smoothbox_ppf(q, sigma, a, b)
+                for q in cdf_lb + (cdf_ub - cdf_lb) * S
+            ]
+        )
+    else:
+        cdf_lb = smoothbox_student_t_cdf(LB[0], df, sigma, a, b)
+        cdf_ub = smoothbox_student_t_cdf(UB[0], df, sigma, a, b)
+        expected = np.array(
+            [
+                smoothbox_student_t_ppf(q, df, sigma, a, b)
+                for q in cdf_lb + (cdf_ub - cdf_lb) * S
+            ]
+        )
+
+    # `f_min_fill` returns its points in the order of the objective, which
+    # is the value itself here.
+    expected = np.sort(np.concatenate((x0[:, 0], expected)))
+    assert np.array_equal(X[:, 0], expected)
+
+
+@pytest.mark.parametrize(
+    "prior",
+    [
+        # Priors of the form PyVBMC gives its noise, centred above the
+        # fixed value and below it.
+        ("student_t", (np.log(0.2), 0.5, 3.0)),
+        ("student_t", (-8.0, 0.5, 3.0)),
+        ("gaussian", (np.log(0.2), 0.5)),
+        # A smooth box around the fixed value, and one below it.
+        ("smoothbox", (-7.0, -4.0, 0.5)),
+        ("smoothbox_student_t", (-9.0, -8.0, 0.5, 3.0)),
+    ],
+)
+def test_space_filling_design_of_a_fixed_coordinate_with_a_prior(
+    monkeypatch, prior
+):
+    """A hyperparameter whose two bounds are equal takes their value at
+    every point of the space-filling design, whatever its prior. Mapped
+    through the prior's quantile function, the value comes back an ulp or
+    two off, where the log prior is ``-inf``. The noise here is fixed at
+    ``log(sqrt(1e-5))``, as a PyVBMC-built GP fixes it for targets of a
+    small range."""
+    from gpyreg import gaussian_process as gp_module
+
+    received = {}
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        received.update(X0=X0.copy(), y0=y0.copy())
+        return X0, y0
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
+    fixed = np.log(np.sqrt(1e-5))
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 1))
+    gp = _gp_1d()
+    bounds = {name: None for name in _no_priors()}
+    bounds["noise_log_scale"] = (fixed, fixed)
+    gp.set_bounds(bounds)
+    priors = _no_priors()
+    priors["noise_log_scale"] = prior
+    gp.set_priors(priors)
+    gp.fit(
+        X=X,
+        y=np.sin(X),
+        options={"n_samples": 0, "init_N": 64, "opts_N": 1},
+        rng=np.random.default_rng(0),
+    )
+
+    assert np.all(received["X0"][:, 2] == fixed)
+    assert np.all(np.isfinite(received["y0"]))
 
 
 @pytest.mark.parametrize("key", ["sampler_name", "sampler"])
@@ -2890,6 +3355,112 @@ def test_noise_gradient_with_a_constant_total_noise():
     )
     # With no variance given the multiplier does not enter the noise.
     assert gradient[D + 2] == 0.0
+
+
+@pytest.mark.parametrize(
+    "features",
+    [
+        {"user_provided_add": True},
+        {"user_provided_add": True, "scale_user_provided": True},
+        {"rectified_linear_output_dependent_add": True},
+        {
+            "user_provided_add": True,
+            "scale_user_provided": True,
+            "rectified_linear_output_dependent_add": True,
+        },
+    ],
+)
+def test_likelihood_gradient_with_a_noise_per_point(features):
+    """Where the noise varies from point to point, the gradient of the log
+    marginal likelihood with respect to the noise hyperparameters is a sum
+    over the training points of the noise function's gradient, weighted by
+    the diagonal of ``inv(C) - alpha alpha^T``. It agrees with finite
+    differences for a user-provided variance, with and without a scale of
+    its own, and for the rectified output-dependent noise, whose threshold
+    lies inside the range of the targets, so that it adds noise at some
+    points and not at others. One input dimension, with repeated inputs."""
+    rng = np.random.default_rng(12)
+    X = rng.uniform(-1, 1, size=(10, 1))
+    X = np.concatenate((X, X[:3], X[:1]))
+    N = X.shape[0]
+    y = -2 * X**2 + 0.1 * rng.standard_normal((N, 1))
+    s2 = 0.01 / rng.integers(1, 4, size=(N, 1))
+
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True, **features),
+    )
+    # [log ell, log sf], the noise, [m0, xm, log omega]
+    noise_hyp = [np.log(0.05)]
+    if features.get("scale_user_provided"):
+        noise_hyp.append(np.log(1.5))
+    if features.get("rectified_linear_output_dependent_add"):
+        # The threshold in the middle of the widest gap between the
+        # targets, away from the kinks of the noise at each target.
+        y_sorted = np.sort(y[:, 0])
+        k = 3 + np.argmax(np.diff(y_sorted[3:-3]))
+        noise_hyp += [0.5 * (y_sorted[k] + y_sorted[k + 1]), np.log(0.5)]
+    hyp = np.concatenate(
+        ([np.log(0.4), 0.0], noise_hyp, [0.2, 0.1, np.log(0.8)])
+    )
+    given_s2 = s2 if features.get("user_provided_add") else None
+    gp.update(X_new=X, y_new=y, s2_new=given_s2, hyp=hyp[None, :])
+
+    __, gradient = gp.log_likelihood(hyp, compute_grad=True)
+    error = check_grad(
+        gp.log_likelihood,
+        lambda h: gp.log_likelihood(h, compute_grad=True)[1],
+        hyp,
+    )
+    assert np.all(error < 1e-6 * np.max(np.abs(gradient)))
+
+
+@pytest.mark.parametrize("sn2, low_noise", [(0.9e-6, True), (1.1e-6, False)])
+@pytest.mark.parametrize("mean_name", ["constant", "negative_quadratic"])
+def test_likelihood_in_the_low_noise_representation(sn2, low_noise, mean_name):
+    """Below a smallest noise variance of 1e-6 the posterior holds the
+    inverse of the training covariance instead of its Cholesky factor.
+    Just below the switch, on a set where the covariance is well
+    conditioned, the negative log marginal likelihood equals a dense
+    evaluation and its gradient agrees with finite differences, as they do
+    just above it."""
+    X = np.reshape(np.linspace(-1, 1, 8), (-1, 1))
+    y = np.sin(3 * X)
+    N = X.shape[0]
+    if mean_name == "constant":
+        mean, mean_hyp = gpr.mean_functions.ConstantMean(), [0.1]
+    else:
+        mean = gpr.mean_functions.NegativeQuadratic()
+        mean_hyp = [0.5, 0.1, np.log(0.8)]
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=mean,
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    # A short length scale keeps the covariance close to its diagonal.
+    hyp = np.concatenate(([np.log(0.08), 0.0, 0.5 * np.log(sn2)], mean_hyp))
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert gp.posteriors[0].L_chol == (not low_noise)
+
+    C = np.exp(-0.5 * ((X - X.T) / 0.08) ** 2) + sn2 * np.eye(N)
+    r = y - mean.compute(np.array(mean_hyp), X).reshape(-1, 1)
+    dense_nlZ = (
+        0.5 * (r.T @ np.linalg.solve(C, r))[0, 0]
+        + 0.5 * np.linalg.slogdet(C)[1]
+        + 0.5 * N * np.log(2 * np.pi)
+    )
+    assert np.isclose(-gp.log_likelihood(hyp), dense_nlZ, rtol=1e-12)
+
+    __, gradient = gp.log_likelihood(hyp, compute_grad=True)
+    error = check_grad(
+        gp.log_likelihood,
+        lambda h: gp.log_likelihood(h, compute_grad=True)[1],
+        hyp,
+    )
+    assert np.all(error < 1e-8 * np.max(np.abs(gradient)))
 
 
 def test_quad_takes_one_width_per_measure():

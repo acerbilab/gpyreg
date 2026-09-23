@@ -6,7 +6,13 @@ import pytest
 import scipy.stats
 from scipy.integrate import quad
 
-from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_ppf, uuinv
+from gpyreg.f_min_fill import (
+    smoothbox_cdf,
+    smoothbox_isf,
+    smoothbox_ppf,
+    smoothbox_sf,
+    uuinv,
+)
 
 
 def pdf(x, sigma, a, b):
@@ -57,6 +63,55 @@ def test_cdf_limits():
 
     assert np.isclose(smoothbox_cdf(-np.inf, sigma, a, b), 0.0)
     assert np.isclose(smoothbox_cdf(np.inf, sigma, a, b), 1.0)
+
+
+def test_sf():
+    """The survival function is one minus the cumulative distribution
+    function below, on and above the box; far above it, where the
+    cumulative distribution function rounds to one, it is the cumulative
+    distribution function at the point mirrored about the centre of the
+    box."""
+    sigma = 3
+    a = -2
+    b = 3
+
+    for x in np.linspace(-15, 15, 301):
+        assert np.isclose(
+            smoothbox_sf(x, sigma, a, b) + smoothbox_cdf(x, sigma, a, b),
+            1.0,
+            rtol=1e-14,
+        )
+
+    assert smoothbox_sf(np.inf, sigma, a, b) == 0.0
+    for x in (b + 20 * sigma, b + 30 * sigma):
+        assert smoothbox_cdf(x, sigma, a, b) == 1.0
+        sf = smoothbox_sf(x, sigma, a, b)
+        assert sf > 0.0
+        assert np.isclose(
+            sf, smoothbox_cdf(a + b - x, sigma, a, b), rtol=1e-12
+        )
+
+
+def test_isf():
+    """The inverse survival function inverts the survival function below,
+    on and above the box, and far above it, where one minus the
+    probability of the upper tail rounds to one."""
+    sigma = 3
+    a = -2
+    b = 3
+
+    for x in np.linspace(-15, 15, 301):
+        assert np.isclose(
+            smoothbox_isf(smoothbox_sf(x, sigma, a, b), sigma, a, b),
+            x,
+            rtol=1e-10,
+            atol=1e-10,
+        )
+
+    for x in (b + 20 * sigma, b + 30 * sigma):
+        p = smoothbox_sf(x, sigma, a, b)
+        assert 1.0 - p == 1.0
+        assert np.isclose(smoothbox_isf(p, sigma, a, b), x, rtol=1e-12)
 
 
 def test_ppf_limits():

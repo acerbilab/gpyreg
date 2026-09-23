@@ -17,7 +17,9 @@ import gpyreg.mean_functions
 from gpyreg.f_min_fill import (
     f_min_fill,
     smoothbox_cdf,
+    smoothbox_sf,
     smoothbox_student_t_cdf,
+    smoothbox_student_t_sf,
 )
 from gpyreg.formatting import full_repr
 from gpyreg.rng import random_integer, resolve_rng
@@ -554,7 +556,10 @@ class GP:
             If ``priors=None``, all hyperparameter priors are removed.
             Within a block of several hyperparameters, a coordinate whose
             location (``mu``, or ``a`` and ``b`` for the smooth-box
-            families) and ``sigma`` are both NaN has no prior.
+            families) and ``sigma`` are both NaN has no prior; every other
+            coordinate needs a finite location, with ``a <= b``, and a
+            finite, positive ``sigma``. A smooth box with ``a == b`` is the
+            Gaussian (or Student's t) centred at ``a``.
             Degrees of freedom ``df`` that are zero, infinite or NaN make
             a ``"student_t"`` prior ``"gaussian"``, as
             ``gplite_hypprior.m`` reads them, and a
@@ -573,7 +578,8 @@ class GP:
             hyperparameter is unknown.
         ValueError
             Raised when a coordinate that has a prior is given a ``sigma``
-            that is not finite and positive.
+            that is not finite and positive, or a location that is not
+            finite, or a smooth box whose ``a`` is above its ``b``.
         """
         self.no_prior = False
         if priors is None:
@@ -652,21 +658,28 @@ class GP:
                 # and Student's t families and the box `[a, b]` for the
                 # smooth-box ones, whose `mu` stays NaN. A coordinate
                 # whose location and `sigma` are both NaN has no prior,
-                # and every other coordinate is scaled by its `sigma`.
-                # `gplite_hypprior.m` reads a coordinate as having no
-                # prior where either is not finite, which the smooth-box
-                # families, gpyreg's own, cannot share.
+                # and every other coordinate needs a finite location, with
+                # `a <= b` for a box, and a finite, positive `sigma`. A box
+                # of zero width, `a == b`, has no plateau and a normalizer
+                # of one: it is the Gaussian or the Student's t centred at
+                # `a`. `gplite_hypprior.m` reads a coordinate as having no
+                # prior where its `mu` or its `sigma` is not finite, a
+                # reading that the smooth-box families, gpyreg's own,
+                # cannot share.
                 if prior_type in ("smoothbox", "smoothbox_student_t"):
                     location = np.vstack(
                         (hyper_priors["a"][i], hyper_priors["b"][i])
                     )
+                    location_name = "end of its box (a or b)"
                 else:
                     location = hyper_priors["mu"][i][None, :]
+                    location_name = "mu"
                 scale = hyper_priors["sigma"][i]
                 has_prior = ~(
                     np.all(np.isnan(location), axis=0) & np.isnan(scale)
                 )
                 scale = scale[has_prior]
+                location = location[:, has_prior]
                 problem = None
                 if np.any(np.isnan(scale)):
                     problem = "a NaN sigma where its location is not NaN"
@@ -674,10 +687,21 @@ class GP:
                     problem = "an infinite sigma"
                 elif np.any(scale <= 0.0):
                     problem = "a sigma that is zero or negative"
+                elif np.any(np.isnan(location)):
+                    problem = (
+                        f"a NaN {location_name} where its sigma is not NaN"
+                    )
+                elif np.any(np.isinf(location)):
+                    problem = f"an infinite {location_name}"
+                elif prior_type in ("smoothbox", "smoothbox_student_t") and (
+                    np.any(location[0] > location[1])
+                ):
+                    problem = "a lower end a of its box above its upper end b"
                 if problem is not None:
                     raise ValueError(
                         f"The prior of {info[0]} has {problem}. A prior "
-                        "needs a finite, positive sigma; a hyperparameter "
+                        "needs a finite location, with a <= b for a smooth "
+                        "box, and a finite, positive sigma; a hyperparameter "
                         "without a prior is set to `None`, and a coordinate "
                         "of a block without a prior has NaN for both its "
                         "location and its sigma."
@@ -1589,22 +1613,45 @@ class GP:
             if not np.isfinite(mu) and not np.isfinite(sigma):
                 continue
 
+            # The mass inside the bounds. Where the lower bound lies above
+            # the centre of the prior (its median), the cumulative
+            # distribution function is above one half at both bounds, where
+            # a double resolves it only to a fixed absolute step, and the
+            # difference of its two values loses the mass as the bounds
+            # move up the tail, all of it with both beyond about 8.3 scales
+            # of a Gaussian, where both values round to one; the survival
+            # function, below one half there, keeps it. Everywhere else the
+            # mass is the difference of the two values of the cumulative
+            # distribution function.
             if np.isfinite(a) and np.isfinite(b):
+                upper_half = lb > 0.5 * (a + b)
                 if df == 0 or not np.isfinite(df):
-                    cdf_lb = smoothbox_cdf(lb, sigma, a, b)
-                    cdf_ub = smoothbox_cdf(ub, sigma, a, b)
+                    p = smoothbox_sf if upper_half else smoothbox_cdf
+                    p_lb = p(lb, sigma, a, b)
+                    p_ub = p(ub, sigma, a, b)
                 else:
-                    cdf_lb = smoothbox_student_t_cdf(lb, df, sigma, a, b)
-                    cdf_ub = smoothbox_student_t_cdf(ub, df, sigma, a, b)
+                    p = (
+                        smoothbox_student_t_sf
+                        if upper_half
+                        else smoothbox_student_t_cdf
+                    )
+                    p_lb = p(lb, df, sigma, a, b)
+                    p_ub = p(ub, df, sigma, a, b)
             else:
+                upper_half = lb > mu
                 if df == 0 or not np.isfinite(df):
-                    cdf_lb = sp.stats.norm.cdf(lb, loc=mu, scale=sigma)
-                    cdf_ub = sp.stats.norm.cdf(ub, loc=mu, scale=sigma)
+                    p = sp.stats.norm.sf if upper_half else sp.stats.norm.cdf
+                    p_lb = p(lb, loc=mu, scale=sigma)
+                    p_ub = p(ub, loc=mu, scale=sigma)
                 else:
-                    cdf_lb = sp.stats.t.cdf(lb, df, loc=mu, scale=sigma)
-                    cdf_ub = sp.stats.t.cdf(ub, df, loc=mu, scale=sigma)
+                    p = sp.stats.t.sf if upper_half else sp.stats.t.cdf
+                    p_lb = p(lb, df, loc=mu, scale=sigma)
+                    p_ub = p(ub, df, loc=mu, scale=sigma)
 
-            self.normalization_constants[i] = cdf_ub - cdf_lb
+            if upper_half:
+                self.normalization_constants[i] = p_lb - p_ub
+            else:
+                self.normalization_constants[i] = p_ub - p_lb
 
     def __prior_masks(self):
         """The hyperprior's type masks and normalization constants, which
@@ -1712,12 +1759,15 @@ class GP:
         z2 = np.zeros(hyp.shape)
         z2[gt_idx] = ((hyp[gt_idx] - mu[gt_idx]) / sigma[gt_idx]) ** 2
 
-        # Fixed prior
+        # A coordinate whose bounds are equal has no density off its
+        # value. Its entry of the gradient is that of its own prior,
+        # written below, and stays zero where the prior leaves it unset (no
+        # prior, or a value inside a smooth box), as in
+        # `gplite_hypprior.m`, whose gradient starts at zero and has no
+        # branch for such coordinates.
         if masks["any_f"]:
             if np.any(hyp[f_idx] != lb[f_idx]):
                 lp = -np.inf
-            if compute_grad:
-                dlp[f_idx] = np.nan
 
         # Smooth box prior
         if masks["any_sb"]:
