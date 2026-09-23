@@ -1,7 +1,7 @@
 Release notes
 =============
 
-1.3.1 (unreleased)
+1.3.1 (2026-09-23)
 ------------------
 
 A point marked **Upgrading** says what a script written for 1.3.0 may have
