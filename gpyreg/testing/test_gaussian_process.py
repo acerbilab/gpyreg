@@ -1,5 +1,6 @@
 import copy
 import warnings
+from fractions import Fraction
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -2561,15 +2562,42 @@ def test_low_noise_variance_of_two_points():
     assert np.all(np.abs(np.diag(cov[:, :, 0]) - expected) <= tolerance)
 
 
+def _exact_variances_at_the_training_inputs(K, sn2):
+    """The diagonal of ``K - K @ inv(K + sn2 * I) @ K``, the latent
+    predictive variances at the training inputs, for the floating-point
+    entries of ``K`` and ``sn2`` taken as exact numbers: Gauss-Jordan
+    elimination of ``[K + sn2 * I | K]`` in rational arithmetic turns its
+    right half into ``inv(K + sn2 * I) @ K``, and each variance is rounded
+    once, at the end."""
+    N = K.shape[0]
+    rows = [[Fraction(v) for v in np.concatenate((row, row))] for row in K]
+    for i in range(N):
+        rows[i][i] += Fraction(sn2)
+    for p in range(N):
+        pivot = [v / rows[p][p] for v in rows[p]]
+        rows = [
+            pivot if r == p else [a - row[p] * b for a, b in zip(row, pivot)]
+            for r, row in enumerate(rows)
+        ]
+    return np.array(
+        [
+            float(
+                Fraction(K[i, i])
+                - sum(Fraction(K[i, j]) * rows[j][N + i] for j in range(N))
+            )
+            for i in range(N)
+        ]
+    )
+
+
 def test_low_noise_predictions_at_the_training_inputs():
     """At a noise standard deviation of 1e-6, the predictive variances at
-    the training inputs, of order 1e-12, are non-negative and agree with
-    ``sn2 * K @ inv(K + sn2 I)`` from the eigendecomposition of ``K``,
-    where each term of the diagonal is non-negative, to ``N * eps``; formed
-    from the explicit inverse they were off by up to 2e-4. The full
-    predictive covariance has no eigenvalue below the rounding of the prior
-    covariance it is subtracted from, where it had eigenvalues down to
-    -8e-4."""
+    the training inputs, of order 1e-12, are non-negative and agree to
+    ``N * eps`` with the exact variances of the kernel matrix, computed in
+    rational arithmetic; formed from the explicit inverse they were off by
+    about 1e-4, or clamped to zero. The full predictive covariance has no
+    eigenvalue below the rounding of the prior covariance it is subtracted
+    from, where it had eigenvalues of order -1e-3."""
     N = 30
     eps = np.finfo(float).eps
     rng = np.random.default_rng(0)
@@ -2578,9 +2606,7 @@ def test_low_noise_predictions_at_the_training_inputs():
     posterior = gp.posteriors[0]
     sn2 = np.exp(2 * posterior.hyp[2]) * posterior.sn2_mult
     K = gp.covariance.compute(posterior.hyp[:2], X)
-    lam, U = np.linalg.eigh(K)
-    lam = np.maximum(lam, 0.0)
-    reference = (U**2) @ (lam * sn2 / (lam + sn2))
+    reference = _exact_variances_at_the_training_inputs(K, sn2)
 
     __, s2 = gp.predict(X)
 
