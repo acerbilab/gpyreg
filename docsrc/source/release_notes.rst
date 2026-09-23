@@ -4,6 +4,9 @@ Release notes
 1.3.1 (unreleased)
 ------------------
 
+A point marked **Upgrading** says what a script written for 1.3.0 may have
+to change.
+
 * The gradient of the log prior is zero, not NaN, for a hyperparameter
   whose lower and upper bounds are equal and that has no prior, or a
   smooth-box prior whose box holds its value. The NaN reached
@@ -18,10 +21,20 @@ Release notes
   cumulative distribution function it was zero with both bounds far in
   the upper tail (beyond about 8.3 scales of a Gaussian prior), which made
   the log posterior infinite everywhere and sent :meth:`gpyreg.GP.fit` to
-  a poor point. Bounds in the lower tail or on both sides of the centre
-  give the same value as before, to the last bit. ``gpyreg.f_min_fill``
-  has the survival functions of the two smooth-box families,
-  ``smoothbox_sf`` and ``smoothbox_student_t_sf``.
+  a poor point. Where the lower bound is not above the centre, the value
+  is the same as before, to the last bit. ``gpyreg.f_min_fill`` has the
+  survival functions of the two smooth-box families, ``smoothbox_sf`` and
+  ``smoothbox_student_t_sf``.
+* :meth:`gpyreg.GP.set_priors` refuses, with a message that says what is
+  wrong, a coordinate whose ``sigma`` is finite beside a location that is
+  not: an infinite or NaN ``mu`` of a Gaussian or Student's t prior, or an
+  infinite or NaN end ``a`` or ``b`` of a smooth box, as it refuses a
+  ``sigma`` that is not finite and positive. 1.3.0 took such a prior, and
+  the log posterior was NaN with the bounds that :meth:`gpyreg.GP.fit`
+  fills. A coordinate of a block without a prior is written, as before,
+  with NaN for both its location and its ``sigma``. **Upgrading:** a
+  script that wrote a non-finite ``mu`` for no prior, which gplite reads
+  that way, sets the hyperparameter's prior to ``None``.
 
 1.3.0 (2026-09-23)
 ------------------

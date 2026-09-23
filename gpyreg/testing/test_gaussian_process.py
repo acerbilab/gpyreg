@@ -2620,6 +2620,15 @@ def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
         ("gaussian", ([np.nan, 0.3], [np.nan, 1.2])),
         ("student_t", ([np.nan, 0.3], [np.nan, 1.2], [np.nan, 3.0])),
         ("smoothbox", ([np.nan, -1.0], [np.nan, 1.0], [np.nan, 0.7])),
+        (
+            "smoothbox_student_t",
+            ([np.nan, -1.0], [np.nan, 1.0], [np.nan, 0.7], [np.nan, 4.0]),
+        ),
+        # A prior of each family on the whole block.
+        ("gaussian", (0.3, 1.2)),
+        ("student_t", (0.3, 1.2, 3.0)),
+        ("smoothbox", (-1.0, 1.0, 0.7)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, 4.0)),
     ],
 )
 def test_get_priors_returns_what_set_priors_reads_back(family, params):
@@ -2687,6 +2696,56 @@ def test_set_priors_refuses_a_nan_scale_beside_a_location(family, params):
     assert "covariance_log_lengthscale" in message
     assert "NaN" in message
     assert "infinite" not in message
+
+
+@pytest.mark.parametrize(
+    "family, params, problem",
+    [
+        ("gaussian", (np.inf, 1.0), "infinite mu"),
+        ("gaussian", (-np.inf, 1.0), "infinite mu"),
+        ("gaussian", (np.nan, 1.0), "NaN mu"),
+        ("student_t", (np.inf, 1.0, 3.0), "infinite mu"),
+        ("student_t", (np.nan, 1.0, 3.0), "NaN mu"),
+        ("smoothbox", (0.0, np.inf, 1.0), "infinite end"),
+        ("smoothbox", (-np.inf, 0.0, 1.0), "infinite end"),
+        ("smoothbox", (np.nan, 0.0, 1.0), "NaN end"),
+        ("smoothbox", (np.nan, np.nan, 1.0), "NaN end"),
+        ("smoothbox_student_t", (0.0, np.inf, 1.0, 3.0), "infinite end"),
+        ("smoothbox_student_t", (np.nan, 1.0, 1.0, 3.0), "NaN end"),
+    ],
+)
+def test_set_priors_refuses_a_location_that_is_not_finite(
+    family, params, problem
+):
+    """A coordinate that has a prior needs a finite location (``mu``, or
+    both ends of a smooth box) beside its finite ``sigma``, as it needs a
+    finite, positive ``sigma``: the log posterior of such a prior is NaN
+    or infinite. The message names the hyperparameter and what is wrong
+    with its location."""
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+    with pytest.raises(ValueError) as execinfo:
+        _gp_1d().set_priors(priors)
+    message = execinfo.value.args[0]
+    assert "mean_const" in message
+    assert problem in message
+    assert "None" in message
+
+
+def test_set_priors_refuses_a_location_that_is_not_finite_in_a_block():
+    """In a block, a coordinate whose location and ``sigma`` are both NaN
+    has no prior, and another coordinate with an infinite location is
+    refused."""
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (
+        "gaussian",
+        (np.array([np.nan, np.inf]), np.array([np.nan, 1.0])),
+    )
+    with pytest.raises(ValueError) as execinfo:
+        _gp_2d().set_priors(priors)
+    message = execinfo.value.args[0]
+    assert "covariance_log_lengthscale" in message
+    assert "infinite mu" in message
 
 
 def test_set_priors_and_set_bounds_refuse_an_unknown_hyperparameter():
