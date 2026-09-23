@@ -2541,6 +2541,11 @@ def test_low_noise_posterior_without_its_factor():
         gp.random_function(x_star, rng=np.random.default_rng(3)),
         stripped.random_function(x_star, rng=np.random.default_rng(3)),
     )
+    for a, b in zip(
+        gp.quad(0.2, 0.5, compute_var=True),
+        stripped.quad(0.2, 0.5, compute_var=True),
+    ):
+        assert np.array_equal(a, b)
 
     x_new = np.array([[0.123]])
     stripped.update(X_new=x_new, y_new=np.sin(2 * x_new))
@@ -2552,6 +2557,35 @@ def test_low_noise_posterior_without_its_factor():
             getattr(stripped.posteriors[0], key),
             getattr(gp_ref.posteriors[0], key),
         )
+
+
+@pytest.mark.parametrize("d", [1e-3, 1e-2])
+def test_low_noise_quadrature_variance_of_two_points(d):
+    """Two training points at distance ``d``, with the kernel
+    ``c = exp(-d**2 / 2)`` between them and the noise variance ``n``, and a
+    Gaussian measure of standard deviation ``sigma`` centred between them:
+    the kernel means ``z`` of the two points are equal, ``(1, 1)`` is an
+    eigenvector of ``K + n I`` with eigenvalue ``1 + c + n``, and the
+    variance of the integral is ``nf - 2 z**2 / (1 + c + n)`` with
+    ``nf = 1 / sqrt(1 + 2 sigma**2)``, a form without the ill-conditioning
+    of ``K + n I``. Formed from the explicit inverse that the low-noise
+    representation holds, the variance carried the rounding of the
+    inverse, which grows as the noise shrinks; formed from a Cholesky
+    factor, it is within the rounding of a difference of terms of order
+    one."""
+    X = np.array([[0.0], [d]])
+    gp = _low_noise_gp(X, np.array([[0.3], [-0.2]]))
+    n = np.exp(2 * np.log(1e-6)) * gp.posteriors[0].sn2_mult
+    c = np.exp(-(d**2) / 2)
+    sigma = 0.5
+    z = np.exp(-((d / 2) ** 2) / (2 * (1 + sigma**2))) / np.sqrt(
+        1 + sigma**2
+    )
+    expected = 1 / np.sqrt(1 + 2 * sigma**2) - 2 * z**2 / (1 + c + n)
+
+    __, F_var = gp.quad(d / 2, sigma, compute_var=True)
+
+    assert np.abs(F_var[0, 0] - expected) <= 8 * np.finfo(float).eps
 
 
 @pytest.mark.parametrize("state", ["cleaned", "no_posterior"])

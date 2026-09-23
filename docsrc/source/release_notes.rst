@@ -90,6 +90,14 @@ to change.
   in the low-noise representation, and its posterior after single-point
   updates, change; a script that compares them with values stored from
   1.3.1 stores them again.
+* :meth:`gpyreg.GP.quad` with ``compute_var=True`` forms the variance of
+  an integral from the same Cholesky factor in the low-noise
+  representation, where it formed it from the inverse and carried its
+  rounding: with two training points 1e-3 apart at a noise standard
+  deviation of 1e-6, a variance of 0.016 was off by 6e-11. The means of
+  the integrals, and both in the Cholesky representation, are unchanged,
+  to the last bit. **Upgrading:** the variances of integrals of a GP in
+  the low-noise representation change.
 * Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
   the ``ValueError`` it passes on from
   :meth:`gpyreg.GP.get_recommended_bounds`, and the ``ValueError`` and

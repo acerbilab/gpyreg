@@ -2728,9 +2728,20 @@ class GP:
                         )
                         / sl
                     )
+                    J_kk = nf_kk - np.sum(z * invKzk.T, 1)
                 else:
-                    invKzk = np.dot(-L, z.T)
-                J_kk = nf_kk - np.sum(z * invKzk.T, 1)
+                    # From the Cholesky factor of the matrix whose negative
+                    # inverse L is, as `predict` forms its variance: formed
+                    # from L, the variance of the integral carries the
+                    # rounding of the inverse, which grows as the noise
+                    # shrinks.
+                    W = sp.linalg.solve_triangular(
+                        self.__low_noise_factor(s),
+                        z.T,
+                        trans=1,
+                        check_finite=False,
+                    )
+                    J_kk = nf_kk - np.sum(W * W, 0)
                 F_var[:, s] = np.maximum(
                     np.spacing(1), J_kk
                 )  # Correct for numerical error
