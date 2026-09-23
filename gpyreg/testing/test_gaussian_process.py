@@ -3044,6 +3044,66 @@ def test_noise_gradient_with_a_constant_total_noise():
     assert gradient[D + 2] == 0.0
 
 
+@pytest.mark.parametrize(
+    "features",
+    [
+        {"user_provided_add": True},
+        {"user_provided_add": True, "scale_user_provided": True},
+        {"rectified_linear_output_dependent_add": True},
+        {
+            "user_provided_add": True,
+            "scale_user_provided": True,
+            "rectified_linear_output_dependent_add": True,
+        },
+    ],
+)
+def test_likelihood_gradient_with_a_noise_per_point(features):
+    """Where the noise varies from point to point, the gradient of the log
+    marginal likelihood with respect to the noise hyperparameters is a sum
+    over the training points of the noise function's gradient, weighted by
+    the diagonal of ``inv(C) - alpha alpha^T``. It agrees with finite
+    differences for a user-provided variance, with and without a scale of
+    its own, and for the rectified output-dependent noise, whose threshold
+    lies inside the range of the targets, so that it adds noise at some
+    points and not at others. One input dimension, with repeated inputs."""
+    rng = np.random.default_rng(12)
+    X = rng.uniform(-1, 1, size=(10, 1))
+    X = np.concatenate((X, X[:3], X[:1]))
+    N = X.shape[0]
+    y = -2 * X**2 + 0.1 * rng.standard_normal((N, 1))
+    s2 = 0.01 / rng.integers(1, 4, size=(N, 1))
+
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True, **features),
+    )
+    # [log ell, log sf], the noise, [m0, xm, log omega]
+    noise_hyp = [np.log(0.05)]
+    if features.get("scale_user_provided"):
+        noise_hyp.append(np.log(1.5))
+    if features.get("rectified_linear_output_dependent_add"):
+        # The threshold in the middle of the widest gap between the
+        # targets, away from the kinks of the noise at each target.
+        y_sorted = np.sort(y[:, 0])
+        k = 3 + np.argmax(np.diff(y_sorted[3:-3]))
+        noise_hyp += [0.5 * (y_sorted[k] + y_sorted[k + 1]), np.log(0.5)]
+    hyp = np.concatenate(
+        ([np.log(0.4), 0.0], noise_hyp, [0.2, 0.1, np.log(0.8)])
+    )
+    given_s2 = s2 if features.get("user_provided_add") else None
+    gp.update(X_new=X, y_new=y, s2_new=given_s2, hyp=hyp[None, :])
+
+    __, gradient = gp.log_likelihood(hyp, compute_grad=True)
+    error = check_grad(
+        gp.log_likelihood,
+        lambda h: gp.log_likelihood(h, compute_grad=True)[1],
+        hyp,
+    )
+    assert np.all(error < 1e-6 * np.max(np.abs(gradient)))
+
+
 def test_quad_takes_one_width_per_measure():
     """A ``sigma`` of one column holds one standard deviation per measure,
     the same in every dimension, as ``gplite_quad.m`` broadcasts it and as
