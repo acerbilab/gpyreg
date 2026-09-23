@@ -2591,6 +2591,34 @@ def test_set_priors_refuses_a_scale_that_is_not_positive(sigma, problem):
     assert "None" in message
 
 
+@pytest.mark.parametrize("had_priors", [False, True])
+def test_a_refused_set_priors_leaves_the_gp_as_it_was(had_priors):
+    """``set_priors`` changes nothing when it refuses its argument: not the
+    priors, and not the flag that says whether the GP has any, which
+    decides whether ``fit`` adds the log prior to its objective and what
+    ``str`` reports."""
+    gp = _gp_1d()
+    if had_priors:
+        priors = _no_priors()
+        priors["mean_const"] = ("gaussian", (0.0, 1.0))
+        gp.set_priors(priors)
+    hyper_priors = copy.deepcopy(gp.hyper_priors)
+    no_prior = gp.no_prior
+    text = str(gp)
+
+    refused = _no_priors()
+    refused["mean_const"] = ("gaussian", (0.0, -1.0))
+    missing = {"mean_const": ("gaussian", (0.0, 1.0))}
+    unknown = dict(_no_priors(), not_a_hyperparameter=None)
+    for priors in (refused, missing, unknown):
+        with pytest.raises(ValueError):
+            gp.set_priors(priors)
+        assert gp.no_prior is no_prior
+        assert str(gp) == text
+        for key, value in hyper_priors.items():
+            assert np.array_equal(gp.hyper_priors[key], value, equal_nan=True)
+
+
 def _gp_2d():
     """A two-dimensional GP with five hyperparameters: the two length
     scales and the output scale of the kernel, one of the noise and one of

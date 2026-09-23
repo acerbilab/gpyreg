@@ -23,6 +23,10 @@ to change.
   catches ``ValueError``, and a script that fits on such inputs, or reads
   the recommended bounds for them, gives the hyperparameters that the
   message names finite bounds first.
+* :meth:`gpyreg.GP.set_priors` leaves the GP as it was when it refuses its
+  argument. On a GP without priors, a refused call marked the GP as
+  having priors, so that ``str`` reported them as present and
+  :meth:`gpyreg.GP.fit` added to its objective a log prior of zero.
 
 1.3.1 (2026-09-23)
 ------------------

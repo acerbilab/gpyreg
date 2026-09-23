@@ -632,9 +632,10 @@ class GP:
             that is not finite and positive, or a location that is not
             finite, or a smooth box whose ``a`` is above its ``b``.
         """
-        self.no_prior = False
-        if priors is None:
-            self.no_prior = True
+        # The GP's own state changes only once every check has passed, so
+        # a refused call leaves the priors, and the flag that says whether
+        # there are any, as they were.
+        remove_all = priors is None
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -660,7 +661,7 @@ class GP:
         lower = 0
 
         for info in hyper_info:
-            if self.no_prior:
+            if remove_all:
                 vals = None
             else:
                 try:
