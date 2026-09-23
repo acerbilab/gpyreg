@@ -2955,23 +2955,42 @@ def test_prior_mass_in_the_upper_tail(family, params, bounds):
     assert np.isclose(log_priors[0], log_priors[1], rtol=1e-12)
 
 
-@pytest.mark.parametrize("family", ["gaussian", "student_t"])
+@pytest.mark.parametrize(
+    "family", ["gaussian", "student_t", "smoothbox", "smoothbox_student_t"]
+)
 def test_prior_mass_from_the_centre_down(family):
-    """Where the lower bound is not above the centre of the prior, as for
-    every prior that PyVBMC sets, the mass inside the bounds is the
-    difference of the cumulative distribution function at the two bounds,
-    bit for bit."""
-    mu, sigma, df = 0.3, 1.2, 3.0
+    """Where the lower bound is not above the centre of the prior (``mu``,
+    or the middle of the box), as for every prior that PyVBMC sets, the
+    mass inside the bounds is the difference of the cumulative
+    distribution function at the two bounds, bit for bit. The lower bound
+    here is at the centre and below it."""
+    from gpyreg.f_min_fill import smoothbox_cdf, smoothbox_student_t_cdf
+
+    mu, sigma, df, a, b = 0.3, 1.2, 3.0, -1.0, 1.6
+    centre = mu
     if family == "gaussian":
         params = (mu, sigma)
         cdf = lambda x: scipy.stats.norm.cdf(x, loc=mu, scale=sigma)
-    else:
+    elif family == "student_t":
         params = (mu, sigma, df)
         cdf = lambda x: scipy.stats.t.cdf(x, df, loc=mu, scale=sigma)
+    elif family == "smoothbox":
+        params = (a, b, sigma)
+        cdf = lambda x: smoothbox_cdf(x, sigma, a, b)
+        centre = 0.5 * (a + b)
+    else:
+        params = (a, b, sigma, df)
+        cdf = lambda x: smoothbox_student_t_cdf(x, df, sigma, a, b)
+        centre = 0.5 * (a + b)
     priors = _no_priors()
     priors["mean_const"] = (family, params)
 
-    for lower, upper in ((mu, 4.0), (-1.0, 4.0), (-5.0, -1.0), (mu, np.inf)):
+    for lower, upper in (
+        (centre, 4.0),
+        (centre - 1.3, 4.0),
+        (-5.0, -1.0),
+        (centre, np.inf),
+    ):
         gp = _gp_1d()
         gp_bounds = {name: (-np.inf, np.inf) for name in priors}
         gp_bounds["mean_const"] = (lower, upper)
