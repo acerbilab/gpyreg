@@ -597,6 +597,32 @@ def test_rank_one_update_without_stored_noise_scale():
     assert np.allclose(f_s2, f_s2_ref, rtol=1e-10, atol=1e-12)
 
 
+def test_quad_without_stored_noise_scale():
+    # Posteriors pickled by earlier versions have no ``sl`` attribute; the
+    # variance of an integral then recovers the scale of the Cholesky
+    # factor from ``sW``.
+    N = 12
+    rng = np.random.default_rng(15)
+    X = np.reshape(np.linspace(-2, 2, N), (-1, 1))
+    y = np.sin(X) + 0.1 * rng.standard_normal((N, 1))
+    hyp = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+    assert gp.posteriors[0].L_chol
+    F_ref, F_var_ref = gp.quad(0.0, 1.0, compute_var=True)
+
+    del gp.posteriors[0].sl
+    F, F_var = gp.quad(0.0, 1.0, compute_var=True)
+
+    assert np.array_equal(F, F_ref)
+    assert np.allclose(F_var, F_var_ref, rtol=1e-12, atol=0.0)
+
+
 def test_update_aligns_user_provided_noise():
     # The stored s2 always has one row per training input: points without
     # a supplied variance get zero, whichever side of the update lacks it.

@@ -1010,11 +1010,8 @@ class GP:
                 sn2_eff = sn2 * self.posteriors[s].sn2_mult
 
                 # Noise scale of the existing factorization, kept for the
-                # extended factor. Posteriors pickled before the scale was
-                # stored lack the attribute and recover it from sW.
-                sl = getattr(self.posteriors[s], "sl", None)
-                if sl is None:
-                    sl = 1.0 / self.posteriors[s].sW[0, 0] ** 2
+                # extended factor.
+                sl = self.posteriors[s]._noise_scale()
 
                 # Compute covariance and cross-covariance.
                 hyp_cov = hyp_s[0:cov_N]
@@ -2512,11 +2509,8 @@ class GP:
                 # L = chol((K + sn2_mult * sn2) / sl). The scale is the one
                 # the factor was built with, which a rank-one update keeps
                 # and the minimum of the current training noise need not
-                # reproduce. Posteriors pickled before the scale was stored
-                # lack the attribute and recover it from sW.
-                sl = getattr(self.posteriors[s], "sl", None)
-                if sl is None:
-                    sl = 1.0 / self.posteriors[s].sW[0, 0] ** 2
+                # reproduce.
+                sl = self.posteriors[s]._noise_scale()
 
             # Compute posterior mean of the integral
             tau = np.sqrt(sigma**2 + ell**2)
@@ -3390,3 +3384,14 @@ class Posterior:
         self.sn2_mult = sn2_mult
         self.L_chol = Lchol
         self.sl = sl
+
+    def _noise_scale(self):
+        """Return ``sl``, the scale of the factorization.
+
+        Posteriors pickled before the scale was stored lack the attribute
+        and recover it from ``sW``, whose entries are ``1 / sqrt(sl)``.
+        """
+        sl = getattr(self, "sl", None)
+        if sl is None:
+            sl = 1.0 / self.sW[0, 0] ** 2
+        return sl
