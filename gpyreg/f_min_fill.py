@@ -300,6 +300,37 @@ def smoothbox_cdf(x: float, sigma: float, a: float, b: float):
     return (C - 1.0 + sp.stats.norm.cdf(x, loc=b, scale=sigma)) / C
 
 
+def smoothbox_sf(x: float, sigma: float, a: float, b: float):
+    """
+    Compute the value of the survival function (one minus the cumulative
+    distribution function) for the smooth box distribution. Above the box
+    it keeps the probability of the upper tail, which one minus
+    :func:`smoothbox_cdf` loses where the cumulative distribution function
+    rounds to one.
+
+    Parameters
+    ==========
+    x : float
+        The point where we want the value of the survival function.
+    sigma : float
+        Value of sigma for the smooth box distribution.
+    a : float
+        Value of a for the smooth box distribution.
+    b : float
+        Value of b for the smooth box distribution.
+    """
+    # Normalization constant so that integral over pdf is 1.
+    C = 1.0 + (b - a) / (sigma * np.sqrt(2 * np.pi))
+
+    if x > b:
+        return sp.stats.norm.sf(x, loc=b, scale=sigma) / C
+
+    if x >= a:
+        return (0.5 + (b - x) / (sigma * np.sqrt(2 * np.pi))) / C
+
+    return (C - 1.0 + sp.stats.norm.sf(x, loc=a, scale=sigma)) / C
+
+
 def smoothbox_student_t_cdf(
     x: float, df: float, sigma: float, a: float, b: float
 ):
@@ -335,6 +366,45 @@ def smoothbox_student_t_cdf(
         return (0.5 + (x - a) * c) / C
 
     return (C - 1.0 + sp.stats.t.cdf(x, df, loc=b, scale=sigma)) / C
+
+
+def smoothbox_student_t_sf(
+    x: float, df: float, sigma: float, a: float, b: float
+):
+    """
+    Compute the value of the survival function (one minus the cumulative
+    distribution function) for the smooth box student t distribution.
+    Above the box it keeps the probability of the upper tail, which one
+    minus :func:`smoothbox_student_t_cdf` loses where the cumulative
+    distribution function rounds to one.
+
+    Parameters
+    ==========
+    x : float
+        The point where we want the value of the survival function.
+    df : float
+        The degrees of freedom of the distribution.
+    sigma : float
+        Value of sigma for the distribution.
+    a : float
+        Value of a for the distribution.
+    b : float
+        Value of b for the distribution.
+    """
+    # Normalization constant so that integral over pdf is 1, as in
+    # `smoothbox_student_t_cdf`.
+    c = np.exp(
+        sp.special.gammaln(0.5 * (df + 1)) - sp.special.gammaln(0.5 * df)
+    ) / (sigma * np.sqrt(df * np.pi))
+    C = 1.0 + (b - a) * c
+
+    if x > b:
+        return sp.stats.t.sf(x, df, loc=b, scale=sigma) / C
+
+    if x >= a:
+        return (0.5 + (b - x) * c) / C
+
+    return (C - 1.0 + sp.stats.t.sf(x, df, loc=a, scale=sigma)) / C
 
 
 def smoothbox_ppf(q: float, sigma: float, a: float, b: float):

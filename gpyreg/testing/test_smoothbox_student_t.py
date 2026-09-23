@@ -5,7 +5,11 @@ import scipy.special
 import scipy.stats
 from scipy.integrate import quad
 
-from gpyreg.f_min_fill import smoothbox_student_t_cdf, smoothbox_student_t_ppf
+from gpyreg.f_min_fill import (
+    smoothbox_student_t_cdf,
+    smoothbox_student_t_ppf,
+    smoothbox_student_t_sf,
+)
 
 
 def pdf(x, sigma, df, a, b):
@@ -63,6 +67,35 @@ def test_cdf_limits():
 
     assert np.isclose(smoothbox_student_t_cdf(-np.inf, df, sigma, a, b), 0.0)
     assert np.isclose(smoothbox_student_t_cdf(np.inf, df, sigma, a, b), 1.0)
+
+
+def test_sf():
+    """The survival function is one minus the cumulative distribution
+    function below, on and above the box; far above it, where the
+    cumulative distribution function rounds to one, it is the cumulative
+    distribution function at the point mirrored about the centre of the
+    box."""
+    sigma = 3
+    df = 3
+    a = -2
+    b = 3
+
+    for x in np.linspace(-15, 15, 301):
+        assert np.isclose(
+            smoothbox_student_t_sf(x, df, sigma, a, b)
+            + smoothbox_student_t_cdf(x, df, sigma, a, b),
+            1.0,
+            rtol=1e-14,
+        )
+
+    assert smoothbox_student_t_sf(np.inf, df, sigma, a, b) == 0.0
+    for x in (b + 1e6 * sigma, b + 1e8 * sigma):
+        assert smoothbox_student_t_cdf(x, df, sigma, a, b) == 1.0
+        sf = smoothbox_student_t_sf(x, df, sigma, a, b)
+        assert sf > 0.0
+        assert np.isclose(
+            sf, smoothbox_student_t_cdf(a + b - x, df, sigma, a, b), rtol=1e-12
+        )
 
 
 def test_ppf_limits():

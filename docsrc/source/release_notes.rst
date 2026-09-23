@@ -11,6 +11,17 @@ Release notes
   another hyperparameter has a prior, the optimizer of
   :meth:`gpyreg.GP.fit`, which stopped within an iteration, short of the
   optimum.
+* The probability that a hyperprior puts inside the bounds of its
+  hyperparameter, by which :meth:`gpyreg.GP.log_posterior` renormalizes
+  the prior, is computed from the survival function where both bounds lie
+  above the centre of the prior. As a difference of two values of the
+  cumulative distribution function it was zero with both bounds far in
+  the upper tail (beyond about 8.3 scales of a Gaussian prior), which made
+  the log posterior infinite everywhere and sent :meth:`gpyreg.GP.fit` to
+  a poor point. Bounds in the lower tail or on both sides of the centre
+  give the same value as before, to the last bit. ``gpyreg.f_min_fill``
+  has the survival functions of the two smooth-box families,
+  ``smoothbox_sf`` and ``smoothbox_student_t_sf``.
 
 1.3.0 (2026-09-23)
 ------------------

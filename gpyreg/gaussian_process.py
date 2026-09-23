@@ -17,7 +17,9 @@ import gpyreg.mean_functions
 from gpyreg.f_min_fill import (
     f_min_fill,
     smoothbox_cdf,
+    smoothbox_sf,
     smoothbox_student_t_cdf,
+    smoothbox_student_t_sf,
 )
 from gpyreg.formatting import full_repr
 from gpyreg.rng import random_integer, resolve_rng
@@ -1589,22 +1591,43 @@ class GP:
             if not np.isfinite(mu) and not np.isfinite(sigma):
                 continue
 
+            # The mass inside the bounds. Where the lower bound lies above
+            # the centre of the prior (its median), the cumulative
+            # distribution function is close to one at both bounds and the
+            # difference of its two values loses the mass, all of it with
+            # both bounds beyond about 8.3 scales of a Gaussian; the
+            # survival function keeps it. Everywhere else the mass is the
+            # difference of the two values of the cumulative distribution
+            # function.
             if np.isfinite(a) and np.isfinite(b):
+                upper_half = lb > 0.5 * (a + b)
                 if df == 0 or not np.isfinite(df):
-                    cdf_lb = smoothbox_cdf(lb, sigma, a, b)
-                    cdf_ub = smoothbox_cdf(ub, sigma, a, b)
+                    p = smoothbox_sf if upper_half else smoothbox_cdf
+                    p_lb = p(lb, sigma, a, b)
+                    p_ub = p(ub, sigma, a, b)
                 else:
-                    cdf_lb = smoothbox_student_t_cdf(lb, df, sigma, a, b)
-                    cdf_ub = smoothbox_student_t_cdf(ub, df, sigma, a, b)
+                    p = (
+                        smoothbox_student_t_sf
+                        if upper_half
+                        else smoothbox_student_t_cdf
+                    )
+                    p_lb = p(lb, df, sigma, a, b)
+                    p_ub = p(ub, df, sigma, a, b)
             else:
+                upper_half = lb > mu
                 if df == 0 or not np.isfinite(df):
-                    cdf_lb = sp.stats.norm.cdf(lb, loc=mu, scale=sigma)
-                    cdf_ub = sp.stats.norm.cdf(ub, loc=mu, scale=sigma)
+                    p = sp.stats.norm.sf if upper_half else sp.stats.norm.cdf
+                    p_lb = p(lb, loc=mu, scale=sigma)
+                    p_ub = p(ub, loc=mu, scale=sigma)
                 else:
-                    cdf_lb = sp.stats.t.cdf(lb, df, loc=mu, scale=sigma)
-                    cdf_ub = sp.stats.t.cdf(ub, df, loc=mu, scale=sigma)
+                    p = sp.stats.t.sf if upper_half else sp.stats.t.cdf
+                    p_lb = p(lb, df, loc=mu, scale=sigma)
+                    p_ub = p(ub, df, loc=mu, scale=sigma)
 
-            self.normalization_constants[i] = cdf_ub - cdf_lb
+            if upper_half:
+                self.normalization_constants[i] = p_lb - p_ub
+            else:
+                self.normalization_constants[i] = p_ub - p_lb
 
     def __prior_masks(self):
         """The hyperprior's type masks and normalization constants, which

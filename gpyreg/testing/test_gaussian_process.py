@@ -2794,6 +2794,73 @@ def test_smooth_box_student_t_prior_with_many_degrees_of_freedom(df):
     )
 
 
+@pytest.mark.parametrize(
+    "family, params, bounds",
+    [
+        ("gaussian", (0.0, 1.0), (9.0, 10.0)),
+        ("student_t", (0.0, 1.0, 3.0), (1e6, 2e6)),
+        ("smoothbox", (-0.5, 0.5, 1.0), (9.5, 10.5)),
+        ("smoothbox_student_t", (-0.5, 0.5, 1.0, 3.0), (1e6, 2e6)),
+    ],
+)
+def test_prior_mass_in_the_upper_tail(family, params, bounds):
+    """The mass of a prior between two bounds far in its upper tail, by
+    which the log prior is renormalized, is that between the mirrored
+    bounds in its lower tail, since each prior here is symmetric about
+    zero. The cumulative distribution function rounds to one at both
+    bounds of the upper tail, so a mass taken as the difference of its two
+    values is zero and the log posterior infinite."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+
+    masses = []
+    log_priors = []
+    for lower, upper in (bounds, (-bounds[1], -bounds[0])):
+        # The targets follow the constant mean into the tail, so that the
+        # log likelihood stays of the size of the log prior.
+        m0 = 0.5 * (lower + upper)
+        hyp = np.array([0.0, 0.0, np.log(0.1), m0])
+        gp = _gp_1d()
+        gp.update(X_new=X, y_new=np.sin(X) + m0, hyp=hyp[None, :])
+        gp_bounds = {name: (-np.inf, np.inf) for name in priors}
+        gp_bounds["mean_const"] = (lower, upper)
+        gp.set_bounds(gp_bounds)
+        gp.set_priors(priors)
+        masses.append(gp.normalization_constants[3])
+        log_priors.append(gp.log_posterior(hyp) - gp.log_likelihood(hyp))
+
+    assert masses[0] > 0.0
+    assert np.isclose(masses[0], masses[1], rtol=1e-12)
+    assert np.isfinite(log_priors[0])
+    assert np.isclose(log_priors[0], log_priors[1], rtol=1e-12)
+
+
+@pytest.mark.parametrize("family", ["gaussian", "student_t"])
+def test_prior_mass_from_the_centre_down(family):
+    """Where the lower bound is not above the centre of the prior, as for
+    every prior that PyVBMC sets, the mass inside the bounds is the
+    difference of the cumulative distribution function at the two bounds,
+    bit for bit."""
+    mu, sigma, df = 0.3, 1.2, 3.0
+    if family == "gaussian":
+        params = (mu, sigma)
+        cdf = lambda x: scipy.stats.norm.cdf(x, loc=mu, scale=sigma)
+    else:
+        params = (mu, sigma, df)
+        cdf = lambda x: scipy.stats.t.cdf(x, df, loc=mu, scale=sigma)
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+
+    for lower, upper in ((mu, 4.0), (-1.0, 4.0), (-5.0, -1.0), (mu, np.inf)):
+        gp = _gp_1d()
+        gp_bounds = {name: (-np.inf, np.inf) for name in priors}
+        gp_bounds["mean_const"] = (lower, upper)
+        gp.set_bounds(gp_bounds)
+        gp.set_priors(priors)
+        assert gp.normalization_constants[3] == cdf(upper) - cdf(lower)
+
+
 @pytest.mark.parametrize("key", ["sampler_name", "sampler"])
 def test_fit_reads_the_documented_sampler_option(key):
     """`fit` documents the sampler under `sampler_name` and read it under
