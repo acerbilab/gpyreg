@@ -3072,6 +3072,94 @@ def test_fit_with_samples_in_the_upper_tail_of_a_prior(monkeypatch):
     assert np.allclose(designs[0], -designs[1][::-1], rtol=1e-10, atol=0.0)
 
 
+@pytest.mark.parametrize("below_centre", [0.0, 1.8])
+@pytest.mark.parametrize(
+    "family", ["gaussian", "student_t", "smoothbox", "smoothbox_student_t"]
+)
+def test_space_filling_design_from_the_centre_down(family, below_centre):
+    """Where the lower bound is not above the centre of the prior (``mu``,
+    or the middle of the box), as for every prior that PyVBMC sets (the
+    lower bound of its noise prior is the prior's centre), the
+    space-filling design maps its unit-cube draws through the cumulative
+    distribution function of the prior at the two bounds and its percent
+    point function, bit for bit. The lower bound here is at the centre and
+    below it."""
+    from gpyreg.f_min_fill import (
+        f_min_fill,
+        smoothbox_cdf,
+        smoothbox_ppf,
+        smoothbox_student_t_cdf,
+        smoothbox_student_t_ppf,
+    )
+
+    mu, sigma, a, b = 0.3, 1.2, -1.0, 1.6
+    df = 3.0 if family.endswith("student_t") else 0.0
+    smooth_box = family.startswith("smoothbox")
+    centre = 0.5 * (a + b) if smooth_box else mu
+    hprior = {
+        "mu": np.array([np.nan if smooth_box else mu]),
+        "sigma": np.array([sigma]),
+        "df": np.array([df]),
+        "a": np.array([a if smooth_box else np.nan]),
+        "b": np.array([b if smooth_box else np.nan]),
+    }
+    LB, UB = np.array([centre - below_centre]), np.array([4.0])
+    N = 257
+    x0 = np.array([[1.0]])
+    X, __ = f_min_fill(
+        lambda x: x[0],
+        x0,
+        LB,
+        UB,
+        LB,
+        UB,
+        hprior,
+        N,
+        rng=np.random.default_rng(0),
+    )
+
+    # The draws of `f_min_fill`: the unscrambled Sobol sequence without its
+    # first point (a single column, which the shuffle leaves alone).
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        S = scipy.stats.qmc.Sobol(d=1, scramble=False).random(n=N)[1:, 0]
+    if family == "gaussian":
+        cdf_lb = scipy.stats.norm.cdf((LB[0] - mu) / sigma)
+        cdf_ub = scipy.stats.norm.cdf((UB[0] - mu) / sigma)
+        expected = (
+            scipy.stats.norm.ppf(cdf_lb + (cdf_ub - cdf_lb) * S) * sigma + mu
+        )
+    elif family == "student_t":
+        cdf_lb = scipy.stats.t.cdf((LB[0] - mu) / sigma, df)
+        cdf_ub = scipy.stats.t.cdf((UB[0] - mu) / sigma, df)
+        expected = (
+            scipy.stats.t.ppf(cdf_lb + (cdf_ub - cdf_lb) * S, df) * sigma + mu
+        )
+    elif family == "smoothbox":
+        cdf_lb = smoothbox_cdf(LB[0], sigma, a, b)
+        cdf_ub = smoothbox_cdf(UB[0], sigma, a, b)
+        expected = np.array(
+            [
+                smoothbox_ppf(q, sigma, a, b)
+                for q in cdf_lb + (cdf_ub - cdf_lb) * S
+            ]
+        )
+    else:
+        cdf_lb = smoothbox_student_t_cdf(LB[0], df, sigma, a, b)
+        cdf_ub = smoothbox_student_t_cdf(UB[0], df, sigma, a, b)
+        expected = np.array(
+            [
+                smoothbox_student_t_ppf(q, df, sigma, a, b)
+                for q in cdf_lb + (cdf_ub - cdf_lb) * S
+            ]
+        )
+
+    # `f_min_fill` returns its points in the order of the objective, which
+    # is the value itself here.
+    expected = np.sort(np.concatenate((x0[:, 0], expected)))
+    assert np.array_equal(X[:, 0], expected)
+
+
 @pytest.mark.parametrize("key", ["sampler_name", "sampler"])
 def test_fit_reads_the_documented_sampler_option(key):
     """`fit` documents the sampler under `sampler_name` and read it under
