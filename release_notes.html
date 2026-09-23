@@ -415,10 +415,11 @@
             </div>
             <nav aria-label="Page">
                 <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.3.0 (2026-09-23)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.2.1 (2026-09-14)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.2.0 (2026-09-13)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">1.1.0 (2026-09-05)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.3.1 (2026-09-23)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.3.0 (2026-09-23)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.2.1 (2026-09-14)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">1.2.0 (2026-09-13)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">1.1.0 (2026-09-05)</a></li>
 </ul>
             </nav>
         </div>
@@ -433,7 +434,78 @@
   <section id="release-notes">
 <h1>Release notes<a class="headerlink" href="#release-notes" title="Link to this heading">#</a></h1>
 <section id="id1">
-<h2>1.3.0 (2026-09-23)<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<h2>1.3.1 (2026-09-23)<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<p>A point marked <strong>Upgrading</strong> says what a script written for 1.3.0 may have
+to change.</p>
+<ul class="simple">
+<li><p>The gradient of the log prior is zero, not NaN, for a hyperparameter
+whose lower and upper bounds are equal and that has no prior, or a
+smooth-box prior whose box holds its value. The NaN reached
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_posterior" title="gpyreg.GP.log_posterior"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_posterior()</span></code></a> with <code class="docutils literal notranslate"><span class="pre">compute_grad=True</span></code>, and, where
+another hyperparameter has a prior, the optimizer of
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>, which stopped within an iteration, short of the
+optimum.</p></li>
+<li><p>The probability that a hyperprior puts inside the bounds of its
+hyperparameter, by which <a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_posterior" title="gpyreg.GP.log_posterior"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_posterior()</span></code></a> renormalizes
+the prior, is computed from the survival function where both bounds lie
+above the centre of the prior. As a difference of two values of the
+cumulative distribution function it was zero with both bounds far in
+the upper tail (beyond about 8.3 scales of a Gaussian prior), which made
+the log posterior infinite everywhere and sent <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> to
+a poor point. Where the lower bound is not above the centre, the value
+is the same as before, to the last bit. <code class="docutils literal notranslate"><span class="pre">gpyreg.f_min_fill</span></code> has the
+survival functions of the two smooth-box families, <code class="docutils literal notranslate"><span class="pre">smoothbox_sf</span></code> and
+<code class="docutils literal notranslate"><span class="pre">smoothbox_student_t_sf</span></code>.</p></li>
+<li><p>The space-filling design of <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>, drawn by
+<code class="docutils literal notranslate"><span class="pre">gpyreg.f_min_fill</span></code>, draws the starting values of a hyperparameter
+whose bounds both lie above the centre of its prior through the
+survival function of the prior and its inverse, where it drew them
+through the cumulative distribution function and the percent point
+function. With both bounds far in the upper tail, every draw of that
+hyperparameter lay at infinity (the starting points the fit was given
+stayed finite), and a fit with hyperparameter samples raised
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> because the widths of the slice sampler were NaN. Where
+the lower bound is not above the centre, the design is the same as
+before, to the last bit. <code class="docutils literal notranslate"><span class="pre">gpyreg.f_min_fill</span></code> has the inverse survival
+functions of the two smooth-box families, <code class="docutils literal notranslate"><span class="pre">smoothbox_isf</span></code> and
+<code class="docutils literal notranslate"><span class="pre">smoothbox_student_t_isf</span></code>.</p></li>
+<li><p>The space-filling design of <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>, drawn by
+<code class="docutils literal notranslate"><span class="pre">gpyreg.f_min_fill</span></code>, gives a hyperparameter whose lower and upper
+bounds are equal their value at every point when the hyperparameter has
+a prior, as it did for one without. Mapped through the prior’s quantile
+function, the value came back an ulp or two off, where the log prior is
+<code class="docutils literal notranslate"><span class="pre">-inf</span></code>, so that the objective was infinite at every point of the
+design but the starting points the fit was given, and the ranking of
+the design that picks the starts of the optimization was lost. A GP
+that PyVBMC builds meets this when the noise is held at its lower bound
+(targets of a range below about 3e-3) and the option <code class="docutils literal notranslate"><span class="pre">noise_size</span></code>
+moves the centre of the noise prior away from that bound.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_priors()</span></code></a> refuses, with a message that says what is
+wrong, a coordinate whose <code class="docutils literal notranslate"><span class="pre">sigma</span></code> is finite beside a location that is
+not: an infinite or NaN <code class="docutils literal notranslate"><span class="pre">mu</span></code> of a Gaussian or Student’s t prior, or an
+infinite or NaN end <code class="docutils literal notranslate"><span class="pre">a</span></code> or <code class="docutils literal notranslate"><span class="pre">b</span></code> of a smooth box, as it refuses a
+<code class="docutils literal notranslate"><span class="pre">sigma</span></code> that is not finite and positive. 1.3.0 took such a prior, and
+the log posterior was NaN with the bounds that <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>
+fills. A coordinate of a block without a prior is written, as before,
+with NaN for both its location and its <code class="docutils literal notranslate"><span class="pre">sigma</span></code>. <strong>Upgrading:</strong> a
+script that wrote a non-finite <code class="docutils literal notranslate"><span class="pre">mu</span></code> for no prior, which gplite reads
+that way, sets the prior of a hyperparameter none of whose coordinates
+has a prior to <code class="docutils literal notranslate"><span class="pre">None</span></code>, and gives a coordinate of a block without a
+prior NaN for both its location and its <code class="docutils literal notranslate"><span class="pre">sigma</span></code>, as the message says.
+A smooth box with an infinite or NaN end has no such replacement: the
+script writes the prior it means.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_priors()</span></code></a> refuses, with a message that says what is
+wrong, a smooth box of either family whose lower end <code class="docutils literal notranslate"><span class="pre">a</span></code> is above its
+upper end <code class="docutils literal notranslate"><span class="pre">b</span></code>. 1.3.0 took such a box, whose normalization constant is
+then below one or negative, and gave a log prior that was wrong or NaN.
+A smooth box with <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">b</span></code>, which has no plateau and is the Gaussian
+or the Student’s t centred at <code class="docutils literal notranslate"><span class="pre">a</span></code>, is taken as before. <strong>Upgrading:</strong>
+a script that wrote an inverted box writes the box it means, with
+<code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;=</span> <span class="pre">b</span></code>.</p></li>
+</ul>
+</section>
+<section id="id2">
+<h2>1.3.0 (2026-09-23)<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
 <p>A point marked <strong>Upgrading</strong> says what a script written for 1.2.1 may have
 to change.</p>
 <ul class="simple">
@@ -704,8 +776,8 @@ mean, in <a class="reference internal" href="gaussian_process.html#gpyreg.GP.set
 sample size, that its autocorrelations are paired from lag 0.</p></li>
 </ul>
 </section>
-<section id="id2">
-<h2>1.2.1 (2026-09-14)<a class="headerlink" href="#id2" title="Link to this heading">#</a></h2>
+<section id="id3">
+<h2>1.2.1 (2026-09-14)<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.quad" title="gpyreg.GP.quad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.quad()</span></code></a> returns the correct integral variance when the
 training noise is heteroskedastic, for example with user-provided
@@ -756,8 +828,8 @@ recorded samples give <code class="docutils literal notranslate"><span class="pr
 of <a class="reference internal" href="gaussian_process.html#gpyreg.gaussian_process.Posterior" title="gpyreg.gaussian_process.Posterior"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.gaussian_process.Posterior</span></code></a> are documented.</p></li>
 </ul>
 </section>
-<section id="id3">
-<h2>1.2.0 (2026-09-13)<a class="headerlink" href="#id3" title="Link to this heading">#</a></h2>
+<section id="id4">
+<h2>1.2.0 (2026-09-13)<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.predict" title="gpyreg.GP.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.predict()</span></code></a> accepts the keyword-only option
 <code class="docutils literal notranslate"><span class="pre">return_cross_covariance=True</span></code>. It appends a tuple containing the latent
@@ -774,8 +846,8 @@ to <code class="docutils literal notranslate"><span class="pre">False</span></co
 documentation corrections; the corresponding behavior is unchanged.</p></li>
 </ul>
 </section>
-<section id="id4">
-<h2>1.1.0 (2026-09-05)<a class="headerlink" href="#id4" title="Link to this heading">#</a></h2>
+<section id="id5">
+<h2>1.1.0 (2026-09-05)<a class="headerlink" href="#id5" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>, <a class="reference internal" href="gaussian_process.html#gpyreg.GP.random_function" title="gpyreg.GP.random_function"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.random_function()</span></code></a>,
 <a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler" title="gpyreg.slice_sample.SliceSampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler</span></code></a> and <code class="docutils literal notranslate"><span class="pre">f_min_fill</span></code> accept
@@ -844,10 +916,11 @@ older sampler saves resume using the global stream.</p></li>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.3.0 (2026-09-23)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.2.1 (2026-09-14)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.2.0 (2026-09-13)</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">1.1.0 (2026-09-05)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.3.1 (2026-09-23)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.3.0 (2026-09-23)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.2.1 (2026-09-14)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">1.2.0 (2026-09-13)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">1.1.0 (2026-09-05)</a></li>
 </ul>
   </nav></div>
 

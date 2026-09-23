@@ -1,6 +1,77 @@
 Release notes
 =============
 
+1.3.1 (2026-09-23)
+------------------
+
+A point marked **Upgrading** says what a script written for 1.3.0 may have
+to change.
+
+* The gradient of the log prior is zero, not NaN, for a hyperparameter
+  whose lower and upper bounds are equal and that has no prior, or a
+  smooth-box prior whose box holds its value. The NaN reached
+  :meth:`gpyreg.GP.log_posterior` with ``compute_grad=True``, and, where
+  another hyperparameter has a prior, the optimizer of
+  :meth:`gpyreg.GP.fit`, which stopped within an iteration, short of the
+  optimum.
+* The probability that a hyperprior puts inside the bounds of its
+  hyperparameter, by which :meth:`gpyreg.GP.log_posterior` renormalizes
+  the prior, is computed from the survival function where both bounds lie
+  above the centre of the prior. As a difference of two values of the
+  cumulative distribution function it was zero with both bounds far in
+  the upper tail (beyond about 8.3 scales of a Gaussian prior), which made
+  the log posterior infinite everywhere and sent :meth:`gpyreg.GP.fit` to
+  a poor point. Where the lower bound is not above the centre, the value
+  is the same as before, to the last bit. ``gpyreg.f_min_fill`` has the
+  survival functions of the two smooth-box families, ``smoothbox_sf`` and
+  ``smoothbox_student_t_sf``.
+* The space-filling design of :meth:`gpyreg.GP.fit`, drawn by
+  ``gpyreg.f_min_fill``, draws the starting values of a hyperparameter
+  whose bounds both lie above the centre of its prior through the
+  survival function of the prior and its inverse, where it drew them
+  through the cumulative distribution function and the percent point
+  function. With both bounds far in the upper tail, every draw of that
+  hyperparameter lay at infinity (the starting points the fit was given
+  stayed finite), and a fit with hyperparameter samples raised
+  ``ValueError`` because the widths of the slice sampler were NaN. Where
+  the lower bound is not above the centre, the design is the same as
+  before, to the last bit. ``gpyreg.f_min_fill`` has the inverse survival
+  functions of the two smooth-box families, ``smoothbox_isf`` and
+  ``smoothbox_student_t_isf``.
+* The space-filling design of :meth:`gpyreg.GP.fit`, drawn by
+  ``gpyreg.f_min_fill``, gives a hyperparameter whose lower and upper
+  bounds are equal their value at every point when the hyperparameter has
+  a prior, as it did for one without. Mapped through the prior's quantile
+  function, the value came back an ulp or two off, where the log prior is
+  ``-inf``, so that the objective was infinite at every point of the
+  design but the starting points the fit was given, and the ranking of
+  the design that picks the starts of the optimization was lost. A GP
+  that PyVBMC builds meets this when the noise is held at its lower bound
+  (targets of a range below about 3e-3) and the option ``noise_size``
+  moves the centre of the noise prior away from that bound.
+* :meth:`gpyreg.GP.set_priors` refuses, with a message that says what is
+  wrong, a coordinate whose ``sigma`` is finite beside a location that is
+  not: an infinite or NaN ``mu`` of a Gaussian or Student's t prior, or an
+  infinite or NaN end ``a`` or ``b`` of a smooth box, as it refuses a
+  ``sigma`` that is not finite and positive. 1.3.0 took such a prior, and
+  the log posterior was NaN with the bounds that :meth:`gpyreg.GP.fit`
+  fills. A coordinate of a block without a prior is written, as before,
+  with NaN for both its location and its ``sigma``. **Upgrading:** a
+  script that wrote a non-finite ``mu`` for no prior, which gplite reads
+  that way, sets the prior of a hyperparameter none of whose coordinates
+  has a prior to ``None``, and gives a coordinate of a block without a
+  prior NaN for both its location and its ``sigma``, as the message says.
+  A smooth box with an infinite or NaN end has no such replacement: the
+  script writes the prior it means.
+* :meth:`gpyreg.GP.set_priors` refuses, with a message that says what is
+  wrong, a smooth box of either family whose lower end ``a`` is above its
+  upper end ``b``. 1.3.0 took such a box, whose normalization constant is
+  then below one or negative, and gave a log prior that was wrong or NaN.
+  A smooth box with ``a == b``, which has no plateau and is the Gaussian
+  or the Student's t centred at ``a``, is taken as before. **Upgrading:**
+  a script that wrote an inverted box writes the box it means, with
+  ``a <= b``.
+
 1.3.0 (2026-09-23)
 ------------------
 

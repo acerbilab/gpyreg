@@ -1176,7 +1176,10 @@ Use the value <code class="docutils literal notranslate"><span class="pre">None<
 If <code class="docutils literal notranslate"><span class="pre">priors=None</span></code>, all hyperparameter priors are removed.
 Within a block of several hyperparameters, a coordinate whose
 location (<code class="docutils literal notranslate"><span class="pre">mu</span></code>, or <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> for the smooth-box
-families) and <code class="docutils literal notranslate"><span class="pre">sigma</span></code> are both NaN has no prior.
+families) and <code class="docutils literal notranslate"><span class="pre">sigma</span></code> are both NaN has no prior; every other
+coordinate needs a finite location, with <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;=</span> <span class="pre">b</span></code>, and a
+finite, positive <code class="docutils literal notranslate"><span class="pre">sigma</span></code>. A smooth box with <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">b</span></code> is the
+Gaussian (or Student’s t) centred at <code class="docutils literal notranslate"><span class="pre">a</span></code>.
 Degrees of freedom <code class="docutils literal notranslate"><span class="pre">df</span></code> that are zero, infinite or NaN make
 a <code class="docutils literal notranslate"><span class="pre">&quot;student_t&quot;</span></code> prior <code class="docutils literal notranslate"><span class="pre">&quot;gaussian&quot;</span></code>, as
 <code class="docutils literal notranslate"><span class="pre">gplite_hypprior.m</span></code> reads them, and a
@@ -1196,7 +1199,8 @@ expected hyperparameter.</p>
 hyperparameter is unknown.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when a coordinate that has a prior is given a <code class="docutils literal notranslate"><span class="pre">sigma</span></code>
-that is not finite and positive.</p>
+that is not finite and positive, or a location that is not
+finite, or a smooth box whose <code class="docutils literal notranslate"><span class="pre">a</span></code> is above its <code class="docutils literal notranslate"><span class="pre">b</span></code>.</p>
 </dd>
 </dl>
 </dd>
