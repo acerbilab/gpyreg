@@ -3160,6 +3160,60 @@ def test_space_filling_design_from_the_centre_down(family, below_centre):
     assert np.array_equal(X[:, 0], expected)
 
 
+@pytest.mark.parametrize(
+    "prior",
+    [
+        # Priors of the form PyVBMC gives its noise, centred above the
+        # fixed value and below it.
+        ("student_t", (np.log(0.2), 0.5, 3.0)),
+        ("student_t", (-8.0, 0.5, 3.0)),
+        ("gaussian", (np.log(0.2), 0.5)),
+        # A smooth box around the fixed value, and one below it.
+        ("smoothbox", (-7.0, -4.0, 0.5)),
+        ("smoothbox_student_t", (-9.0, -8.0, 0.5, 3.0)),
+    ],
+)
+def test_space_filling_design_of_a_fixed_coordinate_with_a_prior(
+    monkeypatch, prior
+):
+    """A hyperparameter whose two bounds are equal takes their value at
+    every point of the space-filling design, whatever its prior. Mapped
+    through the prior's quantile function, the value comes back an ulp or
+    two off, where the log prior is ``-inf``. The noise here is fixed at
+    ``log(sqrt(1e-5))``, as a PyVBMC-built GP fixes it for targets of a
+    small range."""
+    from gpyreg import gaussian_process as gp_module
+
+    received = {}
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        received.update(X0=X0.copy(), y0=y0.copy())
+        return X0, y0
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
+    fixed = np.log(np.sqrt(1e-5))
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 1))
+    gp = _gp_1d()
+    bounds = {name: None for name in _no_priors()}
+    bounds["noise_log_scale"] = (fixed, fixed)
+    gp.set_bounds(bounds)
+    priors = _no_priors()
+    priors["noise_log_scale"] = prior
+    gp.set_priors(priors)
+    gp.fit(
+        X=X,
+        y=np.sin(X),
+        options={"n_samples": 0, "init_N": 64, "opts_N": 1},
+        rng=np.random.default_rng(0),
+    )
+
+    assert np.all(received["X0"][:, 2] == fixed)
+    assert np.all(np.isfinite(received["y0"]))
+
+
 @pytest.mark.parametrize("key", ["sampler_name", "sampler"])
 def test_fit_reads_the_documented_sampler_option(key):
     """`fit` documents the sampler under `sampler_name` and read it under

@@ -162,7 +162,11 @@ def f_min_fill(
                     df = 3
                 df = np.minimum(df, 3)
                 upper_half = LB[i] > 0.5 * (a + b)
-                if df == 0 and upper_half:
+                if LB[i] == UB[i]:
+                    # Fixed dimension, which the quantile function would
+                    # return an ulp or two off its value.
+                    sX[:, i] = LB[i]
+                elif df == 0 and upper_half:
                     sf_lb = smoothbox_sf(LB[i], sigma, a, b)
                     sf_ub = smoothbox_sf(UB[i], sigma, a, b)
                     S_scaled = sf_lb - (sf_lb - sf_ub) * S[:, i]
@@ -197,7 +201,10 @@ def f_min_fill(
                     df = 3
                 df = np.minimum(df, 3)
                 upper_half = LB[i] > mu
-                if df == 0 and upper_half:
+                if LB[i] == UB[i]:
+                    # Fixed dimension, as above.
+                    sX[:, i] = LB[i]
+                elif df == 0 and upper_half:
                     sf_lb = sp.stats.norm.sf((LB[i] - mu) / sigma)
                     sf_ub = sp.stats.norm.sf((UB[i] - mu) / sigma)
                     S_scaled = sf_lb - (sf_lb - sf_ub) * S[:, i]

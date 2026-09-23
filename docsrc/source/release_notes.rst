@@ -36,6 +36,17 @@ to change.
   the same as before, to the last bit. ``gpyreg.f_min_fill`` has the
   inverse survival functions of the two smooth-box families,
   ``smoothbox_isf`` and ``smoothbox_student_t_isf``.
+* The space-filling design of :meth:`gpyreg.GP.fit`, drawn by
+  ``gpyreg.f_min_fill``, gives a hyperparameter whose lower and upper
+  bounds are equal their value at every point when the hyperparameter has
+  a prior, as it did for one without. Mapped through the prior's quantile
+  function, the value came back an ulp or two off, where the log prior is
+  ``-inf``, so that the objective was infinite at every point of the
+  design but the starting points the fit was given, and the ranking of
+  the design that picks the starts of the optimization was lost. A GP
+  that PyVBMC builds meets this when the noise is held at its lower bound
+  (targets of a range below about 3e-3) and the option ``noise_size``
+  moves the centre of the noise prior away from that bound.
 * :meth:`gpyreg.GP.set_priors` refuses, with a message that says what is
   wrong, a coordinate whose ``sigma`` is finite beside a location that is
   not: an infinite or NaN ``mu`` of a Gaussian or Student's t prior, or an
