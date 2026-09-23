@@ -2324,8 +2324,10 @@ class GP:
             Either a array of shape ``(N, D)`` with each row containing the
             standard deviation of a single Gaussian measure, or a single
             floating point number which is interpreted as an array of shape
-            ``(1, D)``. A one-dimensional array of length ``D`` is one
-            measure, as for ``mu``.
+            ``(1, D)``, or an array of shape ``(N, 1)`` with one standard
+            deviation per measure, the same in every dimension. A
+            one-dimensional array of length ``D`` is one measure, as for
+            ``mu``.
         compute_var : bool, defaults to False
             Whether to compute variance for each integral.
         separate_samples : bool, defaults to False
@@ -2351,8 +2353,8 @@ class GP:
             zero, constant and negative quadratic means.
         ValueError
             Raised when the GP has no training data or no posterior
-            factors, or when the Gaussian measures do not have one column
-            per input dimension.
+            factors, or when ``mu`` does not have one column per input
+            dimension, or ``sigma`` neither one nor one per dimension.
         """
 
         if not isinstance(
@@ -2400,13 +2402,15 @@ class GP:
         sigma = np.atleast_2d(np.asarray(sigma, dtype=float))
         if np.size(mu) == 1:
             mu = np.tile(mu, (1, D))
-        if np.size(sigma) == 1:
+        # A sigma of one column holds one standard deviation per measure,
+        # the same in every dimension, which `gplite_quad.m` broadcasts.
+        if sigma.shape[1] == 1:
             sigma = np.tile(sigma, (1, D))
         if mu.shape[1] != D or sigma.shape[1] != D:
             raise ValueError(
                 "Each Gaussian measure needs one column per input "
-                f"dimension, {D} of them: mu has {mu.shape[1]} and sigma "
-                f"{sigma.shape[1]}."
+                f"dimension, {D} of them, and sigma may also have one "
+                f"column: mu has {mu.shape[1]} and sigma {sigma.shape[1]}."
             )
 
         N_star = mu.shape[0]

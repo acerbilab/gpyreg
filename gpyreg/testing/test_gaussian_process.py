@@ -2892,6 +2892,39 @@ def test_noise_gradient_with_a_constant_total_noise():
     assert gradient[D + 2] == 0.0
 
 
+def test_quad_takes_one_width_per_measure():
+    """A ``sigma`` of one column holds one standard deviation per measure,
+    the same in every dimension, as ``gplite_quad.m`` broadcasts it and as
+    release 1.2.1 took it: the integrals and their variances are those of
+    the same widths written out per dimension. A ``sigma`` of another width
+    than one or ``D`` is refused."""
+    D = 3
+    rng = np.random.default_rng(9)
+    X = rng.uniform(-2, 2, size=(15, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2]) * X[:, 2:3]
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    hyp = np.concatenate(
+        [np.zeros(D), [0.0], [np.log(0.1)], [0.5], np.zeros(D), np.zeros(D)]
+    )
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    mu = rng.uniform(-1, 1, size=(4, D))
+    widths = np.array([[0.3], [0.7], [1.1], [2.0]])
+
+    F_one, V_one = gp.quad(mu, widths, compute_var=True)
+    F_all, V_all = gp.quad(mu, np.tile(widths, (1, D)), compute_var=True)
+
+    assert np.array_equal(F_one, F_all)
+    assert np.array_equal(V_one, V_all)
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(mu, np.ones((4, 2)))
+    assert "one column per input" in execinfo.value.args[0]
+
+
 def test_quad_input_checks():
     """Bayesian quadrature needs the training data, the posterior factors,
     a mean function whose hyperparameters it can place and measures with

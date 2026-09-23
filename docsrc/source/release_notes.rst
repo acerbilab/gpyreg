@@ -177,18 +177,25 @@ to change.
   ``hyp`` checks the width of the hyperparameter row, and with
   ``compute_posterior=True`` refuses hyperparameters that are NaN (never
   set), naming them; :meth:`gpyreg.GP.quad` refuses a mean function it
-  cannot place; and a noise variance given as an array whose row count is
+  cannot place, and a ``mu`` with more columns than input dimensions, for
+  which 1.2.1 ignored the extra columns, broadcast them into a wrong
+  integral or raised a broadcasting error, depending on the mean function
+  and the dimension; and a noise
+  variance given as an array whose row count is
   not that of the inputs is refused, where 1.2.1 reshaped any array of
   ``N`` entries into a column and failed on any other. Inputs on which
   1.2.1 failed with an error from inside the computation are refused
   with a message that names the problem: :meth:`gpyreg.GP.quad` refuses
   a GP without training data or posterior factors, where 1.2.1 raised
-  ``AttributeError`` or ``TypeError``, and a measure that has not one
-  column per input dimension; and
+  ``AttributeError`` or ``TypeError``, and a ``mu`` with fewer columns
+  than input dimensions, where it raised ``IndexError``; and
   :meth:`gpyreg.slice_sample.SliceSampler.sample` refuses a ``thin`` or
   ``burn`` that is not a whole number, an infinite one included, with
   ``ValueError`` instead of raising ``TypeError`` from ``range``. A noise
-  variance may be any number or 0-d array, and ``SliceSampler.sample``
+  variance may be any number or 0-d array; ``quad`` takes a ``sigma`` of
+  one column, one standard deviation per measure in every dimension, as
+  1.2.1 and gplite take it, and refuses a ``sigma`` of any other width
+  than one or the number of input dimensions; and ``SliceSampler.sample``
   takes a ``thin`` or ``burn`` that is a whole number of any type, a
   float such as 2.0 included, where 1.2.1 took integers only. A failed
   Cholesky decomposition reports ``LinAlgError`` in both noise
@@ -218,13 +225,17 @@ to change.
   - ``quad`` with another mean function, whose integral 1.2.1 computed
     as if that mean were a constant equal to its first hyperparameter,
     has no replacement;
+  - ``quad`` with a ``mu`` of more columns than input dimensions, whose
+    extra columns 1.2.1 ignored or broadcast into a wrong integral, is
+    given one column per dimension;
   - a noise variance given as a row of ``N`` is given as a column;
   - a script that catches the exception of a check whose type changed
     catches the new one: ``ValueError`` for a shape check (an ``X`` that
     is not two-dimensional, or whose number of columns is not the GP's
     ``D``), which raised ``AssertionError``, for ``quad`` on a GP without
     training data or posterior factors (``AttributeError`` or
-    ``TypeError``) or with a measure of another width (``IndexError``),
+    ``TypeError``) or with a ``mu`` of fewer columns than input
+    dimensions (``IndexError``),
     and for a ``thin`` or ``burn`` that is not a whole number
     (``TypeError``); ``LinAlgError`` for a failed Cholesky decomposition
     in the low-noise representation (``TypeError``).
