@@ -1429,6 +1429,12 @@ class GP:
             fit nor held from an earlier ``fit`` or ``update``, before the
             fit changes anything.
         ValueError
+            Raised by the check of the shapes of the training data given,
+            before the fit changes anything: when ``X`` is neither a 1-D
+            nor a 2-D array or does not have ``D`` columns, when ``y`` does
+            not hold one value per row of ``X``, or when an array ``s2``
+            does not hold one variance per row of ``X``.
+        ValueError
             Raised by :py:meth:`get_recommended_bounds`, through which the
             fit fills the bounds that are not set: when the option
             ``lower_bounds`` or ``upper_bounds`` is neither
@@ -1447,6 +1453,13 @@ class GP:
         ValueError
             Raised when ``n_samples`` is positive and ``sampler_name`` is
             not ``'slicesample'``, after the optimization.
+        ValueError
+            Raised by :py:class:`gpyreg.slice_sample.SliceSampler` when
+            ``n_samples`` is positive, after the optimization: when the
+            widths of the sampler, from the option ``widths`` or computed
+            by the fit, are not all positive and finite, or when the log
+            posterior is not finite at the optimized hyperparameters, where
+            the chain starts.
         ValueError
             Raised by :py:meth:`update`, which computes the posterior of
             the fitted hyperparameters, when one of them is NaN.
@@ -2242,6 +2255,16 @@ class GP:
             is not clamped at zero, unlike the variances
             :py:func:`predict` returns, so on a nearly singular posterior
             an entry can come out slightly negative.
+
+        Raises
+        ------
+        LinAlgError
+            Raised when a posterior holds the negative inverse of the
+            training covariance without its Cholesky factor, as one
+            pickled by gpyreg 1.3.1 or earlier does where the smallest
+            noise variance at the training inputs is below 1e-6, and the
+            factorization that computes the factor again fails even after
+            its noise is multiplied tenfold, up to ten times.
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
         s_N = self.posteriors.size
@@ -2396,6 +2419,16 @@ class GP:
             be treated as read-only; custom covariance results may be copied
             to give each tuple entry stable values. Observation-noise inputs
             and ``add_noise`` do not affect these latent kernel matrices.
+
+        Raises
+        ------
+        LinAlgError
+            Raised when a posterior holds the negative inverse of the
+            training covariance without its Cholesky factor, as one
+            pickled by gpyreg 1.3.1 or earlier does where the smallest
+            noise variance at the training inputs is below 1e-6, and the
+            factorization that computes the factor again fails even after
+            its noise is multiplied tenfold, up to ten times.
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
 
@@ -2619,6 +2652,14 @@ class GP:
             Raised when the GP has no training data or no posterior
             factors, or when ``mu`` does not have one column per input
             dimension, or ``sigma`` neither one nor one per dimension.
+        LinAlgError
+            Raised when ``compute_var`` is True and a posterior holds the
+            negative inverse of the training covariance without its
+            Cholesky factor, as one pickled by gpyreg 1.3.1 or earlier does
+            where the smallest noise variance at the training inputs is
+            below 1e-6, and the factorization that computes the factor
+            again fails even after its noise is multiplied tenfold, up to
+            ten times.
         """
 
         if not isinstance(
@@ -3086,10 +3127,11 @@ class GP:
             negative eigenvalue beyond the rounding of the prior variance
             at ``X_star``.
         LinAlgError
-            Raised when the posterior holds the negative inverse of the
-            training covariance, as it does where the smallest noise
-            variance at the training inputs is below 1e-6, and the
-            Cholesky decomposition of that covariance fails even after
+            Raised when the posterior drawn from holds the negative inverse
+            of the training covariance without its Cholesky factor, as one
+            pickled by gpyreg 1.3.1 or earlier does where the smallest
+            noise variance at the training inputs is below 1e-6, and the
+            factorization that computes the factor again fails even after
             its noise is multiplied tenfold, up to ten times.
         """
         rng = resolve_rng(rng)
@@ -3626,11 +3668,16 @@ class Posterior:
     L_factor : ndarray, shape (N, N) or None
         If ``L_chol`` is False, the upper triangular Cholesky factor of
         ``K + sn2_mult * diag(sn2)``, the matrix whose negative inverse
-        ``L`` is, from which predictions and draws form their covariance:
-        formed from ``L``, it would carry the rounding of the inverse,
+        ``L`` is. :py:func:`GP.predict`, :py:func:`GP.predict_full`,
+        :py:func:`GP.quad` and :py:func:`GP.random_function` form their
+        covariances from it, and a single-point :py:func:`GP.update` takes
+        from it the predictive variance of the new point and extends it:
+        formed from ``L``, these would carry the rounding of the inverse,
         which grows as the noise shrinks. ``None`` if ``L_chol`` is True,
-        where ``L`` is that factor, scaled. A posterior pickled without it
-        has it computed again where it is needed.
+        where ``L`` is that factor, scaled. A posterior pickled by gpyreg
+        1.3.1 or earlier has no such attribute: the predictions, the
+        quadrature and the draws compute the factor again at each call,
+        and a single-point update recomputes the posterior in full.
     """
 
     def __init__(

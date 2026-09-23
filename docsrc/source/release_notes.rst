@@ -29,10 +29,9 @@ to change.
   sampler raised ``ValueError``. A finite lower bound from the caller is
   taken, and an upper bound left unset collapses onto it, as before: the
   fit runs as it did, to the last bit. **Upgrading:** a script that
-  catches the ``KeyError`` catches
-  ``ValueError``, and a script that fits on such inputs, or reads the
-  recommended bounds for them, gives the hyperparameters that the message
-  names a finite lower bound first.
+  catches the ``KeyError`` catches ``ValueError``, and a script that fits
+  on such inputs, or reads the recommended bounds for them, gives the
+  hyperparameters that the message names a finite lower bound first.
 * :meth:`gpyreg.GP.set_priors` leaves the GP as it was when it refuses its
   argument, and marks the GP as having priors only where a coordinate of
   some block has one. On a GP without priors, a refused call marked the
@@ -194,8 +193,14 @@ to change.
   ``ValueError``.
 * Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
   the ``ValueError`` it passes on from
-  :meth:`gpyreg.GP.get_recommended_bounds`, and the ``ValueError`` and
-  ``LinAlgError`` it passes on from :meth:`gpyreg.GP.update`.
+  :meth:`gpyreg.GP.get_recommended_bounds`, from the check of the shapes
+  of its training data and from
+  :class:`gpyreg.slice_sample.SliceSampler`, and the ``ValueError`` and
+  ``LinAlgError`` it passes on from :meth:`gpyreg.GP.update`. Those of
+  :meth:`gpyreg.GP.predict`, :meth:`gpyreg.GP.predict_full`,
+  :meth:`gpyreg.GP.quad` and :meth:`gpyreg.GP.random_function` name the
+  ``LinAlgError`` of the factorization that a posterior pickled by an
+  earlier version in the low-noise representation needs.
 
 1.3.1 (2026-09-23)
 ------------------
