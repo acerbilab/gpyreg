@@ -142,33 +142,45 @@ to change.
   :class:`gpyreg.gaussian_process.Posterior`, one more ``N`` by ``N``
   matrix per hyperparameter sample). Formed from the inverse, as gplite
   forms it, the covariance carried a rounding error that grows as the
-  noise shrinks: at a noise standard deviation of 1e-6, the variances at
-  the training inputs, of order 1e-12, were off by up to 2e-4 or clamped
-  to zero, and the covariance of ``predict_full`` had eigenvalues down to
-  about -1e-3. A single-point :meth:`gpyreg.GP.update` of such a posterior
-  takes from the factor the predictive variance of the new point and the
-  solve that it divides by that variance, and extends the factor. With
-  the variance formed from the inverse it recomputed the posterior in
-  full where rounding had clamped that variance, and otherwise extended
-  the posterior with a wrong one, which moved the predictive mean by some
-  thousandths over ten updates. :meth:`gpyreg.GP.random_function` draws
-  from the kept factor instead of factoring the training covariance at
-  each call: its draws from a posterior that no single-point update has
-  extended are unchanged, and after such updates they change with the
-  posterior. A posterior pickled by an earlier version has the
-  factor computed again where it is needed. The Cholesky representation
-  is unchanged, to the last bit. **Upgrading:** the predictions of a GP
-  in the low-noise representation, and its posterior after single-point
-  updates, change; a script that compares them with values stored from
-  1.3.1 stores them again. PyBADS reaches this representation: at its
-  default options the lower bound of its GP noise is a variance of about
-  1.4e-7, so a fit that ends at that bound, as on a noiseless target,
-  predicts different values and can take the search elsewhere.
+  noise shrinks: with 30 training inputs on [-2, 2], a squared
+  exponential kernel of unit length and output scales and a noise
+  standard deviation of 1e-6, the variances at the training inputs, of
+  order 1e-12, were off by about 1e-4, many of them clamped to zero, and
+  the covariance of ``predict_full`` had eigenvalues of order -1e-3. A
+  single-point :meth:`gpyreg.GP.update` of such a posterior takes from
+  the factor the predictive variance of the new point and the solve that
+  it divides by that variance, and extends the factor. With the variance
+  formed from the inverse it recomputed the posterior in full where
+  rounding had clamped that variance, and otherwise extended the
+  posterior with a wrong one, which moved the predictive mean away from
+  that of the posterior computed in full: over the last ten of the 30
+  inputs of the GP above, added one at a time, with targets of range 2
+  and noise standard deviations from 1e-7 to 1e-4, by up to 1e-2, and by
+  up to 0.3 with a length scale of 3, as the noise and the rounding of the
+  BLAS build decided.
+  :meth:`gpyreg.GP.random_function` draws from the kept factor instead of
+  factoring the training covariance at each call: its draws from a
+  posterior that no single-point update has extended are unchanged, and
+  after such updates they change with the posterior. A posterior pickled
+  by an earlier version has the factor computed again where it is
+  needed. The Cholesky representation is unchanged, to the last bit.
+  **Upgrading:** the predictions of a GP in the low-noise representation,
+  and its posterior after single-point updates, change; a script that
+  compares them with values stored from 1.3.1 stores them again. PyBADS
+  reaches this representation: at its default options the lower bound of
+  the noise of its GP is a variance of about 1.4e-7, below the 1e-6 at
+  which the representation starts. It makes no single-point updates and
+  reads only the hyperparameters of the posteriors, so for any fit whose
+  noise variance ends below 1e-6, as on a noiseless target, its
+  predictive means are unchanged and its predictive variances change,
+  which can take its search elsewhere.
 * :meth:`gpyreg.GP.quad` with ``compute_var=True`` forms the variance of
   an integral from the same Cholesky factor in the low-noise
   representation, where it formed it from the inverse and carried its
-  rounding: with two training points 1e-3 apart at a noise standard
-  deviation of 1e-6, a variance of 0.016 was off by 6e-11. The means of
+  rounding: with two training points 1e-3 apart, a squared exponential
+  kernel of unit length and output scales, a noise standard deviation of
+  1e-6 and a Gaussian measure of standard deviation 0.5 centred between
+  the two points, a variance of 0.016 was off by 6e-11. The means of
   the integrals, and both in the Cholesky representation, are unchanged,
   to the last bit. **Upgrading:** the variances of integrals of a GP in
   the low-noise representation change.
