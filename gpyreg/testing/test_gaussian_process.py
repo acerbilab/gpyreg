@@ -2510,6 +2510,75 @@ def test_log_prior_matches_the_documented_densities():
             assert np.isclose(log_prior, expected, rtol=1e-12)
 
 
+def _reference_mass(kind, params, lower, upper):
+    """The mass of a reference density between two bounds, by quadrature
+    over the pieces between its kinks, the ends of a smooth box."""
+    density = lambda t: np.exp(_reference_log_prior(kind, params, t))
+    cuts = [lower, upper]
+    if kind.startswith("smoothbox"):
+        cuts += [end for end in params[:2] if lower < end < upper]
+    cuts = sorted(cuts)
+    return sum(
+        quad(density, low, high, epsabs=0.0, epsrel=1e-12, limit=200)[0]
+        for low, high in zip(cuts[:-1], cuts[1:])
+    )
+
+
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        # Around the centre of every prior.
+        [(-1.0, 2.0), (-1.5, 1.0), (-2.0, 0.5), (-3.0, 2.0)],
+        # Above the centre: in the upper tail, or from inside a box.
+        [(2.5, 5.0), (1.0, 3.0), (0.2, 3.5), (-0.5, 4.0)],
+        # Below the centre.
+        [(-5.0, -2.0), (-4.0, -1.5), (-3.5, -1.5), (-5.0, -3.0)],
+        # One finite bound.
+        [(0.0, np.inf), (-np.inf, 0.5), (-np.inf, 2.0), (-1.0, np.inf)],
+    ],
+    ids=["centre", "upper", "lower", "one_bound"],
+)
+def test_log_prior_matches_the_truncated_densities(bounds):
+    """With bounds, each hyperprior is renormalized over them: the log prior
+    is that of the documented density truncated to the bounds, whose mass
+    between them is computed here by quadrature of the density."""
+    # In the order of the hyperparameter array: covariance, noise, mean.
+    priors = {
+        "covariance_log_lengthscale": ("gaussian", (0.3, 1.2)),
+        "covariance_log_outputscale": ("student_t", (-0.2, 0.8, 5.0)),
+        "noise_log_scale": ("smoothbox", (-1.0, 1.0, 0.7)),
+        "mean_const": ("smoothbox_student_t", (-2.0, 0.5, 0.9, 4.0)),
+    }
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.set_priors(priors)
+    gp.set_bounds(dict(zip(priors, bounds)))
+
+    # A point between the bounds of each hyperparameter.
+    hyp = np.array(
+        [
+            low + 0.3 * (high - low)
+            if np.isfinite(low) and np.isfinite(high)
+            else (low + 0.7 if np.isfinite(low) else high - 0.7)
+            for low, high in bounds
+        ]
+    )
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    gp.update(X_new=X, y_new=np.sin(X), hyp=hyp[None, :])
+
+    expected = sum(
+        _reference_log_prior(kind, params, x)
+        - np.log(_reference_mass(kind, params, low, high))
+        for (kind, params), x, (low, high) in zip(priors.values(), hyp, bounds)
+    )
+    log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+    assert np.isclose(log_prior, expected, rtol=1e-10)
+
+
 @pytest.mark.parametrize("family", ["smoothbox", "smoothbox_student_t"])
 @pytest.mark.parametrize("D", [2, 3])
 def test_smooth_box_prior_over_a_block(family, D):
