@@ -3401,6 +3401,29 @@ def test_fit_raises_what_it_documents():
         )
 
 
+@pytest.mark.parametrize("given", ["neither", "X", "y"])
+def test_fit_without_training_data_raises(given):
+    """A fit needs training inputs and targets, given to it or held by the
+    GP. Without them it says so, naming what is missing, before it changes
+    anything. It raised ``AttributeError`` from a component or from the
+    check of the shapes, or, given ``X`` alone, the ``ValueError`` of
+    ``get_recommended_bounds`` after storing ``X``."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    data = {"X": {"X": X}, "y": {"y": y}, "neither": {}}[given]
+    gp = _gp_1d()
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.fit(**data, options={"n_samples": 0, "init_N": 8})
+
+    message = execinfo.value.args[0]
+    assert "no training data" in message
+    missing = {"X": "y", "y": "X", "neither": "X and y"}[given]
+    assert f"missing {missing}." in message
+    assert gp.X is None and gp.y is None
+    assert np.all(np.isnan(gp.lower_bounds))
+
+
 def test_update_without_hyperparameters_raises():
     """A posterior cannot be computed from hyperparameters that were never
     set: the message names them instead of leaving NaN factors behind."""

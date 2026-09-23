@@ -114,6 +114,14 @@ to change.
   the integrals, and both in the Cholesky representation, are unchanged,
   to the last bit. **Upgrading:** the variances of integrals of a GP in
   the low-noise representation change.
+* :meth:`gpyreg.GP.fit` on a GP without training data, given neither to
+  it nor held from an earlier ``fit`` or ``update``, raises ``ValueError``
+  that says so and names what is missing, before it changes anything. It
+  raised ``AttributeError`` from a covariance function or from the check
+  of the input shapes, or, given ``X`` alone, the ``ValueError`` of
+  :meth:`gpyreg.GP.get_recommended_bounds` after storing ``X``.
+  **Upgrading:** a script that catches the ``AttributeError`` catches
+  ``ValueError``.
 * Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
   the ``ValueError`` it passes on from
   :meth:`gpyreg.GP.get_recommended_bounds`, and the ``ValueError`` and

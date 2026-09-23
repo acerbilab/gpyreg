@@ -1405,6 +1405,10 @@ class GP:
         Raises
         ------
         ValueError
+            Raised when the GP has no training data, neither given to the
+            fit nor held from an earlier ``fit`` or ``update``, before the
+            fit changes anything.
+        ValueError
             Raised by :py:meth:`get_recommended_bounds`, through which the
             fit fills the bounds that are not set: when the option
             ``lower_bounds`` or ``upper_bounds`` is neither
@@ -1466,6 +1470,22 @@ class GP:
         burn_in = options.get("burn", thin * s_N)
         lower_bounds = options.get("lower_bounds", "current")
         upper_bounds = options.get("upper_bounds", "current")
+
+        # The training data, given here or held by the GP, checked before
+        # the fit changes anything.
+        missing = [
+            name
+            for name, given, held in (("X", X, self.X), ("y", y, self.y))
+            if given is None and held is None
+        ]
+        if missing:
+            raise ValueError(
+                "The GP has no training data: `fit` needs the inputs X and "
+                "the targets y, given to it or held by the GP from an "
+                "earlier `fit` or `update`; missing "
+                + " and ".join(missing)
+                + "."
+            )
 
         X, y, s2 = self._convert_shapes(X, y, s2)
         # Initialize GP if requested.
