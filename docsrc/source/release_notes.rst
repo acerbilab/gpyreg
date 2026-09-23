@@ -142,8 +142,9 @@ to change.
   the posterior with a wrong one, which moved the predictive mean by some
   thousandths over ten updates. :meth:`gpyreg.GP.random_function` draws
   from the kept factor instead of factoring the training covariance at
-  each call, so its draws change only after a single-point update, at the
-  level of rounding. A posterior pickled by an earlier version has the
+  each call: its draws from a posterior that no single-point update has
+  extended are unchanged, and after such updates they change with the
+  posterior. A posterior pickled by an earlier version has the
   factor computed again where it is needed. The Cholesky representation
   is unchanged, to the last bit. **Upgrading:** the predictions of a GP
   in the low-noise representation, and its posterior after single-point
