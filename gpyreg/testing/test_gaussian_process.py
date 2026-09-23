@@ -3030,6 +3030,36 @@ def test_set_bounds_refuses_an_inverted_pair():
     assert np.all(gp.upper_bounds[:2] == 1.0)
 
 
+def test_fit_raises_what_it_documents():
+    """``fit`` passes on the ``ValueError`` of ``get_recommended_bounds``,
+    through which it fills its bounds, and that of ``update``, which
+    computes the posterior of the fitted hyperparameters, as its
+    ``Raises`` section says."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    options = {"n_samples": 0, "init_N": 8}
+
+    with pytest.raises(ValueError, match="`lower_bounds` should be"):
+        _gp_1d().fit(X, y, options=dict(options, lower_bounds="nonsense"))
+    with pytest.raises(ValueError, match="Lower bound above upper bound"):
+        _gp_1d().fit(
+            X,
+            y,
+            options=dict(
+                options, lower_bounds=np.ones(4), upper_bounds=-np.ones(4)
+            ),
+        )
+    # Without a space-filling design or an optimization, the fit keeps
+    # the starting point it is given, NaN included.
+    with pytest.raises(ValueError, match="are NaN"):
+        _gp_1d().fit(
+            X,
+            y,
+            hyp0=np.full((1, 4), np.nan),
+            options={"n_samples": 0, "init_N": 0, "opts_N": 0},
+        )
+
+
 def test_update_without_hyperparameters_raises():
     """A posterior cannot be computed from hyperparameters that were never
     set: the message names them instead of leaving NaN factors behind."""

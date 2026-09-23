@@ -50,6 +50,10 @@ to change.
   already did, and leaves the bounds as they were. It stored the inverted
   pair, which the next ``fit`` refused. **Upgrading:** a script that set
   an inverted pair and never fitted gives the pair in order.
+* Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
+  the ``ValueError`` it passes on from
+  :meth:`gpyreg.GP.get_recommended_bounds`, and the ``ValueError`` and
+  ``LinAlgError`` it passes on from :meth:`gpyreg.GP.update`.
 
 1.3.1 (2026-09-23)
 ------------------

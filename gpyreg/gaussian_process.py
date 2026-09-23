@@ -1373,8 +1373,24 @@ class GP:
         Raises
         ------
         ValueError
+            Raised by :py:meth:`get_recommended_bounds`, through which the
+            fit fills the bounds that are not set: when the option
+            ``lower_bounds`` or ``upper_bounds`` is neither
+            ``"recommended"``, ``None``, ``"current"`` nor an array, when
+            a lower bound given is above its upper bound, or when a column
+            of the training inputs has no spread and a hyperparameter
+            whose recommended bounds take their scale from it is not given
+            finite bounds.
+        ValueError
             Raised when ``n_samples`` is positive and ``sampler_name`` is
             not ``'slicesample'``, after the optimization.
+        ValueError
+            Raised by :py:meth:`update`, which computes the posterior of
+            the fitted hyperparameters, when one of them is NaN.
+        LinAlgError
+            Raised by :py:meth:`update` when the Cholesky decomposition of
+            the training covariance of the fitted hyperparameters fails
+            even after its noise is multiplied tenfold, up to ten times.
         """
         # Share one stream between the initial design and the sampler,
         # including when the caller supplies a seed rather than a generator.
