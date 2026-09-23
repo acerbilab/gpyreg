@@ -62,6 +62,34 @@ to change.
   **Upgrading:** a script that passes ``thin=True`` passes ``1``, and one
   that gives a fit with ``n_samples=0`` a ``thin`` that is not a whole
   number greater than zero leaves it out.
+* Where the smallest noise variance at the training inputs is below 1e-6,
+  as it can be after a fit on noiseless targets, the posterior holds the
+  negative inverse of the training covariance (the low-noise
+  representation). :meth:`gpyreg.GP.predict` and
+  :meth:`gpyreg.GP.predict_full` form the predictive covariance there from
+  a Cholesky factor of the training covariance, which the posterior keeps
+  beside the inverse (the attribute ``L_factor`` of
+  :class:`gpyreg.gaussian_process.Posterior`, one more ``N`` by ``N``
+  matrix per hyperparameter sample). Formed from the inverse, as gplite
+  forms it, the covariance carried a rounding error that grows as the
+  noise shrinks: at a noise standard deviation of 1e-6, the variances at
+  the training inputs, of order 1e-12, were off by up to 2e-4 or clamped
+  to zero, and the covariance of ``predict_full`` had eigenvalues down to
+  about -1e-3. A single-point :meth:`gpyreg.GP.update` of such a posterior
+  takes from the factor the predictive variance of the new point and the
+  solve that it divides by that variance, and extends the factor. With
+  the variance formed from the inverse it recomputed the posterior in
+  full where rounding had clamped that variance, and otherwise extended
+  the posterior with a wrong one, which moved the predictive mean by some
+  thousandths over ten updates. :meth:`gpyreg.GP.random_function` draws
+  from the kept factor instead of factoring the training covariance at
+  each call, so its draws change only after a single-point update, at the
+  level of rounding. A posterior pickled by an earlier version has the
+  factor computed again where it is needed. The Cholesky representation
+  is unchanged, to the last bit. **Upgrading:** the predictions of a GP
+  in the low-noise representation, and its posterior after single-point
+  updates, change; a script that compares them with values stored from
+  1.3.1 stores them again.
 * Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
   the ``ValueError`` it passes on from
   :meth:`gpyreg.GP.get_recommended_bounds`, and the ``ValueError`` and

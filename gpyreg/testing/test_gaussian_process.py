@@ -2411,6 +2411,149 @@ def test_rank_one_update_low_noise_duplicate_recomputes(monkeypatch):
     assert np.array_equal(f_s2, f_s2_ref)
 
 
+def _low_noise_gp(X, y, noise_sd=1e-6):
+    """A one-dimensional GP with a squared exponential kernel of unit
+    length and output scales whose noise variance, below 1e-6, puts its
+    posterior in the low-noise representation."""
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.update(
+        X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, np.log(noise_sd), 0.0]])
+    )
+    assert not gp.posteriors[0].L_chol
+    return gp
+
+
+def test_low_noise_variance_of_two_points():
+    """Two training points at distance ``d`` have, with the kernel
+    ``k = exp(-d**2 / 2)`` and the noise variance ``n``, the predictive
+    variance ``n * ((1 - k) * (1 + k) + n) / ((1 - k + n) * (1 + k + n))``
+    at either point, a form without cancellation. Formed from the explicit
+    inverse of the training covariance, which the low-noise representation
+    holds, the variance carried the rounding of the inverse, which grows as
+    the noise shrinks: here 1e-12 against rounding of order 1e-10. Formed
+    from a Cholesky factor, it is within the rounding of a difference of
+    terms of the size of the prior variance, one."""
+    d = 1e-3
+    X = np.array([[0.0], [d]])
+    gp = _low_noise_gp(X, np.array([[0.3], [-0.2]]))
+    n = np.exp(2 * np.log(1e-6)) * gp.posteriors[0].sn2_mult
+    k = np.exp(-(d**2) / 2)
+    one_minus_k = -np.expm1(-(d**2) / 2)
+    expected = (
+        n * (one_minus_k * (1 + k) + n) / ((one_minus_k + n) * (1 + k + n))
+    )
+    tolerance = 8 * np.finfo(float).eps
+
+    __, s2 = gp.predict(X)
+    __, cov = gp.predict_full(X)
+
+    assert np.all(s2 >= 0.0)
+    assert np.all(np.abs(s2[:, 0] - expected) <= tolerance)
+    assert np.all(np.abs(np.diag(cov[:, :, 0]) - expected) <= tolerance)
+
+
+def test_low_noise_predictions_at_the_training_inputs():
+    """At a noise standard deviation of 1e-6, the predictive variances at
+    the training inputs, of order 1e-12, are non-negative and agree with
+    ``sn2 * K @ inv(K + sn2 I)`` from the eigendecomposition of ``K``,
+    where each term of the diagonal is non-negative, to ``N * eps``; formed
+    from the explicit inverse they were off by up to 2e-4. The full
+    predictive covariance has no eigenvalue below the rounding of the prior
+    covariance it is subtracted from, where it had eigenvalues down to
+    -8e-4."""
+    N = 30
+    eps = np.finfo(float).eps
+    rng = np.random.default_rng(0)
+    X = np.sort(rng.uniform(-2, 2, N))[:, None]
+    gp = _low_noise_gp(X, np.sin(2 * X))
+    posterior = gp.posteriors[0]
+    sn2 = np.exp(2 * posterior.hyp[2]) * posterior.sn2_mult
+    K = gp.covariance.compute(posterior.hyp[:2], X)
+    lam, U = np.linalg.eigh(K)
+    lam = np.maximum(lam, 0.0)
+    reference = (U**2) @ (lam * sn2 / (lam + sn2))
+
+    __, s2 = gp.predict(X)
+
+    assert np.all(s2 >= 0.0)
+    assert np.all(np.abs(s2[:, 0] - reference) <= N * eps)
+
+    x_star = np.vstack((X, np.linspace(-2.5, 2.5, 60)[:, None]))
+    __, cov = gp.predict_full(x_star)
+    K_star = gp.covariance.compute(posterior.hyp[:2], x_star)
+    M = x_star.shape[0]
+    tolerance = 10 * M * eps * np.linalg.norm(K_star, 2)
+    assert np.min(np.linalg.eigvalsh(cov[:, :, 0])) > -tolerance
+
+
+def test_low_noise_rank_one_updates_match_a_full_recomputation():
+    """Ten single-point updates of a posterior in the low-noise
+    representation give the predictive mean and the variances at the
+    training inputs of a full recomputation. The extension takes
+    ``inv(K + sn2 I) k*`` and the Schur complement ``v_star`` from the
+    Cholesky factor; with an inaccurate ``v_star``, formed from the explicit
+    inverse, the mean was off by 1e-3 and the variances by 2e-4."""
+    N = 30
+    rng = np.random.default_rng(1)
+    X = np.sort(rng.uniform(-2, 2, N))[:, None]
+    y = np.sin(2 * X)
+    gp = _low_noise_gp(X[:20], y[:20])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        for i in range(20, N):
+            gp.update(X_new=X[i : i + 1], y_new=y[i : i + 1])
+    gp_ref = _low_noise_gp(X, y)
+
+    x_star = np.linspace(-2.5, 2.5, 201)[:, None]
+    f_mu, __ = gp.predict(x_star)
+    f_mu_ref, __ = gp_ref.predict(x_star)
+    __, s2 = gp.predict(X)
+    __, s2_ref = gp_ref.predict(X)
+
+    assert np.max(np.abs(f_mu - f_mu_ref)) < 1e-6
+    assert np.all(s2 >= 0.0)
+    assert np.max(np.abs(s2 - s2_ref)) <= N * np.finfo(float).eps
+
+
+def test_low_noise_posterior_without_its_factor():
+    """A posterior pickled without the Cholesky factor of the low-noise
+    representation has it computed again: its predictions and draws are
+    those of the posterior that holds it, and a single-point update
+    recomputes it in full."""
+    rng = np.random.default_rng(2)
+    X = np.sort(rng.uniform(-2, 2, 15))[:, None]
+    y = np.sin(2 * X)
+    gp = _low_noise_gp(X, y)
+    stripped = copy.deepcopy(gp)
+    del stripped.posteriors[0].L_factor
+
+    x_star = np.linspace(-2.5, 2.5, 9)[:, None]
+    for a, b in zip(gp.predict(x_star), stripped.predict(x_star)):
+        assert np.array_equal(a, b)
+    for a, b in zip(gp.predict_full(x_star), stripped.predict_full(x_star)):
+        assert np.array_equal(a, b)
+    assert np.array_equal(
+        gp.random_function(x_star, rng=np.random.default_rng(3)),
+        stripped.random_function(x_star, rng=np.random.default_rng(3)),
+    )
+
+    x_new = np.array([[0.123]])
+    stripped.update(X_new=x_new, y_new=np.sin(2 * x_new))
+    gp_ref = _low_noise_gp(
+        np.vstack((X, x_new)), np.vstack((y, np.sin(2 * x_new)))
+    )
+    for key in ("alpha", "L", "L_factor"):
+        assert np.array_equal(
+            getattr(stripped.posteriors[0], key),
+            getattr(gp_ref.posteriors[0], key),
+        )
+
+
 @pytest.mark.parametrize("state", ["cleaned", "no_posterior"])
 def test_single_point_update_without_posterior_factors(state):
     """The rank-one shortcut extends the stored factors, so a GP that

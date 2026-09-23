@@ -1182,23 +1182,49 @@ class GP:
                     # the new point, which `predict` clamps at the noise
                     # level: a v_star that low carries no information
                     # about the latent variance, so fall through to a full
-                    # recomputation as the branch above does.
-                    if v_star[0, s] <= sn2_eff:
+                    # recomputation as the branch above does. A posterior
+                    # pickled without the Cholesky factor that the
+                    # extension works on is recomputed as well.
+                    L_factor = getattr(self.posteriors[s], "L_factor", None)
+                    if v_star[0, s] <= sn2_eff or L_factor is None:
                         full_update_s = True
                         full_updates.append(s)
-                        warnings.warn(
-                            "Rank-one update of the posterior factor "
-                            f"unstable for posterior {s}. Reverting to "
-                            "full update.",
-                            stacklevel=2,
-                        )
+                        if L_factor is not None:
+                            warnings.warn(
+                                "Rank-one update of the posterior factor "
+                                f"unstable for posterior {s}. Reverting to "
+                                "full update.",
+                                stacklevel=2,
+                            )
                     else:
-                        alpha_update = np.dot(-L, Ks)
+                        # inv(K + sn2_mult * sn2) k* from the Cholesky
+                        # factor of the matrix: taken from the explicit
+                        # inverse L, whose rounding grows as the noise
+                        # shrinks, it would carry that rounding, divided
+                        # by v_star, into alpha and L at every update. The
+                        # factor is extended by the column L_factor^-T k*
+                        # and the square root of v_star, the Schur
+                        # complement that the inverse divides by.
+                        new_column = sp.linalg.solve_triangular(
+                            L_factor, Ks, trans=1, check_finite=False
+                        )
+                        alpha_update = sp.linalg.solve_triangular(
+                            L_factor, new_column, trans=0, check_finite=False
+                        )
                         v = -alpha_update / v_star[:, s]
                         self.posteriors[s].L = np.block(
                             [
                                 [L + np.dot(v, alpha_update.T), -v],
                                 [-v.T, -1 / v_star[:, s]],
+                            ]
+                        )
+                        self.posteriors[s].L_factor = np.block(
+                            [
+                                [L_factor, new_column],
+                                [
+                                    np.zeros((1, L_factor.shape[0])),
+                                    np.sqrt(v_star[:, s : s + 1]),
+                                ],
                             ]
                         )
 
@@ -1296,6 +1322,7 @@ class GP:
                 posterior.sn2_mult = None
                 posterior.L_chol = None
                 posterior.sl = None
+                posterior.L_factor = None
         # Maybe add a call to garbage collection here? This would
         # make sure that the things set to None are actually no longer
         # using memory.
@@ -2229,8 +2256,17 @@ class GP:
                     )
                     C = K_star - np.dot(V.T, V)  # Predictive variances
                 else:
-                    LKs = np.dot(L, Ks)
-                    C = K_star + np.dot(Ks.T, LKs)
+                    # From the Cholesky factor of the matrix whose negative
+                    # inverse L is: formed from L (`gplite_pred.m:95-96`),
+                    # the covariance carries the rounding of the inverse,
+                    # which grows as the noise shrinks.
+                    V = sp.linalg.solve_triangular(
+                        self.__low_noise_factor(s),
+                        Ks,
+                        trans=1,
+                        check_finite=False,
+                    )
+                    C = K_star - np.dot(V.T, V)
 
             # Enforce symmetry if lost due to numerical errors.
             C = (C + C.T) / 2
@@ -2421,7 +2457,14 @@ class GP:
                     V = _solve_triangular(L, sW * Ks, trans=1)
                     s2[:, s] = kss - np.sum(V * V, 0)  # predictive variance
                 else:
-                    s2[:, s] = kss + np.sum(Ks * np.dot(L, Ks), 0)
+                    # From the Cholesky factor of the matrix whose negative
+                    # inverse L is: formed from L (`gplite_pred.m:95-96`),
+                    # the variance carries the rounding of the inverse,
+                    # which grows as the noise shrinks.
+                    V = _solve_triangular(
+                        self.__low_noise_factor(s), Ks, trans=1
+                    )
+                    s2[:, s] = kss - np.sum(V * V, 0)
             else:
                 if return_cross_covariance:
                     cross_covariance.append(None)
@@ -3049,17 +3092,13 @@ class GP:
                 # The posterior holds the explicit inverse
                 # -inv(K + sn2_mult * diag(sn2)), whose rounding grows as
                 # the noise shrinks, and a covariance formed from it would
-                # carry that rounding. Factor the matrix itself instead,
-                # with the kernel, noise and multiplier of the posterior.
-                K = self.covariance.compute(hyp[0:cov_N], self.X)
-                sn2 = self.noise.compute(
-                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
-                )
-                L_K, __, __ = self.__training_cholesky(
-                    K, sn2, False, self.posteriors[s].sn2_mult
-                )
+                # carry that rounding; the Cholesky factor of the matrix
+                # itself does not.
                 V = sp.linalg.solve_triangular(
-                    L_K, Ks, trans=1, check_finite=False
+                    self.__low_noise_factor(s),
+                    Ks,
+                    trans=1,
+                    check_finite=False,
                 )
             C = K_star - np.dot(V.T, V)  # Predictive variances
 
@@ -3091,6 +3130,30 @@ class GP:
             return y_star
 
         return f_star
+
+    def __low_noise_factor(self, s):
+        """The upper triangular Cholesky factor of
+        ``K + sn2_mult * diag(sn2)`` at the training inputs, for the
+        posterior ``s`` in the low-noise representation, whose ``L`` is the
+        negative inverse of that matrix. A posterior pickled without it
+        has it computed from the kernel, the noise and the multiplier of
+        the posterior, as the factorization of the posterior computed it.
+        """
+        posterior = self.posteriors[s]
+        L_factor = getattr(posterior, "L_factor", None)
+        if L_factor is not None:
+            return L_factor
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        noise_N = self.noise.hyperparameter_count()
+        hyp = posterior.hyp
+        K = self.covariance.compute(hyp[0:cov_N], self.X)
+        sn2 = self.noise.compute(
+            hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
+        )
+        L_factor, __, __ = self.__training_cholesky(
+            K, sn2, False, posterior.sn2_mult
+        )
+        return L_factor
 
     @staticmethod
     def __robust_cholesky(sigma, scale=None):
@@ -3410,6 +3473,7 @@ class GP:
             sn2_mult,
             L_chol,
             sl_post,
+            L_factor=None if L_chol else L,
         )
 
     def _convert_shapes(
@@ -3495,8 +3559,8 @@ class Posterior:
     L : ndarray, shape (N, N)
         If ``L_chol`` is True, the upper triangular Cholesky factor of
         ``(K + sn2_mult * diag(sn2)) / sl``. Otherwise
-        ``-inv(K + sn2_mult * diag(sn2))``, used when the noise is too
-        small for a stable Cholesky decomposition.
+        ``-inv(K + sn2_mult * diag(sn2))``, the low-noise representation,
+        as ``gplite_core.m`` has it where the noise is small.
     sn2_mult : int
         Multiplier applied to the noise variances, increased in powers of
         ten until the Cholesky decomposition succeeds.
@@ -3509,9 +3573,19 @@ class Posterior:
         factorization with this scale, so it can differ from the minimum
         of the current training noise after observations have been
         appended.
+    L_factor : ndarray, shape (N, N) or None
+        If ``L_chol`` is False, the upper triangular Cholesky factor of
+        ``K + sn2_mult * diag(sn2)``, the matrix whose negative inverse
+        ``L`` is, from which predictions and draws form their covariance:
+        formed from ``L``, it would carry the rounding of the inverse,
+        which grows as the noise shrinks. ``None`` if ``L_chol`` is True,
+        where ``L`` is that factor, scaled. A posterior pickled without it
+        has it computed again where it is needed.
     """
 
-    def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol, sl=None):
+    def __init__(
+        self, hyp, alpha, sW, L, sn2_mult, Lchol, sl=None, L_factor=None
+    ):
         self.hyp = hyp
         self.alpha = alpha
         self.sW = sW
@@ -3519,6 +3593,7 @@ class Posterior:
         self.sn2_mult = sn2_mult
         self.L_chol = Lchol
         self.sl = sl
+        self.L_factor = L_factor
 
     def _noise_scale(self):
         """Return ``sl``, the scale of the factorization.
