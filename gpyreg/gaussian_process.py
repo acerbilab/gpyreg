@@ -112,7 +112,8 @@ def _check_hyperparameter_names(given, hyper_info, argument):
 def _write_prior_block(hyper_priors, name, i, prior_type, prior_params):
     """Write the prior of the hyperparameter block ``name``, at the indices
     ``i`` of the arrays of ``hyper_priors``, as :py:meth:`GP.set_priors`
-    takes it, and refuse one that it does not take."""
+    takes it, and refuse one that it does not take. Return whether a
+    coordinate of the block has a prior."""
     if prior_type == "gaussian":
         mu, sigma = prior_params
         hyper_priors["mu"][i] = mu
@@ -185,6 +186,7 @@ def _write_prior_block(hyper_priors, name, i, prior_type, prior_params):
             "coordinate of a block without a prior has NaN for both its "
             "location and its sigma."
         )
+    return bool(np.any(has_prior))
 
 
 class GP:
@@ -634,10 +636,20 @@ class GP:
             ``set_priors(get_priors())`` changes nothing. A hyperparameter
             has ``None``, as ``set_priors`` takes it for no prior, where
             all of its prior's entries are NaN. Any other prior holds the
-            arrays of its entries, NaN included, under the name of the
-            family it was set with, or of the matching Gaussian family
-            where a Student's t family was set with zero degrees of
-            freedom throughout.
+            arrays of its entries, NaN included. A block with a prior in
+            some coordinate comes back under the name of the family it was
+            set with, or of the matching Gaussian family where a Student's
+            t family was set with zero degrees of freedom throughout. A
+            block with no prior in any coordinate, whose location and
+            ``sigma`` are NaN throughout, comes back under the Gaussian or
+            the Student's t family that its degrees of freedom name:
+            ``"gaussian"`` where it was set with ``"gaussian"`` or
+            ``"smoothbox"``, or with ``"student_t"`` or
+            ``"smoothbox_student_t"`` and zero degrees of freedom
+            throughout; ``None`` where it was set with one of the latter
+            two and NaN degrees of freedom throughout; and ``"student_t"``
+            where it was set with one of them and other degrees of
+            freedom.
 
         Raises
         ------
@@ -729,8 +741,10 @@ class GP:
             location (``mu``, or ``a`` and ``b`` for the smooth-box
             families) and ``sigma`` are both NaN has no prior; every other
             coordinate needs a finite location, with ``a <= b``, and a
-            finite, positive ``sigma``. A smooth box with ``a == b`` is the
-            Gaussian (or Student's t) centred at ``a``.
+            finite, positive ``sigma``. A block with no prior in any
+            coordinate holds none, and a GP whose blocks all hold none has
+            no priors. A smooth box with ``a == b`` is the Gaussian (or
+            Student's t) centred at ``a``.
             Degrees of freedom ``df`` that are zero, infinite or NaN make
             a ``"student_t"`` prior ``"gaussian"``, as
             ``gplite_hypprior.m`` reads them, and a
@@ -790,18 +804,19 @@ class GP:
                     e_str = "Missing hyperparameter " + info[0]
                     raise ValueError(e_str) from None
 
-            # None indicates no prior
+            # None indicates no prior, and so does a block none of whose
+            # coordinates has one, whatever its family.
             if vals is not None:
-                non_trivial_flag = True
                 upper = lower + info[1]
                 prior_type, prior_params = vals
-                _write_prior_block(
+                if _write_prior_block(
                     hyper_priors,
                     info[0],
                     range(lower, upper),
                     prior_type,
                     prior_params,
-                )
+                ):
+                    non_trivial_flag = True
 
             lower += info[1]
 

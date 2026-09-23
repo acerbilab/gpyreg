@@ -34,25 +34,38 @@ to change.
   recommended bounds for them, gives the hyperparameters that the message
   names a finite lower bound first.
 * :meth:`gpyreg.GP.set_priors` leaves the GP as it was when it refuses its
-  argument. On a GP without priors, a refused call marked the GP as
-  having priors, so that ``str`` reported them as present and
-  :meth:`gpyreg.GP.fit` added to its objective a log prior of zero.
+  argument, and marks the GP as having priors only where a coordinate of
+  some block has one. On a GP without priors, a refused call marked the
+  GP as having priors, and so did a call whose blocks had no prior in any
+  coordinate, such as ``("student_t", (nan, nan, nan))``, so that ``str``
+  reported them as present and :meth:`gpyreg.GP.fit` added to its
+  objective a log prior of zero. **Upgrading:** a script that reads from
+  ``str`` whether a GP set with such blocks alone has priors finds none.
 * :meth:`gpyreg.GP.get_priors` returns every prior that
   :meth:`gpyreg.GP.set_priors` takes in a form that ``set_priors`` writes
-  back as it was, so ``set_priors(get_priors())`` changes nothing. A
-  Student's t block whose degrees of freedom mix zero with NaN or a
-  number, such as ``[0, nan]`` or ``[0, 3]``, came back as ``None``, which
-  dropped the prior; degrees of freedom infinite throughout came back as
-  the Gaussian family, which ``set_priors`` writes with zero; and a family
-  set on a block with no prior in any coordinate came back as ``None``.
-  ``get_priors`` raises ``ValueError``, with ``set_priors``' message, for
-  priors that ``set_priors`` refuses, as priors written into
+  back as it was, so ``set_priors(get_priors())`` changes nothing, the
+  mark of the GP as having priors or none included. A Student's t block
+  whose degrees of freedom mix zero with NaN or a number, such as
+  ``[0, nan]`` or ``[0, 3]``, came back as ``None``, which dropped the
+  prior; degrees of freedom infinite throughout came back as the Gaussian
+  family, which ``set_priors`` writes with zero; and a family set on a
+  block with no prior in any coordinate came back as ``None``. Such a
+  block, whose location and ``sigma`` are NaN throughout, comes back under
+  the Gaussian or the Student's t family that its degrees of freedom name:
+  as ``"gaussian"`` where it was set with ``"gaussian"`` or
+  ``"smoothbox"``, or with ``"student_t"`` or ``"smoothbox_student_t"``
+  and zero degrees of freedom throughout; as ``None`` where it was set
+  with one of the latter two and NaN degrees of freedom throughout; and as
+  ``"student_t"`` where it was set with one of them and other degrees of
+  freedom. ``get_priors`` raises ``ValueError``, with ``set_priors``'
+  message, for priors that ``set_priors`` refuses, as priors written into
   ``hyper_priors`` directly can be, where it returned a block that
   ``set_priors`` then refused, or ``None``. **Upgrading:** a script that
   compares what ``get_priors`` returns finds a Student's t family with
-  infinite degrees of freedom under its own name, and a family set on a
-  block without a prior under that family's name, not ``None``; a script
-  that writes priors into ``hyper_priors`` directly sets them through
+  infinite degrees of freedom under its own name, and a block without a
+  prior in any coordinate, unless its degrees of freedom are NaN
+  throughout, under the family just given, not ``None``; a script that
+  writes priors into ``hyper_priors`` directly sets them through
   ``set_priors`` instead.
 * :meth:`gpyreg.GP.set_bounds` refuses with ``ValueError`` a lower bound
   above the upper bound of the same hyperparameter, naming it, as

@@ -3097,21 +3097,30 @@ def test_get_priors_returns_what_set_priors_reads_back(family, params):
         # A family set on a block without a prior in any coordinate.
         ("gaussian", (np.nan, np.nan)),
         ("student_t", (np.nan, np.nan, 3.0)),
+        ("student_t", (np.nan, np.nan, np.nan)),
         ("smoothbox", (np.nan, np.nan, np.nan)),
+        ("smoothbox_student_t", (np.nan, np.nan, np.nan, 4.0)),
+        ("smoothbox_student_t", (np.nan, np.nan, np.nan, np.nan)),
     ],
 )
-def test_set_priors_of_get_priors_changes_nothing(family, params):
+@pytest.mark.parametrize("alone", [False, True], ids=["beside", "alone"])
+def test_set_priors_of_get_priors_changes_nothing(family, params, alone):
     """``set_priors(get_priors())`` writes back every array of the priors
     as the GP holds them, and the flag that says whether it has any, for
-    any prior that ``set_priors`` takes. A Student's t block whose degrees
-    of freedom mix zero with NaN or a number came back as ``None``, which
-    dropped it; one whose degrees of freedom are infinite throughout came
-    back as a Gaussian family with zero; and a family set on a block
-    without a prior came back as ``None``, with NaN degrees of freedom."""
+    any prior that ``set_priors`` takes, beside a prior of another
+    hyperparameter or alone. A Student's t block whose degrees of freedom
+    mix zero with NaN or a number came back as ``None``, which dropped it;
+    one whose degrees of freedom are infinite throughout came back as a
+    Gaussian family with zero; and a family set on a block without a prior
+    came back as ``None``, with NaN degrees of freedom. A GP whose only
+    prior was a block without a prior in any coordinate was marked as
+    having priors, and its copy was not where the block came back as
+    ``None``."""
     gp = _gp_2d()
     priors = _no_priors()
     priors["covariance_log_lengthscale"] = (family, params)
-    priors["mean_const"] = ("student_t", (0.0, 2.0, 5.0))
+    if not alone:
+        priors["mean_const"] = ("student_t", (0.0, 2.0, 5.0))
     gp.set_priors(priors)
 
     other = _gp_2d()
@@ -3120,6 +3129,50 @@ def test_set_priors_of_get_priors_changes_nothing(family, params):
     for key, value in gp.hyper_priors.items():
         assert np.array_equal(other.hyper_priors[key], value, equal_nan=True)
     assert other.no_prior is gp.no_prior
+
+
+@pytest.mark.parametrize(
+    "family, params, returned",
+    [
+        ("gaussian", (np.nan, np.nan), "gaussian"),
+        ("smoothbox", (np.nan, np.nan, np.nan), "gaussian"),
+        ("student_t", (np.nan, np.nan, 0.0), "gaussian"),
+        ("student_t", (np.nan, np.nan, 3.0), "student_t"),
+        ("student_t", (np.nan, np.nan, np.nan), None),
+        ("smoothbox_student_t", (np.nan, np.nan, np.nan, 0.0), "gaussian"),
+        ("smoothbox_student_t", (np.nan, np.nan, np.nan, 3.0), "student_t"),
+        ("smoothbox_student_t", (np.nan, np.nan, np.nan, np.nan), None),
+    ],
+)
+def test_a_block_without_a_prior_in_any_coordinate(family, params, returned):
+    """A block set with a family but with no prior in any coordinate holds
+    no prior: a GP whose only block it is has no priors, as ``str``
+    reports and as ``fit`` reads it, adding no log prior to its objective.
+    ``get_priors`` returns such a block as the Gaussian or the Student's t
+    family that its degrees of freedom name, the ends of a smooth box being
+    NaN, or as ``None`` where its degrees of freedom are NaN as well."""
+    gp = _gp_2d()
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, params)
+    gp.set_priors(priors)
+
+    assert gp.no_prior is True
+    assert "Hyperparameter priors: none" in str(gp)
+    block = gp.get_priors()["covariance_log_lengthscale"]
+    if returned is None:
+        assert block is None
+    else:
+        assert block[0] == returned
+        # The location and sigma of every coordinate are NaN; the degrees
+        # of freedom of a Student's t family are those given.
+        assert np.all(np.isnan(block[1][0])) and np.all(np.isnan(block[1][1]))
+        if returned == "student_t":
+            assert np.all(block[1][2] == params[-1])
+
+    # Beside a block with a prior, the GP has priors.
+    priors["mean_const"] = ("gaussian", (0.0, 1.0))
+    gp.set_priors(priors)
+    assert gp.no_prior is False
 
 
 @pytest.mark.parametrize(
