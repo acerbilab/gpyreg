@@ -1353,9 +1353,9 @@ class GP:
             noise variances are used.
         options : dict, optional
             A dictionary of options for training. The counts among them,
-            ``opts_N``, ``init_N``, ``n_samples`` and ``thin``, are whole
-            numbers of an integer or a float type (2.0 is taken as 2), or
-            0-d arrays that hold one. The possible options are:
+            ``opts_N``, ``init_N``, ``n_samples``, ``thin`` and ``burn``,
+            are whole numbers of an integer or a float type (2.0 is taken
+            as 2), or 0-d arrays that hold one. The possible options are:
 
                 **opts_N** : int, defaults to 3
                     Number of hyperparameter optimization runs.
@@ -1374,8 +1374,11 @@ class GP:
                 **thin** : int, defaults to 5
                     Thinning parameter for slice sampling: one sample in
                     ``thin`` is kept. A whole number greater than zero.
-                **burn** : int, defaults to ``thin * n_samples``
-                    Burn parameter for slice sampling.
+                **burn** : int or None, defaults to ``thin * n_samples``
+                    Burn parameter for slice sampling: the number of
+                    samples drawn and dropped before the first one kept.
+                    A whole number of at least zero, or ``None``, which
+                    leaves it to :py:meth:`SliceSampler.sample`.
                 **lower_bounds** : str or ndarray, defaults to "current"
                     User-provided lower bounds. Any values which are `nan` will
                     be filled with the recommended bounds. "recommended" means
@@ -1436,10 +1439,11 @@ class GP:
             a finite lower bound.
         ValueError
             Raised when the option ``opts_N``, ``init_N`` or ``n_samples``
-            is not a whole number of at least zero, or the option ``thin``
-            not a whole number of at least one: a fraction, a number below
-            that, an infinity, NaN, a bool or a value that is not a number,
-            before the fit changes anything.
+            is not a whole number of at least zero, the option ``thin``
+            not a whole number of at least one, or the option ``burn``
+            neither ``None`` nor a whole number of at least zero: a
+            fraction, a number below that, an infinity, NaN, a bool or a
+            value that is not a number, before the fit changes anything.
         ValueError
             Raised when ``n_samples`` is positive and ``sampler_name`` is
             not ``'slicesample'``, after the optimization.
@@ -1484,7 +1488,11 @@ class GP:
         s_N = _whole_number(
             options.get("n_samples", 10), "The option n_samples", 0
         )
+        # The burn-in of the sampler, checked with the counts whether or
+        # not the fit draws samples; None leaves it to the sampler.
         burn_in = options.get("burn", thin * s_N)
+        if burn_in is not None:
+            burn_in = _whole_number(burn_in, "The option burn", 0)
         lower_bounds = options.get("lower_bounds", "current")
         upper_bounds = options.get("upper_bounds", "current")
 

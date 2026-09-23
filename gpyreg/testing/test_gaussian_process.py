@@ -1209,6 +1209,45 @@ def test_fit_refuses_counts_that_are_not_whole_numbers(name, value):
     assert gp.X is None
 
 
+@pytest.mark.parametrize(
+    "burn", [3.0, np.int64(3), np.float64(3.0), np.array(3), np.array(3.0)]
+)
+def test_fit_takes_a_whole_burn_of_any_type(burn):
+    """The burn-in is a count, which ``fit`` takes as a whole number of an
+    integer or a float type, or a 0-d array that holds one, as it takes its
+    other counts; the fit is that of the integer."""
+    hyp = _fit_with_counts(_gp_1d(), burn=burn)
+    hyp_int = _fit_with_counts(_gp_1d(), burn=3)
+    assert np.array_equal(hyp, hyp_int)
+
+
+@pytest.mark.parametrize("n_samples", [0, 2])
+@pytest.mark.parametrize(
+    "burn",
+    [2.5, -1, -1.0, True, False, np.inf, np.nan, "2", [3]]
+    + [np.array(2.5), np.array(-1), np.array(True)],
+)
+def test_fit_refuses_a_burn_that_is_not_a_whole_number(burn, n_samples):
+    """A burn-in that is neither ``None`` nor a whole number of at least
+    zero is refused before the fit changes anything, whether or not the
+    fit draws samples, with the rule the slice sampler applies. With
+    samples the sampler refused it after the optimization, or ran a bool
+    as the integer it stands for; without samples any value passed."""
+    gp = _gp_1d()
+    with pytest.raises(ValueError) as execinfo:
+        _fit_with_counts(gp, burn=burn, n_samples=n_samples)
+    assert "The option burn" in execinfo.value.args[0]
+    assert gp.X is None
+
+
+def test_fit_leaves_a_burn_of_none_to_the_sampler():
+    """``burn=None`` leaves the burn-in to the slice sampler, which takes a
+    third of the samples it draws before it records any."""
+    hyp = _fit_with_counts(_gp_1d(), burn=None, n_samples=3, thin=2)
+    hyp_third = _fit_with_counts(_gp_1d(), burn=2, n_samples=3, thin=2)
+    assert np.array_equal(hyp, hyp_third)
+
+
 def test_fitting_options():
     N = 20
     D = 1

@@ -109,6 +109,18 @@ to change.
   **Upgrading:** a script that passes a negative ``opts_N`` or ``init_N``
   passes ``0``; one that passes a bool as a count passes the integer; and
   one that asks ``sample`` for zero samples does not call it.
+* :meth:`gpyreg.GP.fit` checks its option ``burn`` with its other counts,
+  before it changes anything and whether or not it draws hyperparameter
+  samples, by the rule of :meth:`gpyreg.slice_sample.SliceSampler.sample`:
+  a whole number of at least zero, taken as the other counts are, or
+  ``None``, which leaves the burn-in to the sampler. It refuses any other
+  value with ``ValueError``. The fit passed ``burn`` to the sampler
+  unchecked: with samples, the sampler refused such a value with
+  ``ValueError`` after the optimization, raised ``TypeError`` for a
+  string, and ran a bool as the integer it stands for; without samples,
+  the fit took any value. **Upgrading:** a script that gives a fit with
+  ``n_samples=0`` a ``burn`` that is neither ``None`` nor a whole number
+  of at least zero leaves it out.
 * Where the smallest noise variance at the training inputs is below 1e-6,
   as it can be after a fit on noiseless targets, the posterior holds the
   negative inverse of the training covariance (the low-noise
