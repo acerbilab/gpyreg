@@ -50,6 +50,18 @@ to change.
   already did, and leaves the bounds as they were. It stored the inverted
   pair, which the next ``fit`` refused. **Upgrading:** a script that set
   an inverted pair and never fitted gives the pair in order.
+* :meth:`gpyreg.GP.fit` takes its option ``thin`` as a whole number of an
+  integer or a float type, as :meth:`gpyreg.slice_sample.SliceSampler.sample`
+  takes it, where a whole float such as 2.0 raised ``TypeError`` from the
+  fit's own use of it. It refuses with ``ValueError``, before it changes
+  anything, a ``thin`` that is not a whole number greater than zero: a
+  fraction, which raised ``TypeError``; zero or a negative number, which
+  raised another ``ValueError`` after the optimization; a bool, which ran
+  as the integer it stands for; and, in a fit without hyperparameter
+  samples, which does not use it, any such value, which it took.
+  **Upgrading:** a script that passes ``thin=True`` passes ``1``, and one
+  that gives a fit with ``n_samples=0`` a ``thin`` that is not a whole
+  number greater than zero leaves it out.
 * Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
   the ``ValueError`` it passes on from
   :meth:`gpyreg.GP.get_recommended_bounds`, and the ``ValueError`` and

@@ -109,6 +109,24 @@ def _check_hyperparameter_names(given, hyper_info, argument):
         )
 
 
+def _positive_whole_number(value, name):
+    """Return ``value`` as an ``int`` where it is a whole number greater than
+    zero, of an integer or a float type, and refuse any other value, a bool
+    included, with a ``ValueError`` that names the option ``name``."""
+    if (
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, numbers.Real)
+        or not np.isfinite(value)
+        or value != np.floor(value)
+        or value < 1
+    ):
+        raise ValueError(
+            f"The option {name} needs to be a whole number greater than "
+            f"zero, of an integer or a float type, not {value!r}."
+        )
+    return int(value)
+
+
 def _write_prior_block(hyper_priors, name, i, prior_type, prior_params):
     """Write the prior of the hyperparameter block ``name``, at the indices
     ``i`` of the arrays of ``hyper_priors``, as :py:meth:`GP.set_priors`
@@ -1324,7 +1342,9 @@ class GP:
                 **n_samples** : int, defaults to 10
                     Number of hyperparameters to sample.
                 **thin** : int, defaults to 5
-                    Thinning parameter for slice sampling.
+                    Thinning parameter for slice sampling: one sample in
+                    ``thin`` is kept. A whole number greater than zero, of
+                    an integer or a float type (2.0 is taken as 2).
                 **burn** : int, defaults to ``thin * n_samples``
                     Burn parameter for slice sampling.
                 **lower_bounds** : str or ndarray, defaults to "current"
@@ -1382,6 +1402,11 @@ class GP:
             whose recommended bounds take their scale from it is not given
             finite bounds.
         ValueError
+            Raised when the option ``thin`` is not a whole number greater
+            than zero: a fraction, zero, a negative number, an infinity,
+            NaN, a bool or a value that is not a number, before the fit
+            changes anything.
+        ValueError
             Raised when ``n_samples`` is positive and ``sampler_name`` is
             not ``'slicesample'``, after the optimization.
         ValueError
@@ -1402,7 +1427,8 @@ class GP:
         opts_N = options.get("opts_N", 3)
         init_N = options.get("init_N", 2**10)
         init_method = options.get("init_method", "sobol")
-        thin = options.get("thin", 5)
+        # A count that the fit slices with, so a whole float is converted.
+        thin = _positive_whole_number(options.get("thin", 5), "thin")
         df_base = options.get("df_base", 7)
         widths = options.get("widths", None)
         log_p = options.get("log_P", None)  # Not used since no slicelite

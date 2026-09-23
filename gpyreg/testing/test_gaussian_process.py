@@ -1103,6 +1103,47 @@ def test_setting_bounds():
     assert np.all(gp.upper_bounds[~mask] == default_upper_bounds[~mask])
 
 
+def _fit_with_thin(gp, thin, n_samples=2):
+    X = np.reshape(np.linspace(-2, 2, 10), (-1, 1))
+    hyp, _, _ = gp.fit(
+        X,
+        np.sin(X),
+        options={"thin": thin, "n_samples": n_samples, "init_N": 16},
+        rng=0,
+    )
+    return hyp
+
+
+@pytest.mark.parametrize("thin", [2.0, np.int64(2), np.float64(2.0)])
+def test_fit_takes_a_whole_thin_of_any_type(thin):
+    """The thinning factor is a count, which ``fit`` takes as a whole number
+    of an integer or a float type, as ``SliceSampler.sample`` takes it. A
+    whole float raised ``TypeError`` from the fit's own use of it."""
+    hyp = _fit_with_thin(_gp_1d(), thin)
+    hyp_int = _fit_with_thin(_gp_1d(), 2)
+    assert hyp.shape[0] == 2
+    assert np.array_equal(hyp, hyp_int)
+
+
+@pytest.mark.parametrize("n_samples", [0, 2])
+@pytest.mark.parametrize(
+    "thin", [2.5, 0, 0.0, -1, -2.0, True, np.inf, np.nan, "2"]
+)
+def test_fit_refuses_a_thin_that_is_not_a_positive_whole_number(
+    thin, n_samples
+):
+    """A thinning factor that is not a whole number greater than zero is
+    refused before the fit changes anything, whether or not the fit draws
+    samples. A fraction raised ``TypeError``, zero and negative numbers
+    raised another error after the optimization, a bool ran as the
+    integer it stands for, and without samples any value passed."""
+    gp = _gp_1d()
+    with pytest.raises(ValueError) as execinfo:
+        _fit_with_thin(gp, thin, n_samples)
+    assert "The option thin" in execinfo.value.args[0]
+    assert gp.X is None
+
+
 def test_fitting_options():
     N = 20
     D = 1
