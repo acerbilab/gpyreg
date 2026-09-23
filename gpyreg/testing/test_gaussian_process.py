@@ -3104,6 +3104,52 @@ def test_likelihood_gradient_with_a_noise_per_point(features):
     assert np.all(error < 1e-6 * np.max(np.abs(gradient)))
 
 
+@pytest.mark.parametrize("sn2, low_noise", [(0.9e-6, True), (1.1e-6, False)])
+@pytest.mark.parametrize("mean_name", ["constant", "negative_quadratic"])
+def test_likelihood_in_the_low_noise_representation(sn2, low_noise, mean_name):
+    """Below a smallest noise variance of 1e-6 the posterior holds the
+    inverse of the training covariance instead of its Cholesky factor.
+    Just below the switch, on a set where the covariance is well
+    conditioned, the negative log marginal likelihood equals a dense
+    evaluation and its gradient agrees with finite differences, as they do
+    just above it."""
+    X = np.reshape(np.linspace(-1, 1, 8), (-1, 1))
+    y = np.sin(3 * X)
+    N = X.shape[0]
+    if mean_name == "constant":
+        mean, mean_hyp = gpr.mean_functions.ConstantMean(), [0.1]
+    else:
+        mean = gpr.mean_functions.NegativeQuadratic()
+        mean_hyp = [0.5, 0.1, np.log(0.8)]
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=mean,
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    # A short length scale keeps the covariance close to its diagonal.
+    hyp = np.concatenate(([np.log(0.08), 0.0, 0.5 * np.log(sn2)], mean_hyp))
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert gp.posteriors[0].L_chol == (not low_noise)
+
+    C = np.exp(-0.5 * ((X - X.T) / 0.08) ** 2) + sn2 * np.eye(N)
+    r = y - mean.compute(np.array(mean_hyp), X).reshape(-1, 1)
+    dense_nlZ = (
+        0.5 * (r.T @ np.linalg.solve(C, r))[0, 0]
+        + 0.5 * np.linalg.slogdet(C)[1]
+        + 0.5 * N * np.log(2 * np.pi)
+    )
+    assert np.isclose(-gp.log_likelihood(hyp), dense_nlZ, rtol=1e-12)
+
+    __, gradient = gp.log_likelihood(hyp, compute_grad=True)
+    error = check_grad(
+        gp.log_likelihood,
+        lambda h: gp.log_likelihood(h, compute_grad=True)[1],
+        hyp,
+    )
+    assert np.all(error < 1e-8 * np.max(np.abs(gradient)))
+
+
 def test_quad_takes_one_width_per_measure():
     """A ``sigma`` of one column holds one standard deviation per measure,
     the same in every dimension, as ``gplite_quad.m`` broadcasts it and as
