@@ -25,17 +25,19 @@ to change.
   is the same as before, to the last bit. ``gpyreg.f_min_fill`` has the
   survival functions of the two smooth-box families, ``smoothbox_sf`` and
   ``smoothbox_student_t_sf``.
-* The space-filling design of :meth:`gpyreg.GP.fit` draws the starting
-  values of a hyperparameter whose bounds both lie above the centre of its
-  prior through the survival function of the prior and its inverse, where
-  it drew them through the cumulative distribution function and the
-  percent point function. With both bounds far in the upper tail, every
-  point of that design lay at infinity, and a fit with hyperparameter
-  samples raised ``ValueError`` because the widths of the slice sampler
-  were NaN. Where the lower bound is not above the centre, the design is
-  the same as before, to the last bit. ``gpyreg.f_min_fill`` has the
-  inverse survival functions of the two smooth-box families,
-  ``smoothbox_isf`` and ``smoothbox_student_t_isf``.
+* The space-filling design of :meth:`gpyreg.GP.fit`, drawn by
+  ``gpyreg.f_min_fill``, draws the starting values of a hyperparameter
+  whose bounds both lie above the centre of its prior through the
+  survival function of the prior and its inverse, where it drew them
+  through the cumulative distribution function and the percent point
+  function. With both bounds far in the upper tail, every draw of that
+  hyperparameter lay at infinity (the starting points the fit was given
+  stayed finite), and a fit with hyperparameter samples raised
+  ``ValueError`` because the widths of the slice sampler were NaN. Where
+  the lower bound is not above the centre, the design is the same as
+  before, to the last bit. ``gpyreg.f_min_fill`` has the inverse survival
+  functions of the two smooth-box families, ``smoothbox_isf`` and
+  ``smoothbox_student_t_isf``.
 * The space-filling design of :meth:`gpyreg.GP.fit`, drawn by
   ``gpyreg.f_min_fill``, gives a hyperparameter whose lower and upper
   bounds are equal their value at every point when the hyperparameter has
@@ -56,13 +58,19 @@ to change.
   fills. A coordinate of a block without a prior is written, as before,
   with NaN for both its location and its ``sigma``. **Upgrading:** a
   script that wrote a non-finite ``mu`` for no prior, which gplite reads
-  that way, sets the hyperparameter's prior to ``None``.
+  that way, sets the prior of a hyperparameter none of whose coordinates
+  has a prior to ``None``, and gives a coordinate of a block without a
+  prior NaN for both its location and its ``sigma``, as the message says.
+  A smooth box with an infinite or NaN end has no such replacement: the
+  script writes the prior it means.
 * :meth:`gpyreg.GP.set_priors` refuses, with a message that says what is
   wrong, a smooth box of either family whose lower end ``a`` is above its
   upper end ``b``. 1.3.0 took such a box, whose normalization constant is
   then below one or negative, and gave a log prior that was wrong or NaN.
   A smooth box with ``a == b``, which has no plateau and is the Gaussian
-  or the Student's t centred at ``a``, is taken as before.
+  or the Student's t centred at ``a``, is taken as before. **Upgrading:**
+  a script that wrote an inverted box writes the box it means, with
+  ``a <= b``.
 
 1.3.0 (2026-09-23)
 ------------------

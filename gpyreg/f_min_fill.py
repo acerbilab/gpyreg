@@ -112,12 +112,13 @@ def f_min_fill(
         # If a prior is specified use that: the draws are mapped through
         # the prior truncated to the bounds. Where the lower bound lies
         # above the centre of the prior (its median), the cumulative
-        # distribution function is close to one at both bounds, and far in
-        # the upper tail it rounds to one at both, so that a draw mapped
+        # distribution function is above one half at both bounds, where a
+        # double resolves it only to a fixed absolute step, and far in the
+        # upper tail it rounds to one at both, so that a draw mapped
         # through it lands at infinity; there the draws go through the
-        # survival function and its inverse, which give the same points in
-        # exact arithmetic. `GP` takes the prior's mass inside the bounds
-        # on the same switch.
+        # survival function, below one half, and its inverse, which give
+        # the same points in exact arithmetic. `GP` takes the prior's mass
+        # inside the bounds on the same switch.
         for i in range(0, n_vars):
             mu = hprior["mu"][i]
             sigma = hprior["sigma"][i]

@@ -1615,12 +1615,14 @@ class GP:
 
             # The mass inside the bounds. Where the lower bound lies above
             # the centre of the prior (its median), the cumulative
-            # distribution function is close to one at both bounds and the
-            # difference of its two values loses the mass, all of it with
-            # both bounds beyond about 8.3 scales of a Gaussian; the
-            # survival function keeps it. Everywhere else the mass is the
-            # difference of the two values of the cumulative distribution
-            # function.
+            # distribution function is above one half at both bounds, where
+            # a double resolves it only to a fixed absolute step, and the
+            # difference of its two values loses the mass as the bounds
+            # move up the tail, all of it with both beyond about 8.3 scales
+            # of a Gaussian, where both values round to one; the survival
+            # function, below one half there, keeps it. Everywhere else the
+            # mass is the difference of the two values of the cumulative
+            # distribution function.
             if np.isfinite(a) and np.isfinite(b):
                 upper_half = lb > 0.5 * (a + b)
                 if df == 0 or not np.isfinite(df):
