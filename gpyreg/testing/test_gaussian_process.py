@@ -309,10 +309,12 @@ def test_cleaning():
 @pytest.mark.filterwarnings(
     """ignore:Matplotlib is currently using agg:UserWarning"""
 )
-def test_gp_gradient_computations():
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_gp_gradient_computations(seed):
+    rng = np.random.default_rng(seed)
     N = 20
     D = 2
-    X = np.random.standard_normal(size=(N, D))
+    X = rng.standard_normal(size=(N, D))
 
     gp = gpr.GP(
         D=D,
@@ -325,13 +327,13 @@ def test_gp_gradient_computations():
     mean_N = gp.mean.hyperparameter_count(D)
     noise_N = gp.noise.hyperparameter_count()
 
-    N_s = np.random.randint(1, 3)
-    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    N_s = rng.integers(1, 3)
+    hyp = rng.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.2
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X)
+    y = gp.random_function(X, rng=rng)
 
     gp.update(X_new=X, y_new=y)
 
@@ -345,7 +347,7 @@ def test_gp_gradient_computations():
             check_grad(
                 f,
                 f_grad,
-                hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size)),
+                hyp0 * np.exp(0.1 * rng.uniform(size=hyp0.size)),
             ),
             0.0,
             atol=1e-6,
@@ -353,28 +355,28 @@ def test_gp_gradient_computations():
     )
 
     # Check GP hyperparameters log prior gradient computation.
-    hyp1 = hyp0 * np.exp(0.1 * np.random.uniform(size=hyp0.size))
-    prior_types = np.random.permutation(range(0, 5))
+    hyp1 = hyp0 * np.exp(0.1 * rng.uniform(size=hyp0.size))
+    prior_types = rng.permutation(range(0, 5))
     for i in range(0, cov_N + mean_N + noise_N):
         prior_type = prior_types[i]
         if prior_type == 1:  # 'gaussian'
-            gp.hyper_priors["mu"][i] = np.random.standard_normal()
-            gp.hyper_priors["sigma"][i] = np.exp(np.random.standard_normal())
+            gp.hyper_priors["mu"][i] = rng.standard_normal()
+            gp.hyper_priors["sigma"][i] = np.exp(rng.standard_normal())
             gp.hyper_priors["df"][i] = 0
         elif prior_type == 2:  #'student_t'
-            gp.hyper_priors["mu"][i] = np.random.standard_normal()
-            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
-            gp.hyper_priors["df"][i] = np.exp(np.random.standard_normal())
+            gp.hyper_priors["mu"][i] = rng.standard_normal()
+            gp.hyper_priors["sigma"][i] = rng.standard_normal()
+            gp.hyper_priors["df"][i] = np.exp(rng.standard_normal())
         elif prior_type == 3:  # 'smoothbox'
             gp.hyper_priors["a"][i] = -3
             gp.hyper_priors["b"][i] = 3
-            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
+            gp.hyper_priors["sigma"][i] = rng.standard_normal()
             gp.hyper_priors["df"][i] = 0
         elif prior_type == 4:  # 'smoothbox_student_t'
             gp.hyper_priors["a"][i] = -3
             gp.hyper_priors["b"][i] = 3
-            gp.hyper_priors["sigma"][i] = np.random.standard_normal()
-            gp.hyper_priors["df"][i] = np.exp(np.random.standard_normal())
+            gp.hyper_priors["sigma"][i] = rng.standard_normal()
+            gp.hyper_priors["df"][i] = np.exp(rng.standard_normal())
         else:  # None
             pass
 
