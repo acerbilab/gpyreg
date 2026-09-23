@@ -1,6 +1,29 @@
 Release notes
 =============
 
+1.3.2 (unreleased)
+------------------
+
+A point marked **Upgrading** says what a script written for 1.3.1 may have
+to change.
+
+* :meth:`gpyreg.GP.get_recommended_bounds`, through which
+  :meth:`gpyreg.GP.fit` fills the bounds that the caller leaves unset,
+  refuses with ``ValueError`` training inputs without spread in a column,
+  as a single training point has none in any column, and the message
+  names the columns and the hyperparameters concerned. The recommended
+  bounds of a length scale of the kernel, and of the scale of
+  :class:`gpyreg.mean_functions.NegativeQuadratic`, take their scale from
+  the width of the inputs, and a column of width zero gave them the pair
+  ``(-inf, -inf)``, on which the optimizer of ``fit`` ended with
+  ``KeyError``; with a lower bound of ``-inf`` from the caller instead,
+  the fit returned an infinite length scale and predicted NaN. Such a
+  hyperparameter is fitted between finite lower and upper bounds that the
+  caller gives it. **Upgrading:** a script that catches the ``KeyError``
+  catches ``ValueError``, and a script that fits on such inputs, or reads
+  the recommended bounds for them, gives the hyperparameters that the
+  message names finite bounds first.
+
 1.3.1 (2026-09-23)
 ------------------
 

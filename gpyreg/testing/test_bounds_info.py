@@ -163,3 +163,136 @@ def test_negative_quadratic_bounds_are_per_column():
     assert_equal(info["PLB"][scale], np.log(width) + 0.5 * np.log(1e-6))
     assert_equal(info["PUB"][scale], np.log(width))
     assert_equal(info["x0"][scale], np.log(np.std(X, axis=0, ddof=1)))
+
+
+def _gp(kernel, mean):
+    return gpr.GP(
+        D=2,
+        covariance=kernel,
+        mean=mean,
+        noise=GaussianNoise(constant_add=True),
+    )
+
+
+_KERNELS = [
+    SquaredExponential(),
+    Matern(3),
+    RationalQuadraticARD(),
+    SquaredExponentialIsotropic(),
+    MaternIsotropic(3),
+]
+_WITHOUT_SPREAD = {
+    # A single training point has no spread in any column; distinct
+    # points that share a coordinate have none in its column.
+    "one_point": (np.array([[0.3, 0.5]]), np.array([[1.0]]), [0, 1]),
+    "shared_column": (
+        np.array([[0.3, 0.5], [0.1, 0.5], [0.9, 0.5], [0.6, 0.5]]),
+        np.array([[1.0], [2.0], [0.5], [1.2]]),
+        [1],
+    ),
+}
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
+@pytest.mark.parametrize(
+    "mean", [ConstantMean(), NegativeQuadratic()], ids=["const", "negquad"]
+)
+@pytest.mark.parametrize(
+    "kernel", _KERNELS, ids=lambda kernel: type(kernel).__name__
+)
+def test_inputs_without_spread_are_refused(kernel, mean, data):
+    """The recommended bounds of a length scale, and of the scale of the
+    negative quadratic mean, are built from the logarithm of the width of
+    the training inputs, so a column without spread gives them the pair
+    ``(-inf, -inf)``, which holds no value. The fit ended with the
+    ``KeyError`` that L-BFGS-B raises on that pair; the recommendation
+    refuses it, naming the column and the hyperparameters."""
+    X, y, columns = _WITHOUT_SPREAD[data]
+    gp = _gp(kernel, mean)
+    expected = ["covariance_log_lengthscale"]
+    if isinstance(mean, NegativeQuadratic):
+        expected.append("mean_log_scale")
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.fit(X, y, options={"n_samples": 0, "init_N": 16}, rng=0)
+
+    message = execinfo.value.args[0]
+    assert "no spread in " + ", ".join(
+        f"X[:, {j}]" for j in columns
+    ) + ":" in (message)
+    assert "bounds of " + ", ".join(expected) + "," in message
+    with pytest.raises(ValueError, match="no spread"):
+        gp.get_recommended_bounds()
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("n_samples", [0, 3])
+@pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
+@pytest.mark.parametrize(
+    "kernel", _KERNELS, ids=lambda kernel: type(kernel).__name__
+)
+def test_inputs_without_spread_fit_between_given_bounds(
+    kernel, data, n_samples
+):
+    """A length scale whose column has no spread is fitted between finite
+    bounds that the caller gives it, set on the GP or passed to ``fit``;
+    a bound left to the recommendation, or an infinite one, is still
+    refused."""
+    X, y, columns = _WITHOUT_SPREAD[data]
+    mean = NegativeQuadratic()
+    gp = _gp(kernel, mean)
+    ls_N = kernel.hyperparameter_count(2) - 1
+    if isinstance(kernel, RationalQuadraticARD):
+        ls_N -= 1
+    bounds = gp.get_bounds()
+    bounds["covariance_log_lengthscale"] = (
+        np.full(ls_N, -3.0),
+        np.full(ls_N, 2.0),
+    )
+    bounds["mean_log_scale"] = (np.full(2, -3.0), np.full(2, 2.0))
+    gp.set_bounds(bounds)
+
+    hyp, _, _ = gp.fit(
+        X, y, options={"n_samples": n_samples, "init_N": 64}, rng=1
+    )
+
+    assert np.all(np.isfinite(hyp))
+    lengthscales = hyp[:, :ls_N]
+    assert np.all((-3.0 <= lengthscales) & (lengthscales <= 2.0))
+    mu, s2 = gp.predict(X)
+    assert np.all(np.isfinite(mu)) and np.all(np.isfinite(s2))
+
+    # The same bounds passed to `fit` as its options.
+    lower, upper = gp.lower_bounds.copy(), gp.upper_bounds.copy()
+    gp = _gp(kernel, NegativeQuadratic())
+    hyp, _, _ = gp.fit(
+        X,
+        y,
+        options={
+            "n_samples": 0,
+            "init_N": 16,
+            "lower_bounds": lower,
+            "upper_bounds": upper,
+        },
+        rng=1,
+    )
+    assert np.all(np.isfinite(hyp))
+
+    # A lower bound left to the recommendation, or given as -inf.
+    for missing in (np.nan, -np.inf):
+        lower_partial = lower.copy()
+        lower_partial[ls_N - 1] = missing
+        gp = _gp(kernel, NegativeQuadratic())
+        with pytest.raises(ValueError, match="no spread"):
+            gp.fit(
+                X,
+                y,
+                options={
+                    "n_samples": 0,
+                    "init_N": 16,
+                    "lower_bounds": lower_partial,
+                    "upper_bounds": upper,
+                },
+                rng=1,
+            )
