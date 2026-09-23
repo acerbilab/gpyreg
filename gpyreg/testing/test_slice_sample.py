@@ -20,10 +20,6 @@ options = {"display": "off", "diagnostics": True}
 threshold = 0.1
 
 
-def _normal_metropolis_proposal():
-    return np.random.normal(size=1)
-
-
 def test_multiple_runs():
     state = np.random.get_state()
 
@@ -83,6 +79,98 @@ def test_evaluations_stay_on_coordinate_line(step_out):
         assert len(evaluated) >= 2 * D * N
 
 
+@pytest.mark.parametrize("burn", [2, 3])
+def test_short_burn_in_keeps_the_chain_moving(burn):
+    """The width adaptation at the end of the burn-in needs a window of at
+    least two iterations. A window of one iteration has no variance to
+    estimate, and a width of zero brackets nothing, so the coordinate would
+    stop and the chain return its starting point once per requested sample."""
+    rv = multivariate_normal(np.zeros(2), np.eye(2))
+    sampler = SliceSampler(
+        rv.logpdf,
+        np.zeros(2),
+        widths=1.0,
+        options={"display": "off", "diagnostics": False},
+        rng=np.random.default_rng(3),
+    )
+    res = sampler.sample(6, burn=burn)
+
+    assert np.all(sampler.widths > 0)
+    assert np.unique(res["samples"], axis=0).shape[0] == 6
+
+
+def test_infinite_width_does_not_come_back_after_the_burn_in():
+    """An infinite width is legal for an unbounded coordinate and is
+    replaced by 10 at construction. The base widths that the geometric-mean
+    recombination at the end of the burn-in uses are the replaced ones: an
+    infinite base width would come back there and fill the chain with NaN."""
+    rv = multivariate_normal(np.zeros(2), np.eye(2))
+    sampler = SliceSampler(
+        rv.logpdf,
+        np.zeros(2),
+        widths=[np.inf, 1.0],
+        LB=[-np.inf, -5.0],
+        UB=[np.inf, 5.0],
+        options={"display": "off", "diagnostics": False},
+        rng=np.random.default_rng(6),
+    )
+    res = sampler.sample(20, burn=10)
+
+    assert np.all(np.isfinite(sampler.base_widths))
+    assert np.all(np.isfinite(sampler.widths))
+    assert np.all(np.isfinite(res["samples"]))
+
+
+def test_burn_in_statistics_window_is_the_second_half():
+    """The adapted widths come from the last ``floor(burn / 2)`` burn-in
+    iterations, one term per iteration and the same number in the divisor.
+
+    On a uniform target whose widths already span the whole box, every
+    proposal is accepted at the first try and the within-burn-in adaptation
+    leaves the widths untouched, so a second sampler with the same seed and
+    no adaptation walks the identical chain and hands over its iterates.
+    """
+    burn = 7  # odd, where MATLAB accumulates one term more than it divides by
+    LB = np.array([-2.0, -1.0])
+    UB = np.array([3.0, 4.0])
+    widths = UB - LB
+    uniform_logpdf = lambda x: 0.0
+
+    def sampler(adaptive):
+        return SliceSampler(
+            uniform_logpdf,
+            np.array([0.0, 0.5]),
+            widths=widths,
+            LB=LB,
+            UB=UB,
+            options={
+                "display": "off",
+                "diagnostics": False,
+                "adaptive": adaptive,
+            },
+            rng=np.random.default_rng(11),
+        )
+
+    adapted = sampler(True)
+    adapted.sample(1, burn=burn)
+    # The same chain without adaptation, recorded iteration by iteration.
+    trace = sampler(False).sample(burn + 1, burn=0)["samples"]
+
+    def widths_from(window):
+        n = window.shape[0]
+        var = (window**2).sum(0) / n - (window.sum(0) / n) ** 2
+        new_widths = np.fmin(
+            5 * np.sqrt(np.maximum(var, 0)), adapted.UB_out - adapted.LB_out
+        )
+        return np.maximum(new_widths, np.sqrt(new_widths * widths))
+
+    expected = widths_from(trace[math.ceil(burn / 2) : burn])
+    np.testing.assert_allclose(adapted.widths, expected, rtol=1e-12)
+    # Not vacuous: MATLAB's window, one iteration longer, gives other widths.
+    assert trace[math.ceil(burn / 2) : burn].shape[0] == burn // 2
+    assert np.any(widths_from(trace[burn // 2 : burn]) != expected)
+
+
 def _split(trace):
     """Split a trace into the two half-chains the diagnostics compare."""
     n = math.floor(trace.shape[0] / 2)
@@ -115,11 +203,18 @@ def test_short_chain_diagnostics_do_not_claim_success():
     assert np.all(np.isfinite(eff_N))
 
 
-def test_constant_trace_in_a_free_parameter_fails_the_diagnostics(caplog):
+@pytest.mark.parametrize("constant", [0.0, 1.0, 0.3, 1e-3, -7.0, np.log(10)])
+def test_constant_trace_in_a_free_parameter_fails_the_diagnostics(
+    caplog, constant
+):
     """A parameter that is free to move but whose chain stayed put has
-    undefined diagnostics, which must not pass as convergence."""
+    undefined diagnostics, which must not pass as convergence.
+
+    Whether the estimates come out non-finite depends on the rounding of
+    the constant's own mean, so the chain is recognized by its range.
+    """
     sampler = _diagnostics_sampler()
-    samples = np.zeros((20, 1))
+    samples = np.full((20, 1), constant)
 
     with caplog.at_level(logging.INFO, logger="SliceSampler"):
         exit_flag, R, eff_N = sampler._SliceSampler__diagnose(samples)
@@ -130,21 +225,22 @@ def test_constant_trace_in_a_free_parameter_fails_the_diagnostics(caplog):
     assert "did not move" in caplog.text
 
 
-def test_fixed_parameter_is_left_out_of_the_diagnostics():
+@pytest.mark.parametrize("constant", [0.0, 1.0, 0.3])
+def test_fixed_parameter_is_left_out_of_the_diagnostics(constant):
     """A parameter fixed by LB == UB has no diagnostics to report, and the
     checks look only at the parameter that is actually sampled."""
     rv = multivariate_normal(np.zeros(2), np.eye(2))
     sampler = SliceSampler(
         rv.logpdf,
-        np.array([0.0, 1.0]),
-        LB=np.array([-np.inf, 1.0]),
-        UB=np.array([np.inf, 1.0]),
+        np.array([0.0, constant]),
+        LB=np.array([-np.inf, constant]),
+        UB=np.array([np.inf, constant]),
         options=options,
         rng=np.random.default_rng(2),
     )
     res = sampler.sample(200)
 
-    assert np.all(res["samples"][:, 1] == 1.0)
+    assert np.all(res["samples"][:, 1] == constant)
     assert np.isnan(res["R"][1])
     assert np.isnan(res["eff_N"][1])
     assert np.isfinite(res["R"][0])
@@ -193,7 +289,9 @@ def _geyer_effective_n_reference(split):
     Estimates the autocorrelations from the split-chain variance and the
     variogram, sums them in consecutive pairs while the pair sum is
     positive, and floors the integrated autocorrelation time at
-    ``1 / log10(m * n)``.
+    ``1 / log10(m * n)``. The pairs start at lag 0, the convention of the
+    estimator under test, so this is a second reading of the estimator's
+    definition and not an external check of the convention itself.
     """
     m, n = split.shape
     chain_means = split.mean(axis=1)
@@ -278,7 +376,12 @@ def test_list_bounds_detect_fixed_parameter():
 
 
 def test_normal():
-    slicer = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    slicer = SliceSampler(
+        norm.logpdf,
+        np.array([0.5]),
+        options=options,
+        rng=np.random.default_rng(0),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.abs(norm.mean() - np.mean(samples)) < threshold
@@ -291,7 +394,12 @@ def test_normal_step_out():
         "diagnostics": True,
         "step_out": True,
     }
-    slicer = SliceSampler(norm.logpdf, np.array([0.5]), options=new_options)
+    slicer = SliceSampler(
+        norm.logpdf,
+        np.array([0.5]),
+        options=new_options,
+        rng=np.random.default_rng(1),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.abs(norm.mean() - np.mean(samples)) < threshold
@@ -324,7 +432,12 @@ def test_normal_mixture():
     rv2 = norm(6, 2)
     pdf = lambda x: p * rv1.pdf(x) + (1 - p) * rv2.pdf(x)
     logpdf = lambda x: np.log(pdf(x))  # if pdf(x) > np.spacing(0) else -np.inf
-    slicer = SliceSampler(logpdf, np.array([0.5]), options=options)
+    slicer = SliceSampler(
+        logpdf,
+        np.array([0.5]),
+        options=options,
+        rng=np.random.default_rng(2),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.abs((1 - p) * 6 - np.mean(samples)) < threshold
@@ -334,7 +447,11 @@ def test_normal_mixture():
 
 def test_exponential():
     slicer = SliceSampler(
-        expon.logpdf, np.array([0.5]), LB=0.0, options=options
+        expon.logpdf,
+        np.array([0.5]),
+        LB=0.0,
+        options=options,
+        rng=np.random.default_rng(3),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -346,7 +463,12 @@ def test_exponential():
 
 def test_uniform():
     slicer = SliceSampler(
-        uniform.logpdf, np.array([0.5]), LB=0.0, UB=1.0, options=options
+        uniform.logpdf,
+        np.array([0.5]),
+        LB=0.0,
+        UB=1.0,
+        options=options,
+        rng=np.random.default_rng(4),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -358,7 +480,12 @@ def test_beta():
     a, b = 2.31, 0.627
     rv = beta(a, b)
     slicer = SliceSampler(
-        rv.logpdf, np.array([0.5]), LB=0.0, UB=1.0, options=options
+        rv.logpdf,
+        np.array([0.5]),
+        LB=0.0,
+        UB=1.0,
+        options=options,
+        rng=np.random.default_rng(5),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -373,7 +500,10 @@ def test_multivariate_normal():
     )
     rv = multivariate_normal(mean, cov)
     slicer = SliceSampler(
-        rv.logpdf, np.array([0.5, -0.5, 1.0]), options=options
+        rv.logpdf,
+        np.array([0.5, -0.5, 1.0]),
+        options=options,
+        rng=np.random.default_rng(6),
     )
     samples = slicer.sample(20000)["samples"]
 
@@ -385,7 +515,12 @@ def test_multivariate_t():
     x = [1.0, -0.5]
     loc = [[2.1, 0.3], [0.3, 1.5]]
     rv = multivariate_t(x, loc, df=3)
-    slicer = SliceSampler(rv.logpdf, np.array([0.5, 0.5]), options=options)
+    slicer = SliceSampler(
+        rv.logpdf,
+        np.array([0.5, 0.5]),
+        options=options,
+        rng=np.random.default_rng(7),
+    )
     samples = slicer.sample(20000)["samples"]
 
     assert np.all(np.abs(x - np.mean(samples, axis=0)) < threshold)
@@ -488,6 +623,34 @@ def test_sample_sanity_checks():
         "burn-in samples option needs to be a non-negative"
         in execinfo.value.args[0]
     )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, thin=1.5)
+    assert (
+        "The thinning factor option needs to be a positive integer"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, burn=2.5)
+    assert (
+        "burn-in samples option needs to be a non-negative"
+        in execinfo.value.args[0]
+    )
+    # Infinity equals its own floor, but it is no number of iterations.
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, thin=np.inf)
+    assert (
+        "The thinning factor option needs to be a positive integer"
+        in execinfo.value.args[0]
+    )
+    with pytest.raises(ValueError) as execinfo:
+        slicer.sample(3, burn=np.inf)
+    assert (
+        "burn-in samples option needs to be a non-negative"
+        in execinfo.value.args[0]
+    )
+    # A whole number of another type is still a whole number.
+    slicer.sample(3, thin=2.0, burn=1.0)
+
     slicer.x0 = slicer.x0 * np.nan
     with pytest.raises(ValueError) as execinfo:
         slicer.sample(3)
@@ -541,14 +704,11 @@ def test_generator_runs_are_reproducible_and_independent_of_global_state():
 
 @pytest.mark.parametrize("serialization", ["pickle", "deepcopy"])
 @pytest.mark.parametrize("rng_kind", ["legacy", "generator", "old_pickle"])
-@pytest.mark.parametrize("metropolis", [False, True])
-def test_serialized_sampler_continues_stream(
-    serialization, rng_kind, metropolis
-):
+def test_serialized_sampler_continues_stream(serialization, rng_kind):
     """Copied samplers resume with generator state or the current global stream.
 
-    Old pickle state has no rng attribute, including when Metropolis steps
-    are enabled. Serializing a legacy sampler must not capture global state.
+    Old pickle state has no rng attribute. Serializing a legacy sampler
+    must not capture global state.
     """
     state = np.random.get_state()
     try:
@@ -560,10 +720,6 @@ def test_serialized_sampler_continues_stream(
             options={"display": "off", "diagnostics": False},
             rng=7 if rng_kind == "generator" else None,
         )
-        if metropolis:
-            sampler.metropolis_pdf = norm.pdf
-            sampler.metropolis_rnd = _normal_metropolis_proposal
-            sampler.metropolis_flag = True
         sampler.sample(5, burn=5)
         if rng_kind == "old_pickle":
             del sampler.rng

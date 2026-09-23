@@ -93,10 +93,11 @@ def test_matern_invalid_degree():
         )
 
 
+@pytest.mark.parametrize("degree", [1, 3, 5])
 @pytest.mark.parametrize("seed", [0, 3, 42])
-def test_matern_kernel_gradient(seed):
+def test_matern_kernel_gradient(seed, degree):
     rng = np.random.RandomState(seed)
-    matern_fun = Matern(3)
+    matern_fun = Matern(degree)
     D = 3
     N = 20
     diag_cov = np.eye(N) * (0.2)
@@ -224,3 +225,40 @@ def _test_kernel_gradient_(
 
 
 test_simple_rational_quad_ard()
+
+
+def test_rational_quad_ard_plausible_upper_bounds():
+    """The plausible upper bound of the output scale is the range of the
+    targets and the shape's is 5, its own hard upper bound. The shape's
+    line wrote into the output scale's slot, which left the shape's
+    plausible upper bound at infinity and lost the output scale's."""
+    rq_ard = RationalQuadraticARD()
+    rng = np.random.default_rng(0)
+    D = 3
+    X = rng.uniform(-1.0, 1.0, (20, D))
+    y = rng.normal(size=(20, 1))
+
+    info = rq_ard.get_bounds_info(X, y)
+
+    assert np.all(np.isfinite(info["PUB"]))
+    assert info["PUB"][D] == np.log(np.max(y) - np.min(y))
+    assert info["PUB"][D + 1] == 5.0
+
+
+@pytest.mark.parametrize(
+    "kernel",
+    [SquaredExponential(), Matern(3), RationalQuadraticARD()],
+    ids=lambda kernel: type(kernel).__name__,
+)
+def test_kernel_refuses_a_gradient_of_the_diagonal(kernel):
+    """The gradient is the gradient of the full covariance matrix. Asked
+    for the diagonal and the gradient at once the kernels returned an
+    (N, 1) value beside an (N, N, cov_N) gradient, a pair that means
+    nothing."""
+    D = 3
+    X = np.ones((20, D))
+    hyp = np.ones(kernel.hyperparameter_count(D))
+
+    with pytest.raises(ValueError) as execinfo:
+        kernel.compute(hyp, X, compute_diag=True, compute_grad=True)
+    assert "cannot both be True" in execinfo.value.args[0]

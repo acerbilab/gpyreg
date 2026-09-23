@@ -920,12 +920,13 @@ def test_fitting():
     noise_N = gp.noise.hyperparameter_count()
 
     N_s = 1
-    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    rng = np.random.default_rng(6)
+    hyp = rng.standard_normal((N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.3
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X, add_noise=True)
+    y = gp.random_function(X, add_noise=True, rng=rng)
     gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
 
     gp1 = gpr.GP(
@@ -936,7 +937,7 @@ def test_fitting():
     )
 
     gp_train = {"n_samples": 0}
-    hyp2, _, _ = gp1.fit(X=X, y=y, options=gp_train)
+    hyp2, _, _ = gp1.fit(X=X, y=y, options=gp_train, rng=rng)
 
     assert np.all(np.abs(hyp - hyp2)[0] < 0.5)
 
@@ -1050,16 +1051,17 @@ def test_predict_lpd():
         mean=gpr.mean_functions.NegativeQuadratic(),
         noise=gpr.noise_functions.GaussianNoise(user_provided_add=True),
     )
+    # This noise function has no hyperparameter of its own: its variance is
+    # the user-provided one plus a nugget of ``eps``. So a row is
+    # [log ell, log sf, m0, mode location (D), log scale (D)], the kernel
+    # having one shared lengthscale. The two samples differ, so that
+    # neither is the average over them.
     hyp = np.array(
         [
             [
                 # Covariance
-                0.0,
-                0.0,
                 0.0,  # log ell
-                1.0,  # log sf2
-                # Noise
-                np.log(np.pi),  # log std. dev. of noise
+                1.0,  # log sf
                 # Mean
                 -(D / 2) * np.log(2 * np.pi),  # MVN mode
                 0.0,
@@ -1071,20 +1073,16 @@ def test_predict_lpd():
             ],
             [
                 # Covariance
-                0.0,
-                0.0,
-                0.0,  # log ell
-                1.0,  # log sf2
-                # Noise
-                np.log(np.pi),  # log std. dev. of noise
+                0.3,  # log ell
+                0.5,  # log sf
                 # Mean
-                -(D / 2) * np.log(2 * np.pi),  # MVN mode
-                0.0,
-                0.0,
-                0.0,  # Mode location
-                0.0,
-                0.0,
-                0.0,  # log scale
+                -1.0,  # MVN mode
+                0.2,
+                -0.1,
+                0.4,  # Mode location
+                0.3,
+                0.3,
+                0.3,  # log scale
             ],
         ]
     )
@@ -1098,22 +1096,28 @@ def test_predict_lpd():
         ).reshape(-1, 1)
         + offset
     )
-    s2_star = np.arange(-3, 3).reshape((-1, 1))
-    s2_star = np.zeros((6, 1))
+    s2_star = np.linspace(0.1, 0.7, 6).reshape((-1, 1))
+
+    # The log predictive density always carries the observation noise,
+    # here the user-provided variance, whichever variance ``add_noise``
+    # selects for the returned ``s2``.
     f_mu, f_s2, lpd = gp.predict(
         X_star, y_star, s2_star=s2_star, return_lpd=True
     )
     assert np.allclose(
         lpd,
         scipy.stats.norm.logpdf(
-            y_star, loc=f_mu, scale=np.sqrt(np.pi * s2_star + f_s2)
+            y_star, loc=f_mu, scale=np.sqrt(s2_star + f_s2)
         ),
     )
-    __, __, lpd2 = gp.predict(
+    __, s2_with_noise, lpd2 = gp.predict(
         X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True
     )
     assert np.all(lpd2 == lpd)
-    __, __, lpd3 = gp.predict(
+    assert np.allclose(s2_with_noise, f_s2 + s2_star)
+
+    # Per sample it is the density of that sample's own Gaussian.
+    f_mu_s, y_s2_s, lpd3 = gp.predict(
         X_star,
         y_star,
         s2_star=s2_star,
@@ -1121,8 +1125,25 @@ def test_predict_lpd():
         add_noise=True,
         separate_samples=True,
     )
-    assert np.all(lpd3[:, 0:1] == lpd)
-    assert np.all(lpd3[:, 1:2] == lpd)
+    assert np.allclose(
+        lpd3,
+        scipy.stats.norm.logpdf(y_star, loc=f_mu_s, scale=np.sqrt(y_s2_s)),
+    )
+    assert not np.allclose(lpd3[:, 0], lpd3[:, 1])
+
+    # Averaged over the samples it is the density of the Gaussian that
+    # carries the mean and the variance of the mixture, and not the average
+    # of the per-sample densities.
+    mu_bar = np.mean(f_mu_s, 1, keepdims=True)
+    var_bar = np.mean(y_s2_s, 1, keepdims=True) + np.var(
+        f_mu_s, axis=1, ddof=1, keepdims=True
+    )
+    assert np.allclose(f_mu, mu_bar)
+    assert np.allclose(
+        lpd,
+        scipy.stats.norm.logpdf(y_star, loc=mu_bar, scale=np.sqrt(var_bar)),
+    )
+    assert not np.allclose(lpd, np.mean(lpd3, 1, keepdims=True))
 
 
 def test__str__and__repr__():

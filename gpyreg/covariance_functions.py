@@ -1,9 +1,53 @@
 """Module for different covariance functions used by Gaussian Processes."""
 
+import warnings
 from abc import ABC, abstractmethod
 
 import numpy as np
 from scipy.spatial.distance import cdist, pdist, squareform
+
+
+def _target_spread(y: np.ndarray):
+    """Return the range and the standard deviation of the training targets.
+
+    The recommended bounds of every component take the scale of the
+    targets from these two numbers. Targets that are all equal have
+    neither: the range is zero, its logarithm is ``-inf``, and the bounds
+    built from it are unusable (the output scale of a kernel gets the pair
+    ``(-inf, -inf)``, which L-BFGS-B refuses). Such a training set is
+    given the scale of a unit range instead, with a warning, as both
+    gpyreg and gplite already do for a single target. The other statistics
+    of the targets, their location among them, are left alone.
+
+    Parameters
+    ----------
+    y : ndarray
+        The training targets.
+
+    Returns
+    -------
+    height : float
+        The range of the targets, or one where they are all equal and
+        finite. It is NaN where a target is NaN or where every target is
+        the same infinity, and is returned as it is.
+    y_std : float
+        Their standard deviation, or that of a unit range where they are
+        all equal.
+    """
+    height = np.max(y) - np.min(y)
+    if height != 0:
+        return height, np.std(y, ddof=1)
+
+    warnings.warn(
+        "The training targets are all equal, so they have no scale for "
+        "the recommended bounds to take: a range of one is assumed "
+        "instead."
+    )
+    unit_range = np.array([0.0, 1.0])
+    return (
+        np.max(unit_range) - np.min(unit_range),
+        np.std(unit_range, ddof=1),
+    )
 
 
 class AbstractKernel(ABC):
@@ -43,7 +87,7 @@ class AbstractKernel(ABC):
         -------
         K : ndarray
             The covariance matrix which is by default of shape ``(N, N)``. If
-            ``compute_diag = True`` the shape is ``(N,)``.
+            ``compute_diag = True`` the shape is ``(N, 1)``.
         dK : ndarray, shape (N, N, cov_N), optional
             The gradient of the covariance matrix with respect to the
             hyperparameters.
@@ -54,6 +98,9 @@ class AbstractKernel(ABC):
             Raised when `hyp` has not the expected number of hyperparameters.
         ValueError
             Raised when `hyp` is not an 1D array but of higher dimension.
+        ValueError
+            Raised when `compute_diag` and `compute_grad` are both True:
+            the gradient is available for the full covariance matrix only.
         """
 
     def hyperparameter_count(self, D: int):
@@ -154,11 +201,17 @@ class SquaredExponential(AbstractKernel):
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
             )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
+            )
 
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
 
-        if X_star is None and compute_diag and not compute_grad:
+        if X_star is None and compute_diag:
             # The diagonal is sf2 * exp(-0 / 2) = sf2 exactly.
             return np.full((N, 1), sf2)
 
@@ -249,6 +302,12 @@ class Matern(AbstractKernel):
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
             )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
+            )
 
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
@@ -282,11 +341,18 @@ class Matern(AbstractKernel):
                         "sqeuclidean",
                     )
                 )
-                # With d=1 kernel there will be issues caused by zero
-                # divisions. This is OK, the kernel is just not
-                # differentiable there.
+                # Where two inputs share the i-th coordinate the kernel
+                # does not depend on that length scale, so the derivative
+                # is zero. The d=1 kernel divides by zero there and gives
+                # inf * 0 = NaN, which would poison the gradient of the
+                # marginal likelihood through the whole diagonal, so the
+                # product is taken as the zero it is.
                 with np.errstate(all="ignore"):
-                    dK[i, :, :] = sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki
+                    dK[i, :, :] = np.where(
+                        Ki > 0,
+                        sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki,
+                        0.0,
+                    )
             # Gradient of cov output scale
             dK[D, :, :] = 2 * K
             return K, dK.transpose(1, 2, 0)
@@ -328,6 +394,12 @@ class RationalQuadraticARD(AbstractKernel):
             raise ValueError(
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
+            )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
             )
 
         ell = np.exp(hyp[0:D])
@@ -392,26 +464,26 @@ class RationalQuadraticARD(AbstractKernel):
         width = np.max(X, axis=0) - np.min(X, axis=0)
         if np.size(y) <= 1:
             y = np.array([0, 1])
-        height = np.max(y) - np.min(y)
+        height, y_std = _target_spread(y)
 
         lower_bounds[0:D] = np.log(width) + np.log(tol)
         upper_bounds[0:D] = np.log(width * 10)
         plausible_lower_bounds[0:D] = np.log(width) + 0.5 * np.log(tol)
         plausible_upper_bounds[0:D] = np.log(width)
-        plausible_x0[0:D] = np.log(np.std(X, ddof=1))
+        plausible_x0[0:D] = np.log(np.std(X, axis=0, ddof=1))
 
         lower_bounds[D] = np.log(height) + np.log(tol)
         upper_bounds[D] = np.log(height * 10)
         plausible_lower_bounds[D] = np.log(height) + 0.5 * np.log(tol)
         plausible_upper_bounds[D] = np.log(height)
-        plausible_x0[D] = np.log(np.std(y, ddof=1))
+        plausible_x0[D] = np.log(y_std)
 
         # Initialization of the covariance_log_shape hyperparameter (like in
         # BADS)
         lower_bounds[-1] = -5.0
         upper_bounds[-1] = 5
         plausible_lower_bounds[-1] = -5.0
-        plausible_upper_bounds[D] = 5.0
+        plausible_upper_bounds[-1] = 5.0
         plausible_x0[-1] = 1.0
 
         # Plausible starting point
@@ -442,19 +514,19 @@ def _bounds_info_helper(cov_N, X, y):
     width = np.max(X, axis=0) - np.min(X, axis=0)
     if np.size(y) <= 1:
         y = np.array([0, 1])
-    height = np.max(y) - np.min(y)
+    height, y_std = _target_spread(y)
 
     lower_bounds[0:D] = np.log(width) + np.log(tol)
     upper_bounds[0:D] = np.log(width * 10)
     plausible_lower_bounds[0:D] = np.log(width) + 0.5 * np.log(tol)
     plausible_upper_bounds[0:D] = np.log(width)
-    plausible_x0[0:D] = np.log(np.std(X, ddof=1))
+    plausible_x0[0:D] = np.log(np.std(X, axis=0, ddof=1))
 
     lower_bounds[D] = np.log(height) + np.log(tol)
     upper_bounds[D] = np.log(height * 10)
     plausible_lower_bounds[D] = np.log(height) + 0.5 * np.log(tol)
     plausible_upper_bounds[D] = np.log(height)
-    plausible_x0[D] = np.log(np.std(y, ddof=1))
+    plausible_x0[D] = np.log(y_std)
 
     # Plausible starting point
     i_nan = np.isnan(plausible_x0)

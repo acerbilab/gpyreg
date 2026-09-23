@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from gpyreg.covariance_functions import _target_spread
+
 
 class GaussianNoise:
     """
@@ -9,6 +11,11 @@ class GaussianNoise:
 
     Total noise variance is is obtained by summing the independent
     contribution of each noise feature.
+
+    With ``constant_add = False`` the constant contribution is not zero
+    but ``np.spacing(1)``, about 2.2e-16: a nugget that keeps a covariance
+    matrix with no other noise factorizable. ``gplite_noisefun.m`` has the
+    same nugget.
 
     Parameters
     ==========
@@ -121,7 +128,7 @@ class GaussianNoise:
 
         if np.size(y) <= 1:
             y = np.array([0, 1])
-        height = np.max(y) - np.min(y)
+        height, y_std = _target_spread(y)
 
         i = 0
         # Base constant noise
@@ -130,7 +137,7 @@ class GaussianNoise:
             lower_bounds[i] = np.log(tol)
             upper_bounds[i] = np.log(height)
             plausible_lower_bounds[i] = 0.5 * np.log(tol)
-            plausible_upper_bounds[i] = np.log(np.std(y, ddof=1))
+            plausible_upper_bounds[i] = np.log(y_std)
             plausible_x0[i] = np.log(1e-3)
             i += 1
 

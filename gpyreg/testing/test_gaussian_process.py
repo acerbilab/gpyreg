@@ -1,9 +1,11 @@
 import copy
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.linalg
+import scipy.special
 import scipy.stats
 from scipy.integrate import quad
 
@@ -551,6 +553,16 @@ def test_rank_one_update_with_heteroskedastic_noise(case):
     assert np.allclose(f_mu, f_mu_ref, rtol=1e-10, atol=1e-12)
     assert np.allclose(f_s2, f_s2_ref, rtol=1e-10, atol=1e-12)
 
+    # Bayesian quadrature normalizes its solves by the scale the stored
+    # factor carries, which after a rank-one update need not be the
+    # minimum of the enlarged training noise, so the integral and its
+    # variance agree with those of the full recomputation.
+    F, F_var = gp.quad(0.0, 1.0, compute_var=True)
+    F_ref, F_var_ref = gp_ref.quad(0.0, 1.0, compute_var=True)
+    assert np.allclose(F, F_ref, rtol=1e-10, atol=1e-12)
+    assert np.allclose(F_var, F_var_ref, rtol=1e-8, atol=1e-12)
+    assert np.all(F_var > np.spacing(1))
+
 
 def test_rank_one_update_without_stored_noise_scale():
     # Posteriors pickled by earlier versions have no ``sl`` attribute; the
@@ -626,7 +638,8 @@ def test_update_aligns_user_provided_noise():
 def test_split_update():
     N = 20
     D = 2
-    X = np.random.standard_normal(size=(N, D))
+    rng = np.random.default_rng(17)
+    X = rng.standard_normal((N, D))
     s2 = np.full((N, 1), 0.05)
 
     gp = gpr.GP(
@@ -640,13 +653,13 @@ def test_split_update():
     mean_N = gp.mean.hyperparameter_count(D)
     noise_N = gp.noise.hyperparameter_count()
 
-    N_s = np.random.randint(1, 3)
-    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    N_s = 2
+    hyp = rng.standard_normal((N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.2
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X)
+    y = gp.random_function(X, rng=rng)
 
     gp.update(X_new=X, y_new=y, s2_new=s2, compute_posterior=True)
 
@@ -1043,25 +1056,40 @@ def test_fitting_options():
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
     )
+    hyp_N = (
+        gp.covariance.hyperparameter_count(D)
+        + gp.noise.hyperparameter_count()
+        + gp.mean.hyperparameter_count(D)
+    )
 
-    gp_train_1 = {"opts_N": 0}
-    gp_train_2 = {"n_samples": 0}
-    gp_train_3 = {"init_N": 0}
-    gp_train_4 = {"opts_N": 0, "n_samples": 0}
-    gp_train_5 = {"n_samples": 0, "init_N": 0}
-    gp_train_6 = {"opts_N": 0, "init_N": 0}
-    gp_train_7 = {"opts_N": 0, "n_samples": 0, "init_N": 0}
-    gp_train_8 = {"init_N": 1}
-
-    # Test that all these at least can be run in a row.
-    gp.fit(X=X, y=y, options=gp_train_1)
-    gp.fit(X=X, y=y, options=gp_train_2)
-    gp.fit(X=X, y=y, options=gp_train_3)
-    gp.fit(X=X, y=y, options=gp_train_4)
-    gp.fit(X=X, y=y, options=gp_train_5)
-    gp.fit(X=X, y=y, options=gp_train_6)
-    gp.fit(X=X, y=y, options=gp_train_7)
-    gp.fit(X=X, y=y, options=gp_train_8)
+    # Every combination of the three sizes that can be switched off, run
+    # in a row on one GP. `n_samples` decides how many hyperparameter
+    # vectors come back, `opts_N` whether an optimization result does, and
+    # `n_samples` again whether a sampling result does.
+    cases = [
+        ({"opts_N": 0}, 10, False, True),
+        ({"n_samples": 0}, 1, True, False),
+        ({"init_N": 0}, 10, True, True),
+        ({"opts_N": 0, "n_samples": 0}, 1, False, False),
+        ({"n_samples": 0, "init_N": 0}, 1, True, False),
+        ({"opts_N": 0, "init_N": 0}, 10, False, True),
+        ({"opts_N": 0, "n_samples": 0, "init_N": 0}, 1, False, False),
+        ({"init_N": 1}, 10, True, True),
+    ]
+    for options, rows, optimized, sampled in cases:
+        hyp, optimize_result, sampling_result = gp.fit(
+            X=X, y=y, options=options
+        )
+        assert hyp.shape == (rows, hyp_N), options
+        assert np.all(np.isfinite(hyp)), options
+        assert (optimize_result is not None) is optimized, options
+        assert (sampling_result is not None) is sampled, options
+        if sampled:
+            assert sampling_result["samples"].shape[1] == hyp_N, options
+        assert np.size(gp.posteriors) == rows, options
+        assert np.array_equal(
+            gp.get_hyperparameters(as_array=True), hyp
+        ), options
 
 
 def test_fitting():
@@ -1081,12 +1109,13 @@ def test_fitting():
     noise_N = gp.noise.hyperparameter_count()
 
     N_s = 1
-    hyp = np.random.standard_normal(size=(N_s, cov_N + noise_N + mean_N))
+    rng = np.random.default_rng(6)
+    hyp = rng.standard_normal((N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.3
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
 
     gp.update(hyp=hyp, compute_posterior=False)
-    y = gp.random_function(X, add_noise=True)
+    y = gp.random_function(X, add_noise=True, rng=rng)
     gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
 
     gp1 = gpr.GP(
@@ -1097,7 +1126,7 @@ def test_fitting():
     )
 
     gp_train = {"n_samples": 0}
-    hyp2, _, _ = gp1.fit(X=X, y=y, options=gp_train)
+    hyp2, _, _ = gp1.fit(X=X, y=y, options=gp_train, rng=rng)
 
     assert np.all(np.abs(hyp - hyp2)[0] < 0.5)
 
@@ -1211,6 +1240,10 @@ def test_predict_lpd():
         mean=gpr.mean_functions.NegativeQuadratic(),
         noise=gpr.noise_functions.GaussianNoise(user_provided_add=True),
     )
+    # This noise function has no hyperparameter of its own: its variance is
+    # the user-provided one plus a nugget of ``eps``. So a row is
+    # [log ell (D), log sf, m0, mode location (D), log scale (D)]. The two
+    # samples differ, so that neither is the average over them.
     hyp = np.array(
         [
             [
@@ -1218,9 +1251,7 @@ def test_predict_lpd():
                 0.0,
                 0.0,
                 0.0,  # log ell
-                1.0,  # log sf2
-                # Noise
-                np.log(np.pi),  # log std. dev. of noise
+                1.0,  # log sf
                 # Mean
                 -(D / 2) * np.log(2 * np.pi),  # MVN mode
                 0.0,
@@ -1232,20 +1263,18 @@ def test_predict_lpd():
             ],
             [
                 # Covariance
-                0.0,
-                0.0,
-                0.0,  # log ell
-                1.0,  # log sf2
-                # Noise
-                np.log(np.pi),  # log std. dev. of noise
+                0.3,
+                -0.2,
+                0.1,  # log ell
+                0.5,  # log sf
                 # Mean
-                -(D / 2) * np.log(2 * np.pi),  # MVN mode
-                0.0,
-                0.0,
-                0.0,  # Mode location
-                0.0,
-                0.0,
-                0.0,  # log scale
+                -1.0,  # MVN mode
+                0.2,
+                -0.1,
+                0.4,  # Mode location
+                0.3,
+                0.3,
+                0.3,  # log scale
             ],
         ]
     )
@@ -1259,22 +1288,28 @@ def test_predict_lpd():
         ).reshape(-1, 1)
         + offset
     )
-    s2_star = np.arange(-3, 3).reshape((-1, 1))
-    s2_star = np.zeros((6, 1))
+    s2_star = np.linspace(0.1, 0.7, 6).reshape((-1, 1))
+
+    # The log predictive density always carries the observation noise,
+    # here the user-provided variance, whichever variance ``add_noise``
+    # selects for the returned ``s2``.
     f_mu, f_s2, lpd = gp.predict(
         X_star, y_star, s2_star=s2_star, return_lpd=True
     )
     assert np.allclose(
         lpd,
         scipy.stats.norm.logpdf(
-            y_star, loc=f_mu, scale=np.sqrt(np.pi * s2_star + f_s2)
+            y_star, loc=f_mu, scale=np.sqrt(s2_star + f_s2)
         ),
     )
-    __, __, lpd2 = gp.predict(
+    __, s2_with_noise, lpd2 = gp.predict(
         X_star, y_star, s2_star=s2_star, return_lpd=True, add_noise=True
     )
     assert np.all(lpd2 == lpd)
-    __, __, lpd3 = gp.predict(
+    assert np.allclose(s2_with_noise, f_s2 + s2_star)
+
+    # Per sample it is the density of that sample's own Gaussian.
+    f_mu_s, y_s2_s, lpd3 = gp.predict(
         X_star,
         y_star,
         s2_star=s2_star,
@@ -1282,8 +1317,25 @@ def test_predict_lpd():
         add_noise=True,
         separate_samples=True,
     )
-    assert np.all(lpd3[:, 0:1] == lpd)
-    assert np.all(lpd3[:, 1:2] == lpd)
+    assert np.allclose(
+        lpd3,
+        scipy.stats.norm.logpdf(y_star, loc=f_mu_s, scale=np.sqrt(y_s2_s)),
+    )
+    assert not np.allclose(lpd3[:, 0], lpd3[:, 1])
+
+    # Averaged over the samples it is the density of the Gaussian that
+    # carries the mean and the variance of the mixture, and not the average
+    # of the per-sample densities.
+    mu_bar = np.mean(f_mu_s, 1, keepdims=True)
+    var_bar = np.mean(y_s2_s, 1, keepdims=True) + np.var(
+        f_mu_s, axis=1, ddof=1, keepdims=True
+    )
+    assert np.allclose(f_mu, mu_bar)
+    assert np.allclose(
+        lpd,
+        scipy.stats.norm.logpdf(y_star, loc=mu_bar, scale=np.sqrt(var_bar)),
+    )
+    assert not np.allclose(lpd, np.mean(lpd3, 1, keepdims=True))
 
 
 def test__str__and__repr__():
@@ -1615,8 +1667,13 @@ def test_float32_kernel_preserves_diagonal_noise(
 
 
 def _small_gp_with_priors(seed=3):
+    """A GP in three dimensions with a prior of each family. Each smooth
+    box is set on a block of three hyperparameters (the length scales, and
+    the log scales of the mean), with a box per coordinate that puts the
+    starting values, all within (-1, 1), above the first box, inside the
+    second and below the third."""
     rng = np.random.default_rng(seed)
-    N, D = 25, 2
+    N, D = 25, 3
     X = rng.standard_normal((N, D))
     y = np.sin(X).sum(1, keepdims=True) + 0.1 * rng.standard_normal((N, 1))
     gp = gpr.GP(
@@ -1628,27 +1685,21 @@ def _small_gp_with_priors(seed=3):
     hyp = 0.3 * rng.standard_normal((1, 3 * D + 3))
     gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=True)
     names = list(gp.get_bounds().keys())
+    a = np.array([-3.0, -1.0, 1.0])
+    b = np.array([-1.0, 1.0, 3.0])
     priors = {
-        names[0]: (
-            "student_t",
-            (np.zeros(D), np.full(D, 1.0), np.full(D, 3.0)),
-        ),
+        names[0]: ("smoothbox", (a, b, np.array([0.5, 0.7, 0.4]))),
         names[1]: ("gaussian", (np.zeros(1), np.ones(1))),
         names[2]: (
-            "smoothbox",
-            (np.array([-3.0]), np.array([-1.0]), np.array([0.5])),
+            "student_t",
+            (np.zeros(1), np.ones(1), np.full(1, 3.0)),
         ),
-        names[3]: (
-            "smoothbox_student_t",
-            (
-                np.array([-1.0]),
-                np.array([1.0]),
-                np.array([0.5]),
-                np.array([4.0]),
-            ),
-        ),
+        names[3]: None,
         names[4]: ("gaussian", (np.zeros(D), np.full(D, 2.0))),
-        names[5]: None,
+        names[5]: (
+            "smoothbox_student_t",
+            (a, b, np.array([0.5, 0.3, 0.6]), np.array([4.0, 3.0, 5.0])),
+        ),
     }
     bounds = {
         n: (np.full(np.size(v[0]), -6.0), np.full(np.size(v[0]), 6.0))
@@ -1857,3 +1908,1155 @@ def test_fit_seed_continues_design_stream(init_method, seed_kind):
         results.append((hyp, sampling["samples"], sampling["f_vals"]))
     for seeded, generated in zip(*results):
         assert np.array_equal(seeded, generated)
+
+
+def test_predict_full_add_noise_per_point():
+    """``predict_full(add_noise=True)`` adds the observation noise on the
+    diagonal, so the returned matrix stays a covariance also when the noise
+    varies from point to point, and its diagonal is ``predict``'s."""
+    N = 12
+    D = 2
+    rng = np.random.default_rng(4)
+    X = rng.uniform(-2, 2, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(
+            constant_add=True, user_provided_add=True
+        ),
+    )
+    # [log ell (D), log sf, log sn, m0]
+    hyp = np.array([[0.0, 0.0, 0.0, np.log(0.2), 0.0]])
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+
+    x_star = rng.uniform(-2, 2, size=(5, D))
+    s2_star = np.array([[0.5], [0.1], [0.3], [0.05], [0.4]])
+
+    __, cov = gp.predict_full(x_star, s2_star=s2_star, add_noise=True)
+    C = cov[:, :, 0]
+    assert np.allclose(C, C.T, rtol=0, atol=1e-14)
+    assert np.min(np.linalg.eigvalsh((C + C.T) / 2)) > -1e-10
+
+    __, s2 = gp.predict(x_star, s2_star=s2_star, add_noise=True)
+    assert np.allclose(np.diag(C), s2[:, 0], rtol=1e-12, atol=1e-14)
+
+    # The latent covariance differs from the noisy one on the diagonal only.
+    __, cov_latent = gp.predict_full(x_star, s2_star=s2_star)
+    added = C - cov_latent[:, :, 0]
+    assert np.allclose(added, np.diag(np.diag(added)), rtol=0, atol=1e-14)
+    assert np.allclose(np.diag(added), np.ravel(s2_star) + 0.04)
+
+
+def test_failed_factorization_raises_linalgerror():
+    """A training covariance that stays singular after every retry of the
+    noise inflation reports a ``LinAlgError`` in both noise
+    parametrizations, the low-noise one included."""
+    D = 2
+    rng = np.random.default_rng(1)
+    X = rng.uniform(-1, 1, size=(40, D))
+    y = np.sum(X, 1).reshape(-1, 1)
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.NegativeQuadratic(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    # [log ell (D), log sf, log sn, m0, mode location (D), log scale (D)]
+    hyp = np.zeros(3 * D + 3)
+    hyp[0:D] = np.log(1e5)
+    hyp[D] = 20.0
+    hyp[2 * D + 3 :] = np.log(3.0)
+
+    # min(sn2) < 1e-6: the low-noise parametrization.
+    hyp[D + 1] = np.log(1e-7)
+    with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
+        make_gp().update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert "Singular matrix" in execinfo.value.args[0]
+
+    # And the Cholesky parametrization, for contrast.
+    hyp[0:D] = np.log(1e6)
+    hyp[D] = 25.0
+    hyp[D + 1] = np.log(3e-3)
+    with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
+        make_gp().update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert "Singular matrix" in execinfo.value.args[0]
+
+
+def test_robust_cholesky_factors_matrices_cholesky_refuses():
+    """The eigenvalue fallback returns a factor of the matrix it was given:
+    ``T.T @ T == sigma`` for the semidefinite matrices a direct Cholesky
+    decomposition refuses."""
+    robust_cholesky = gpr.GP._GP__robust_cholesky
+    rng = np.random.default_rng(7)
+
+    cases = {}
+    # Rank-deficient but positive semidefinite.
+    A = rng.standard_normal((6, 3))
+    cases["rank deficient"] = A @ A.T
+    # A kernel matrix at duplicated points, exactly singular.
+    kernel = gpr.covariance_functions.SquaredExponential()
+    X = np.array([[0.0], [0.0], [1.0], [1.0], [-1.5]])
+    cases["duplicate points"] = kernel.compute(np.array([0.0, 0.0]), X)
+    # A repeated positive eigenvalue, whose eigenspace the general solver
+    # need not return an orthogonal basis of.
+    Q, __ = np.linalg.qr(rng.standard_normal((5, 5)))
+    cases["repeated eigenvalue"] = Q @ np.diag([1.0, 1.0, 1.0, 0.0, 0.0]) @ Q.T
+
+    for name, sigma in cases.items():
+        sigma = (sigma + sigma.T) / 2
+        with pytest.raises(scipy.linalg.LinAlgError):
+            scipy.linalg.cholesky(sigma, check_finite=False)
+        T = robust_cholesky(sigma)
+        assert np.isrealobj(T), name
+        assert np.allclose(
+            T.T @ T, sigma, rtol=0, atol=1e-10 * np.max(np.abs(sigma))
+        ), name
+
+
+def _dense_grid_gp(hyp):
+    """The GP of the dense-grid draws: 40 points of ``sin(2 x)`` on
+    [-2, 2], with the hyperparameters ``hyp``, one row per sample, in the
+    order [log ell, log sf, log sn, m0, mode location, log scale]."""
+    rng_data = np.random.default_rng(77)
+    X = rng_data.uniform(-2, 2, size=(40, 1))
+    y = np.sin(2 * X)
+
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+    return gp
+
+
+def _predictive_covariance(gp, x_star, s=0):
+    """The predictive covariance of hyperparameter sample ``s`` at
+    ``x_star``, solved against a Cholesky factor of the training
+    covariance with the noise the posterior was computed with."""
+    posterior = gp.posteriors[s]
+    cov_N = gp.covariance.hyperparameter_count(gp.D)
+    noise_N = gp.noise.hyperparameter_count()
+    hyp_cov = posterior.hyp[:cov_N]
+    hyp_noise = posterior.hyp[cov_N : cov_N + noise_N]
+    K = gp.covariance.compute(hyp_cov, gp.X)
+    sn2 = gp.noise.compute(hyp_noise, gp.X, gp.y, gp.s2)
+    K_noisy = K + posterior.sn2_mult * sn2 * np.eye(gp.X.shape[0])
+    Ks = gp.covariance.compute(hyp_cov, gp.X, X_star=x_star)
+    factor = scipy.linalg.cho_factor(K_noisy)
+    C = gp.covariance.compute(hyp_cov, x_star) - Ks.T @ scipy.linalg.cho_solve(
+        factor, Ks
+    )
+    return (C + C.T) / 2
+
+
+@pytest.mark.parametrize(
+    "noise_sd, cholesky_factor", [(2e-3, True), (1e-4, False), (1e-6, False)]
+)
+@pytest.mark.parametrize("grid", [(-2.5, 2.5), (-1.0, 1.0)])
+def test_random_function_on_a_dense_grid(grid, noise_sd, cholesky_factor):
+    """A predictive covariance on a dense one-dimensional grid is
+    numerically singular, so the draw goes through the eigenvalue
+    fallback. Eigenvalues of rounding size, which such a matrix has of
+    both signs, count as zeros, and the draws are draws: they differ
+    between generators and carry the predictive covariance. The
+    covariance is the prior covariance minus what the data explain, so
+    its rounding is that of the prior variance: on the grid inside the
+    data, where the largest eigenvalue is four orders of magnitude or more
+    below the prior variance, the negative eigenvalues are still rounding.
+    This holds in both representations of the posterior: the Cholesky
+    factor of the training covariance, and, below a noise variance of
+    1e-6, the negative inverse, from which the predictive covariance would
+    carry a rounding error that grows as the noise shrinks. The grid on
+    [-2.5, 2.5] reaches past the data on both sides."""
+    hyp = np.array(
+        [[np.log(0.7), np.log(1.2), np.log(noise_sd), 0.0, 0.0, np.log(1.5)]]
+    )
+    gp = _dense_grid_gp(hyp)
+    if cholesky_factor:
+        assert gp.posteriors[0].L_chol
+    else:
+        assert not gp.posteriors[0].L_chol
+
+    x_star = np.reshape(np.linspace(*grid, 100), (-1, 1))
+    C = _predictive_covariance(gp, x_star)
+    with pytest.raises(scipy.linalg.LinAlgError):
+        scipy.linalg.cholesky(C, check_finite=False)
+
+    f_1 = gp.random_function(x_star, rng=np.random.default_rng(1))
+    f_2 = gp.random_function(x_star, rng=np.random.default_rng(2))
+    assert not np.array_equal(f_1, f_2)
+
+    rng = np.random.default_rng(11)
+    draws = np.concatenate(
+        [gp.random_function(x_star, rng=rng) for __ in range(1000)], axis=1
+    )
+    empirical = np.cov(draws, ddof=1)
+    assert np.linalg.norm(empirical - C) < 0.2 * np.linalg.norm(C)
+    mu, __ = gp.predict(x_star)
+    sd_max = np.sqrt(np.max(np.diag(C)))
+    assert np.allclose(
+        np.mean(draws, 1), np.ravel(mu), rtol=0, atol=0.15 * sd_max
+    )
+
+
+@pytest.mark.parametrize(
+    "noise_sds, cholesky_factor",
+    [((1e-2, 1e-1), True), ((1e-4, 1e-6), False)],
+)
+def test_random_function_draws_from_one_hyperparameter_sample(
+    noise_sds, cholesky_factor
+):
+    """With several hyperparameter samples, each draw comes from the
+    posterior of one of them, in either representation of the posterior,
+    and ``add_noise`` adds the observation noise of that sample. The same
+    generator state draws the same sample and the same function with and
+    without the noise, so their difference is the noise alone; the noise
+    variances of the two samples are a hundred times apart or more, so the
+    noise of a draw tells which sample it came from."""
+    hyp = np.array(
+        [
+            [np.log(ell), np.log(sf), np.log(sd), 0.0, 0.0, np.log(1.5)]
+            for ell, sf, sd in zip((0.7, 0.9), (1.2, 1.0), noise_sds)
+        ]
+    )
+    gp = _dense_grid_gp(hyp)
+    for posterior in gp.posteriors:
+        if cholesky_factor:
+            assert posterior.L_chol
+        else:
+            assert not posterior.L_chol
+
+    x_star = np.reshape(np.linspace(-2.5, 2.5, 30), (-1, 1))
+    functions, noise = [], []
+    for seed in range(1000):
+        f = gp.random_function(x_star, rng=np.random.default_rng(seed))
+        y = gp.random_function(
+            x_star, add_noise=True, rng=np.random.default_rng(seed)
+        )
+        functions.append(f)
+        noise.append(y - f)
+    functions = np.concatenate(functions, axis=1)
+    noise = np.concatenate(noise, axis=1)
+
+    noise_variances = np.array(
+        [
+            np.exp(2 * posterior.hyp[2]) * posterior.sn2_mult
+            for posterior in gp.posteriors
+        ]
+    )
+    log_ratios = np.log(np.mean(noise**2, axis=0)[:, None] / noise_variances)
+    drawn = np.argmin(np.abs(log_ratios), axis=1)
+    assert np.all(np.abs(log_ratios[np.arange(1000), drawn]) < np.log(5))
+
+    mu, __ = gp.predict(x_star, separate_samples=True)
+    for s in range(2):
+        assert 300 < np.sum(drawn == s) < 700
+        assert np.mean(noise[:, drawn == s] ** 2) == pytest.approx(
+            noise_variances[s], rel=0.1
+        )
+        C = _predictive_covariance(gp, x_star, s)
+        empirical = np.cov(functions[:, drawn == s], ddof=1)
+        assert np.linalg.norm(empirical - C) < 0.2 * np.linalg.norm(C)
+        sd_max = np.sqrt(np.max(np.diag(C)))
+        assert np.allclose(
+            np.mean(functions[:, drawn == s], 1),
+            mu[:, s],
+            rtol=0,
+            atol=0.15 * sd_max,
+        )
+
+
+def test_robust_cholesky_refuses_an_indefinite_matrix():
+    """A negative eigenvalue larger than the rounding tolerance means the
+    matrix is no covariance matrix, and no factor of it exists. The
+    tolerance is measured against the scale of the terms that formed the
+    matrix where the caller gives it, and against the largest eigenvalue
+    otherwise."""
+    robust_cholesky = gpr.GP._GP__robust_cholesky
+    sigma = np.array([[1.0, 2.0], [2.0, 1.0]])  # eigenvalues 3 and -1
+    for scale in (None, 10.0):
+        with pytest.raises(scipy.linalg.LinAlgError) as execinfo:
+            robust_cholesky(sigma, scale=scale)
+        assert "not positive semidefinite" in execinfo.value.args[0]
+
+    # A matrix formed by cancellation from terms of order one, whose
+    # largest eigenvalue is 1e-5: a negative eigenvalue of -1e-15 is
+    # rounding of those terms, one of -1e-11 is not.
+    Q, __ = np.linalg.qr(np.random.default_rng(5).standard_normal((3, 3)))
+    for smallest, refused in ((-1e-15, False), (-1e-11, True)):
+        sigma = Q @ np.diag([1e-5, 1e-6, smallest]) @ Q.T
+        sigma = (sigma + sigma.T) / 2
+        with pytest.raises(scipy.linalg.LinAlgError):
+            robust_cholesky(sigma)
+        if refused:
+            with pytest.raises(scipy.linalg.LinAlgError):
+                robust_cholesky(sigma, scale=1.44)
+        else:
+            T = robust_cholesky(sigma, scale=1.44)
+            assert np.allclose(T.T @ T, sigma, rtol=0, atol=1e-14)
+
+
+def _low_noise_rank_one_gp(D=2):
+    """A GP in the low-noise parametrization of the posterior factor: with
+    no constant noise term ``min(sn2)`` is ``eps``, below the 1e-6 the
+    Cholesky representation needs."""
+    return gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=False),
+    )
+
+
+def test_rank_one_update_low_noise_branch():
+    """A well-separated observation appended to a low-noise posterior takes
+    the rank-one shortcut and agrees with a full recomputation."""
+    D = 2
+    rng = np.random.default_rng(3)
+    X = rng.uniform(-3, 3, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    # [log ell (D), log sf, m0]: no noise hyperparameter.
+    hyp = np.array([[0.0, 0.0, 0.0, 0.0]])
+    x_new = np.array([[2.9, -2.9]])
+    y_new = np.sin(x_new[:, 0:1]) + np.cos(x_new[:, 1:2])
+
+    gp = _low_noise_rank_one_gp(D)
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+    assert not gp.posteriors[0].L_chol
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        gp.update(X_new=x_new, y_new=y_new)
+
+    gp_ref = _low_noise_rank_one_gp(D)
+    gp_ref.update(
+        X_new=np.concatenate((X, x_new)),
+        y_new=np.concatenate((y, y_new)),
+        hyp=hyp,
+    )
+    assert not gp_ref.posteriors[0].L_chol
+    assert np.allclose(
+        gp.posteriors[0].alpha, gp_ref.posteriors[0].alpha, rtol=1e-8
+    )
+
+    x_star = rng.uniform(-3, 3, size=(5, D))
+    f_mu, f_s2 = gp.predict(x_star)
+    f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.allclose(f_mu, f_mu_ref, rtol=1e-8, atol=1e-10)
+    assert np.allclose(f_s2, f_s2_ref, rtol=1e-8, atol=1e-10)
+
+
+def test_rank_one_update_low_noise_duplicate_recomputes(monkeypatch):
+    """Where rounding drives the latent variance of the new point to zero
+    or below, ``predict`` clamps it, and the low-noise rank-one update
+    would divide by the noise alone, which is no predictive variance: it
+    warns and recomputes in full, as the Cholesky branch does. Rounding
+    takes an observation at an existing training input to either side of
+    zero depending on the platform, so ``predict`` is made to return the
+    clamped value, the noise, whatever the rounding."""
+    D = 2
+    rng = np.random.default_rng(3)
+    X = rng.uniform(-3, 3, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    hyp = np.array([[0.0, 0.0, 0.0, 0.0]])
+    x_new = X[0:1].copy()
+    y_new = y[0:1].copy()
+
+    gp = _low_noise_rank_one_gp(D)
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+    assert not gp.posteriors[0].L_chol
+
+    # The noise variance of the new point, computed as `update` computes
+    # it: what the clamped predictive variance equals.
+    posterior = gp.posteriors[0]
+    cov_N = gp.covariance.hyperparameter_count(D)
+    noise_N = gp.noise.hyperparameter_count()
+    sn2 = np.ravel(
+        gp.noise.compute(
+            posterior.hyp[cov_N : cov_N + noise_N], x_new, y_new, 0
+        )
+    )[0]
+    clamped = sn2 * posterior.sn2_mult
+    predict = gp.predict
+
+    def predict_at_the_clamp(*args, **kwargs):
+        mu, s2 = predict(*args, **kwargs)
+        return mu, np.full_like(s2, clamped)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(gp, "predict", predict_at_the_clamp)
+        with pytest.warns(UserWarning, match="Reverting to full update"):
+            gp.update(X_new=x_new, y_new=y_new)
+
+    gp_ref = _low_noise_rank_one_gp(D)
+    gp_ref.update(
+        X_new=np.concatenate((X, x_new)),
+        y_new=np.concatenate((y, y_new)),
+        hyp=hyp,
+    )
+    assert np.array_equal(gp.posteriors[0].alpha, gp_ref.posteriors[0].alpha)
+    assert np.array_equal(gp.posteriors[0].L, gp_ref.posteriors[0].L)
+
+    x_star = rng.uniform(-3, 3, size=(5, D))
+    f_mu, f_s2 = gp.predict(x_star)
+    f_mu_ref, f_s2_ref = gp_ref.predict(x_star)
+    assert np.array_equal(f_mu, f_mu_ref)
+    assert np.array_equal(f_s2, f_s2_ref)
+
+
+@pytest.mark.parametrize("state", ["cleaned", "no_posterior"])
+def test_single_point_update_without_posterior_factors(state):
+    """The rank-one shortcut extends the stored factors, so a GP that
+    carries none -- after ``clean`` or after an update with
+    ``compute_posterior=False`` -- recomputes in full instead."""
+    N = 10
+    D = 2
+    rng = np.random.default_rng(9)
+    X = rng.uniform(-3, 3, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.0]])
+    x_new = rng.uniform(-3, 3, size=(1, D))
+    y_new = np.sin(x_new[:, 0:1]) + np.cos(x_new[:, 1:2])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    gp = make_gp()
+    if state == "cleaned":
+        gp.update(X_new=X, y_new=y, hyp=hyp)
+        gp.clean()
+    else:
+        gp.update(X_new=X, y_new=y, hyp=hyp, compute_posterior=False)
+    assert gp.posteriors[0].alpha is None
+
+    gp.update(X_new=x_new, y_new=y_new)
+    assert gp.posteriors[0].alpha is not None
+
+    gp_ref = make_gp()
+    gp_ref.update(
+        X_new=np.concatenate((X, x_new)),
+        y_new=np.concatenate((y, y_new)),
+        hyp=hyp,
+    )
+    assert np.array_equal(gp.posteriors[0].alpha, gp_ref.posteriors[0].alpha)
+    assert np.array_equal(gp.posteriors[0].L, gp_ref.posteriors[0].L)
+
+
+def _reference_log_prior(kind, params, x):
+    """The hyperprior densities of ``set_priors``, written from their
+    definitions: a Gaussian and a Student's t, and their smooth-box
+    counterparts, uniform on ``[a, b]`` with tails of scale ``sigma``."""
+    if kind == "gaussian":
+        mu, sigma = params
+        return scipy.stats.norm.logpdf(x, loc=mu, scale=sigma)
+    if kind == "student_t":
+        mu, sigma, df = params
+        return scipy.stats.t.logpdf(x, df, loc=mu, scale=sigma)
+    a, b, sigma = params[0], params[1], params[2]
+    z = 0.0
+    if x < a:
+        z = (x - a) / sigma
+    elif x > b:
+        z = (x - b) / sigma
+    if kind == "smoothbox":
+        # The plateau has the density of the tails at their peak, so the
+        # normalizer is the plateau's length in units of that peak plus one.
+        C = 1.0 + (b - a) / (sigma * np.sqrt(2 * np.pi))
+        return -np.log(C * sigma * np.sqrt(2 * np.pi)) - 0.5 * z**2
+    if kind == "smoothbox_student_t":
+        df = params[3]
+        peak = np.exp(
+            scipy.special.gammaln(0.5 * (df + 1))
+            - scipy.special.gammaln(0.5 * df)
+        ) / (sigma * np.sqrt(df * np.pi))
+        C = 1.0 + (b - a) * peak
+        return np.log(peak / C) - 0.5 * (df + 1) * np.log1p(z**2 / df)
+    raise ValueError("unknown prior " + kind)
+
+
+def test_log_prior_matches_the_documented_densities():
+    """``log_posterior`` minus ``log_likelihood`` is the log hyperprior:
+    the documented Gaussian, Student's t and smooth-box densities, with an
+    infinite or missing number of degrees of freedom naming the Gaussian
+    families as ``gplite_nlZ.m`` documents."""
+    D = 1
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+
+    # In the order of the hyperparameter array: covariance, noise, mean.
+    priors = {
+        "covariance_log_lengthscale": ("gaussian", (0.3, 1.2)),
+        "covariance_log_outputscale": ("student_t", (-0.2, 0.8, 5.0)),
+        "noise_log_scale": ("smoothbox", (-1.0, 1.0, 0.7)),
+        "mean_const": ("smoothbox_student_t", (-2.0, 0.5, 0.9, 4.0)),
+    }
+
+    # The reference densities are normalized, which fixes their constants
+    # independently of gpyreg.
+    for kind, params in priors.values():
+        mass, __ = quad(
+            lambda t: np.exp(_reference_log_prior(kind, params, t)),
+            -np.inf,
+            np.inf,
+        )
+        assert np.isclose(mass, 1.0, rtol=1e-6), kind
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+    # The smooth-box coordinates are the last two: inside their boxes in
+    # the first vector, in either tail in the second.
+    for hyp in (
+        np.array([0.5, -0.4, 0.2, -0.3]),
+        np.array([-1.1, 1.3, -1.5, 0.9]),
+    ):
+        gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+        expected = sum(
+            _reference_log_prior(kind, params, x)
+            for (kind, params), x in zip(priors.values(), hyp)
+        )
+        # No bounds are set, so no prior is truncated and the
+        # renormalization over the bounds is zero.
+        gp.set_priors(priors)
+        assert np.all(np.isnan(gp.lower_bounds))
+        log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+        assert np.isclose(log_prior, expected, rtol=1e-12)
+
+        # A Gaussian and a smooth box are also written with an infinite
+        # or a NaN number of degrees of freedom. Outside `fit`, either
+        # value makes a Student's t a Gaussian, as in `gplite_hypprior.m`,
+        # and a smooth-box Student's t a smooth box, a reading of gpyreg's
+        # own (gplite has no smooth-box priors).
+        for df in (np.inf, np.nan):
+            gp.set_priors(priors)
+            gp.hyper_priors["df"][0] = df  # the Gaussian
+            gp.hyper_priors["df"][2] = df  # the smooth box
+            log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+            assert np.isclose(log_prior, expected, rtol=1e-12)
+
+
+@pytest.mark.parametrize("family", ["smoothbox", "smoothbox_student_t"])
+@pytest.mark.parametrize("D", [2, 3])
+def test_smooth_box_prior_over_a_block(family, D):
+    """A smooth-box prior set on a block of several hyperparameters has one
+    normalization constant per coordinate of the block, whichever side of
+    the box each coordinate falls on."""
+    params = (
+        (-1.0, 1.0, 0.7) if family == "smoothbox" else (-1.0, 1.0, 0.7, 4.0)
+    )
+    priors = {
+        "covariance_log_lengthscale": (family, params),
+        "covariance_log_outputscale": None,
+        "noise_log_scale": None,
+        "mean_const": None,
+    }
+
+    X = np.reshape(np.linspace(-2, 2, 6 * D), (-1, D))
+    y = np.sum(np.sin(X), 1)
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    # The lengthscales fall below the box, on the plateau and above it.
+    lengthscales = np.array([-1.5, 0.2, 1.4])[:D]
+    hyp = np.concatenate((lengthscales, [0.0, np.log(0.1), 0.0]))
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    gp.set_priors(priors)
+
+    expected = sum(
+        _reference_log_prior(family, params, x) for x in lengthscales
+    )
+    log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+    assert np.isclose(log_prior, expected, rtol=1e-12)
+
+    returned = gp.get_priors()["covariance_log_lengthscale"]
+    assert returned[0] == family
+    for value, expected_value in zip(returned[1], params):
+        assert np.all(value == expected_value)
+
+
+def _gp_1d():
+    """A one-dimensional GP with four hyperparameters: two of the kernel,
+    one of the noise and one of the mean."""
+    return gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+
+def _no_priors():
+    return {
+        "covariance_log_lengthscale": None,
+        "covariance_log_outputscale": None,
+        "noise_log_scale": None,
+        "mean_const": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "sigma, problem",
+    [
+        (np.inf, "infinite"),
+        (-np.inf, "infinite"),
+        (np.nan, "NaN"),
+        (0.0, "zero or negative"),
+        (-2.0, "zero or negative"),
+    ],
+)
+def test_set_priors_refuses_a_scale_that_is_not_positive(sigma, problem):
+    """A prior needs a finite, positive scale; no prior is ``None``. The
+    message names the hyperparameter and what is wrong with its scale."""
+    priors = _no_priors()
+    priors["mean_const"] = ("gaussian", (0.0, sigma))
+    with pytest.raises(ValueError) as execinfo:
+        _gp_1d().set_priors(priors)
+    message = execinfo.value.args[0]
+    assert "mean_const" in message
+    assert problem in message
+    assert "None" in message
+
+
+def _gp_2d():
+    """A two-dimensional GP with five hyperparameters: the two length
+    scales and the output scale of the kernel, one of the noise and one of
+    the mean."""
+    return gpr.GP(
+        D=2,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
+        ("gaussian", (0.3, 1.2)),
+        ("student_t", (0.3, 1.2, 5.0)),
+        ("smoothbox", (-1.0, 1.0, 0.7)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, 4.0)),
+    ],
+)
+def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
+    """A coordinate of a block whose location and ``sigma`` are both NaN
+    has no prior: the location is ``mu`` for the Gaussian and Student's t
+    families and the box ``[a, b]`` for the smooth-box ones. The block's
+    log prior is that of its other coordinates alone. PyVBMC writes such
+    a block for the rectified output-dependent noise."""
+    # The first length scale has no prior; its degrees of freedom, where
+    # the family has them, are NaN as well.
+    block = tuple(np.array([np.nan, value]) for value in params)
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, block)
+
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 2))
+    y = np.sum(np.sin(X), 1)
+    gp = _gp_2d()
+    hyp = np.array([0.4, -1.4, 0.0, np.log(0.1), 0.0])
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    gp.set_priors(priors)
+
+    expected = _reference_log_prior(family, params, hyp[1])
+    for moved in (0.4, 3.0):
+        hyp[0] = moved
+        log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+        assert np.isclose(log_prior, expected, rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
+        # A NaN number of degrees of freedom, on the whole block.
+        ("student_t", (0.3, 1.2, np.nan)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, np.nan)),
+        # A block whose first coordinate has no prior.
+        ("gaussian", ([np.nan, 0.3], [np.nan, 1.2])),
+        ("student_t", ([np.nan, 0.3], [np.nan, 1.2], [np.nan, 3.0])),
+        ("smoothbox", ([np.nan, -1.0], [np.nan, 1.0], [np.nan, 0.7])),
+    ],
+)
+def test_get_priors_returns_what_set_priors_reads_back(family, params):
+    """``get_priors`` returns a prior whose degrees of freedom are NaN, and
+    a block with a coordinate that has no prior, in a form ``set_priors``
+    reads back unchanged, before and after a ``fit``. Outside ``fit`` a
+    NaN ``df`` names the Gaussian family, as in ``gplite_hypprior.m``, and
+    the smooth box for the smooth-box Student's t, gpyreg's own family;
+    ``fit`` fills it with ``df_base`` for its own duration alone."""
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 2))
+    y = np.sum(np.sin(X), 1)
+    hyp0 = np.array([[0.4, -0.4, 0.0, np.log(0.1), 0.0]])
+    gp = _gp_2d()
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, params)
+    gp.set_priors(priors)
+    hyper_priors = copy.deepcopy(gp.hyper_priors)
+
+    for fitted in (False, True):
+        if fitted:
+            gp.fit(
+                X=X,
+                y=y,
+                hyp0=hyp0,
+                options={"init_N": 0, "opts_N": 1, "n_samples": 0},
+            )
+        returned = gp.get_priors()["covariance_log_lengthscale"]
+        assert returned is not None
+        assert returned[0] == family
+        for value, given in zip(returned[1], params):
+            assert np.array_equal(
+                value, np.broadcast_to(given, (2,)), equal_nan=True
+            )
+
+        other = _gp_2d()
+        other.set_priors(gp.get_priors())
+        for key, value in hyper_priors.items():
+            assert np.array_equal(gp.hyper_priors[key], value, equal_nan=True)
+            assert np.array_equal(
+                other.hyper_priors[key], value, equal_nan=True
+            )
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
+        ("gaussian", ([0.0, 0.3], [np.nan, 1.2])),
+        ("student_t", ([0.0, 0.3], [np.nan, 1.2], 5.0)),
+        ("smoothbox", ([-1.0, -1.0], [1.0, 1.0], [np.nan, 0.7])),
+        (
+            "smoothbox_student_t",
+            ([-1.0, -1.0], [1.0, 1.0], [np.nan, 0.7], 4.0),
+        ),
+    ],
+)
+def test_set_priors_refuses_a_nan_scale_beside_a_location(family, params):
+    """A coordinate whose location is set needs a finite, positive
+    ``sigma``: a NaN one beside it is refused, with a message that says
+    the scale is NaN."""
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, params)
+    with pytest.raises(ValueError) as execinfo:
+        _gp_2d().set_priors(priors)
+    message = execinfo.value.args[0]
+    assert "covariance_log_lengthscale" in message
+    assert "NaN" in message
+    assert "infinite" not in message
+
+
+def test_set_priors_and_set_bounds_refuse_an_unknown_hyperparameter():
+    """A name outside the model is a mistake, and silently setting no
+    prior on it is what `set_priors`' own docstring promises against."""
+    gp = _gp_1d()
+    priors = _no_priors()
+    priors["not_a_hyperparameter"] = ("gaussian", (0.0, 1.0))
+    with pytest.raises(ValueError) as execinfo:
+        gp.set_priors(priors)
+    assert "not_a_hyperparameter" in execinfo.value.args[0]
+
+    bounds = {name: None for name in _no_priors()}
+    bounds["not_a_hyperparameter"] = (-1.0, 1.0)
+    with pytest.raises(ValueError) as execinfo:
+        gp.set_bounds(bounds)
+    assert "not_a_hyperparameter" in execinfo.value.args[0]
+
+
+def test_get_recommended_bounds_input_checks():
+    """Bounds may be given as any array_like, the message of the upper
+    bounds names them, and an inverted pair the caller gave is refused."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    gp.update(X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]))
+
+    recommended = gp.get_recommended_bounds()
+    for given in ([np.nan] * 4, (np.nan,) * 4):
+        bounds = gp.get_recommended_bounds(given, given)
+        for name, pair in bounds.items():
+            assert np.array_equal(pair[0], recommended[name][0])
+            assert np.array_equal(pair[1], recommended[name][1])
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.get_recommended_bounds(upper_bounds="nonsense")
+    assert "`upper_bounds`" in execinfo.value.args[0]
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.get_recommended_bounds(np.ones(4), -np.ones(4))
+    assert "upper bound" in execinfo.value.args[0]
+
+
+def test_update_without_hyperparameters_raises():
+    """A posterior cannot be computed from hyperparameters that were never
+    set: the message names them instead of leaving NaN factors behind."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    with pytest.raises(ValueError) as execinfo:
+        gp.update(X_new=X, y_new=y)
+    message = execinfo.value.args[0]
+    for name in _no_priors():
+        assert name in message
+
+
+def test_fit_leaves_the_prior_degrees_of_freedom_alone():
+    """``df_base`` fills the degrees of freedom a prior leaves unset for
+    the duration of the fit; the GP keeps the priors the caller set, so a
+    second fit with another value uses it."""
+    X = np.reshape(np.linspace(-2, 2, 12), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    priors = _no_priors()
+    priors["covariance_log_outputscale"] = ("student_t", (0.0, 1.0, np.nan))
+    gp.set_priors(priors)
+    df_before = gp.hyper_priors["df"].copy()
+    assert np.all(np.isnan(df_before))
+
+    hyp0 = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+    options = {"init_N": 0, "opts_N": 1, "n_samples": 0}
+
+    results = []
+    for df_base in (7, 400):
+        __, result, __ = gp.fit(
+            X=X, y=y, hyp0=hyp0, options={**options, "df_base": df_base}
+        )
+        assert np.array_equal(gp.hyper_priors["df"], df_before, equal_nan=True)
+        results.append(result.fun)
+    assert results[0] != results[1]
+
+
+@pytest.mark.parametrize("df", [5.0, 400.0])
+def test_smooth_box_student_t_prior_with_many_degrees_of_freedom(df):
+    """The normalizer of the smooth-box Student's t is a ratio of gamma
+    functions, both of which overflow from a few hundred degrees of
+    freedom; the log prior stays finite and keeps its value."""
+    params = (-1.0, 1.0, 0.7, df)
+    priors = _no_priors()
+    priors["mean_const"] = ("smoothbox_student_t", params)
+
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    hyp = np.array([0.0, 0.0, np.log(0.1), 1.4])  # above the box
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    gp.set_priors(priors)
+
+    log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+    assert np.isfinite(log_prior)
+    assert np.isclose(
+        log_prior,
+        _reference_log_prior("smoothbox_student_t", params, hyp[3]),
+        rtol=1e-12,
+    )
+
+
+@pytest.mark.parametrize("key", ["sampler_name", "sampler"])
+def test_fit_reads_the_documented_sampler_option(key):
+    """`fit` documents the sampler under `sampler_name` and read it under
+    `sampler`, so the documented spelling was ignored. Both are read, the
+    documented one first."""
+    X = np.reshape(np.linspace(-2, 2, 10), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    options = {
+        "init_N": 0,
+        "opts_N": 1,
+        "n_samples": 1,
+        "thin": 1,
+        "burn": 2,
+        key: "does_not_exist",
+    }
+    with pytest.raises(ValueError) as execinfo:
+        gp.fit(
+            X=X,
+            y=y,
+            hyp0=np.array([[0.0, 0.0, np.log(0.1), 0.0]]),
+            options=options,
+        )
+    assert "Unknown sampler!" in execinfo.value.args[0]
+
+
+def test_log_likelihood_and_posterior_take_a_dictionary():
+    """Both methods document a dictionary of hyperparameters, which
+    `hyperparameters_from_dict` returns as one row of an array."""
+    gp, hyp = _small_gp_with_priors(seed=4)
+    hyp = np.ravel(hyp)
+    as_dict = gp.hyperparameters_to_dict(hyp)[0]
+
+    for method in (gp.log_likelihood, gp.log_posterior):
+        assert np.array_equal(method(as_dict), method(hyp))
+        value, gradient = method(as_dict, compute_grad=True)
+        value_ref, gradient_ref = method(hyp, compute_grad=True)
+        assert np.array_equal(value, value_ref)
+        assert np.array_equal(gradient, gradient_ref)
+
+
+def test_fit_does_not_write_into_the_space_filling_design(monkeypatch):
+    """The low-noise starting point is written into the array of starting
+    points, which was a view of the design, so the sampler widths are the
+    standard deviation of the design as `f_min_fill` returned it."""
+    from gpyreg import gaussian_process as gp_module
+
+    records = {}
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        records["design"] = X0
+        records["as_returned"] = X0.copy()
+        return X0, y0
+
+    class RecordingSliceSampler(gp_module.SliceSampler):
+        def __init__(self, f, x0, widths, *args, **kwargs):
+            records["widths"] = np.array(widths, copy=True)
+            super().__init__(f, x0, widths, *args, **kwargs)
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+    monkeypatch.setattr(gp_module, "SliceSampler", RecordingSliceSampler)
+
+    X = np.reshape(np.linspace(-3, 3, 20), (-1, 1))
+    y = np.sin(X)
+    gp = _gp_1d()
+    gp.fit(
+        X=X,
+        y=y,
+        options={
+            "opts_N": 3,
+            "init_N": 64,
+            "n_samples": 2,
+            "thin": 1,
+            "burn": 2,
+        },
+        rng=np.random.default_rng(0),
+    )
+    assert np.array_equal(records["design"], records["as_returned"])
+    assert np.allclose(
+        records["widths"], np.std(records["as_returned"], axis=0, ddof=1)
+    )
+
+
+def test_noise_gradient_with_a_constant_total_noise():
+    """A scale for the user-provided variance gives the noise function two
+    hyperparameters and a gradient with one row per training input, while
+    the total noise stays a scalar as long as no variance is given."""
+    D = 2
+    N = 14
+    rng = np.random.default_rng(5)
+    X = rng.uniform(-2, 2, size=(N, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(
+            constant_add=True,
+            user_provided_add=True,
+            scale_user_provided=True,
+        ),
+    )
+    assert gp.noise.hyperparameter_count() == 2
+    # [log ell (D), log sf, log sn, log s2 multiplier, m0]
+    hyp = np.array([0.1, -0.2, 0.3, np.log(0.2), 0.4, 0.5])
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    assert gp.s2 is None
+
+    __, gradient = gp.log_likelihood(hyp, compute_grad=True)
+    assert np.all(
+        check_grad(
+            gp.log_likelihood,
+            lambda h: gp.log_likelihood(h, compute_grad=True)[1],
+            hyp,
+        )
+        < 1e-5
+    )
+    # With no variance given the multiplier does not enter the noise.
+    assert gradient[D + 2] == 0.0
+
+
+def test_quad_takes_one_width_per_measure():
+    """A ``sigma`` of one column holds one standard deviation per measure,
+    the same in every dimension, as ``gplite_quad.m`` broadcasts it and as
+    release 1.2.1 took it: the integrals and their variances are those of
+    the same widths written out per dimension. A ``sigma`` of another width
+    than one or ``D`` is refused."""
+    D = 3
+    rng = np.random.default_rng(9)
+    X = rng.uniform(-2, 2, size=(15, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2]) * X[:, 2:3]
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.NegativeQuadratic(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    hyp = np.concatenate(
+        [np.zeros(D), [0.0], [np.log(0.1)], [0.5], np.zeros(D), np.zeros(D)]
+    )
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    mu = rng.uniform(-1, 1, size=(4, D))
+    widths = np.array([[0.3], [0.7], [1.1], [2.0]])
+
+    F_one, V_one = gp.quad(mu, widths, compute_var=True)
+    F_all, V_all = gp.quad(mu, np.tile(widths, (1, D)), compute_var=True)
+
+    assert np.array_equal(F_one, F_all)
+    assert np.array_equal(V_one, V_all)
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(mu, np.ones((4, 2)))
+    assert "one column per input" in execinfo.value.args[0]
+
+
+def test_quad_input_checks():
+    """Bayesian quadrature needs the training data, the posterior factors,
+    a mean function whose hyperparameters it can place and measures with
+    one column per input dimension."""
+    D = 2
+    rng = np.random.default_rng(8)
+    X = rng.uniform(-2, 2, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    hyp = np.array([[0.0, 0.0, 0.0, np.log(0.1), 0.0]])
+
+    def make_gp():
+        return gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+
+    gp = make_gp()
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(0.0, 1.0)
+    assert "training data" in execinfo.value.args[0]
+
+    gp.update(X_new=X, y_new=y, hyp=hyp)
+
+    # A one-dimensional measure is one measure of D dimensions.
+    F_flat = gp.quad(np.zeros(D), np.ones(D))
+    F_row = gp.quad(np.zeros((1, D)), np.ones((1, D)))
+    assert F_flat.shape == (1, 1)
+    assert np.array_equal(F_flat, F_row)
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(np.zeros((1, D + 1)), 1.0)
+    assert "one column per input" in execinfo.value.args[0]
+
+    # A mean function of the caller's own, whose hyperparameters quadrature
+    # cannot place.
+    other = make_gp()
+    other.update(X_new=X, y_new=y, hyp=hyp)
+    other.mean = object()
+    with pytest.raises(ValueError) as execinfo:
+        other.quad(0.0, 1.0)
+    assert "mean function" in execinfo.value.args[0]
+
+    gp.clean()
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(0.0, 1.0)
+    assert "posterior factors" in execinfo.value.args[0]
+
+
+def test_convert_shapes_input_checks():
+    """A variance given as a number of any kind is one variance for every
+    input; an array carries one row per input, as `gplite_pred.m:16-23`
+    requires. A variance of another type is a ``TypeError``, a wrong row
+    count a ``ValueError``."""
+    N = 5
+    gp = _gp_1d()
+    X = np.ones((N, 1))
+
+    for s2 in (3, 3.0, np.int64(3), np.float64(3.0), np.array(3.0)):
+        __, __, converted = gp._convert_shapes(X, None, s2)
+        assert converted.shape == (N, 1)
+        assert np.all(converted == 3.0)
+
+    with pytest.raises(ValueError) as execinfo:
+        gp._convert_shapes(X, None, np.ones((1, N)))
+    assert "rows" in execinfo.value.args[0]
+
+    for s2 in ("nonsense", [1.0] * N):
+        with pytest.raises(TypeError):
+            gp._convert_shapes(X, None, s2)
+
+    gp3 = gpr.GP(
+        D=3,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    with pytest.raises(ValueError) as execinfo:
+        gp3._convert_shapes(np.ones((N, 5)), None, None)
+    assert "input data 5 doesn't match" in execinfo.value.args[0]
+
+
+def test_update_checks_the_hyperparameter_width():
+    """`update(hyp=...)` stored a row of any width, which `predict` then
+    read block by block at the wrong offsets."""
+    gp = _gp_1d()  # two kernel, one noise and one mean hyperparameter
+    with pytest.raises(ValueError) as execinfo:
+        gp.update(hyp=np.zeros((1, 5)))
+    assert "4 hyperparameters" in execinfo.value.args[0]
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.update(hyp=np.zeros(4))
+    assert "one row per hyperparameter sample" in execinfo.value.args[0]
+
+    gp.update(hyp=np.zeros((2, 4)))
+    assert np.size(gp.posteriors) == 2
+
+
+def test_fit_with_targets_of_a_tiny_range(monkeypatch):
+    """Targets whose standard deviation is below 1e-3, the noise's
+    plausible lower bound, give the noise an inverted recommended
+    plausible pair, ``[0.5 * log(tol), log(std(y))]``, as gplite's noise
+    does. The clips into the hard box keep it inverted while the range of
+    the targets is above 1e-6 (below that the hard pair collapses first),
+    and the space-filling design needs ``PLB <= PUB``. These targets have
+    a range of 8.2e-5 and a standard deviation of 2.6e-5."""
+    from gpyreg import gaussian_process as gp_module
+
+    received = {}
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(fun, x0, LB, UB, PLB, PUB, *args, **kwargs):
+        received.update(LB=LB.copy(), UB=UB.copy())
+        received.update(PLB=PLB.copy(), PUB=PUB.copy())
+        return real_f_min_fill(fun, x0, LB, UB, PLB, PUB, *args, **kwargs)
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
+    rng = np.random.default_rng(2)
+    X = rng.uniform(-2, 2, size=(20, 1))
+    y = 1.0 + 1e-4 * rng.random((20, 1))
+
+    gp = _gp_1d()
+    hyp, __, __ = gp.fit(
+        X=X,
+        y=y,
+        options={"n_samples": 0, "opts_N": 1, "init_N": 16},
+        rng=np.random.default_rng(3),
+    )
+    assert np.all(np.isfinite(hyp))
+    # The design receives an ordered plausible pair inside the hard box.
+    assert np.all(received["PLB"] <= received["PUB"])
+    assert np.all(received["LB"] <= received["PLB"])
+    assert np.all(received["PUB"] <= received["UB"])

@@ -1,7 +1,12 @@
 import numpy as np
 from scipy.spatial.distance import cdist, pdist, squareform
 
-from .covariance_functions import AbstractKernel, Matern, SquaredExponential
+from .covariance_functions import (
+    AbstractKernel,
+    Matern,
+    SquaredExponential,
+    _target_spread,
+)
 
 
 class AbstractIsotropicKernel(AbstractKernel):
@@ -123,6 +128,12 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
             )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
+            )
 
         ell = np.exp(hyp[0])
         sf2 = np.exp(2 * hyp[1])
@@ -149,11 +160,17 @@ class MaternIsotropic(AbstractIsotropicKernel, Matern):
             K_ls = squareform(
                 pdist(np.sqrt(self.degree) / ell * X, "sqeuclidean")
             )
-            # With d=1 kernel there will be issues caused by zero
-            # divisions. This is OK, the kernel is just not
-            # differentiable there.
+            # Where two inputs coincide the kernel does not depend on the
+            # length scale, so the derivative is zero. The d=1 kernel
+            # divides by zero there and gives inf * 0 = NaN, which would
+            # poison the gradient of the marginal likelihood through the
+            # whole diagonal, so the product is taken as the zero it is.
             with np.errstate(all="ignore"):
-                dK[0, :, :] = sf2 * (self.df(tmp) * np.exp(-tmp)) * K_ls
+                dK[0, :, :] = np.where(
+                    K_ls > 0,
+                    sf2 * (self.df(tmp) * np.exp(-tmp)) * K_ls,
+                    0.0,
+                )
             # Gradient of cov output scale
             dK[1, :, :] = 2 * K
             return K, dK.transpose(1, 2, 0)
@@ -191,6 +208,12 @@ class SquaredExponentialIsotropic(AbstractIsotropicKernel, SquaredExponential):
             raise ValueError(
                 "Covariance function output is available only for "
                 "one-sample hyperparameter inputs."
+            )
+        if compute_diag and compute_grad:
+            raise ValueError(
+                "compute_diag and compute_grad cannot both be True: the "
+                "gradient is available for the full covariance matrix "
+                "only."
             )
 
         ell = np.exp(hyp[0])
@@ -230,26 +253,26 @@ def _isotropic_bounds_info_helper(cov_N, X, y):
     plausible_upper_bounds = np.full((cov_N,), np.inf)
     plausible_x0 = np.full((cov_N,), np.nan)
 
-    width = np.mean(np.max(X, axis=0) - np.min(X, axis=0))
-    min_width = np.min(width)
-    max_width = np.max(width)
+    width = np.max(X, axis=0) - np.min(X, axis=0)
     if np.size(y) <= 1:
         y = np.array([0, 1])
-    height = np.max(y) - np.min(y)
+    height, y_std = _target_spread(y)
 
-    lower_bounds[0 : cov_N - 1] = np.log(min_width) + np.log(tol)
-    upper_bounds[0 : cov_N - 1] = np.log(max_width * 10)
-    plausible_lower_bounds[0 : cov_N - 1] = np.log(min_width) + 0.5 * np.log(
-        tol
-    )
-    plausible_upper_bounds[0 : cov_N - 1] = np.log(max_width)
-    plausible_x0[0 : cov_N - 1] = np.log(np.std(X, ddof=1))
+    # One length scale for every dimension, so its bounds and its starting
+    # value are the means of the per-dimension logs, as the isoflag branch
+    # of gplite_covfun.m has them.
+    mean_log_width = np.mean(np.log(width))
+    lower_bounds[0 : cov_N - 1] = mean_log_width + np.log(tol)
+    upper_bounds[0 : cov_N - 1] = np.mean(np.log(width * 10))
+    plausible_lower_bounds[0 : cov_N - 1] = mean_log_width + 0.5 * np.log(tol)
+    plausible_upper_bounds[0 : cov_N - 1] = mean_log_width
+    plausible_x0[0 : cov_N - 1] = np.mean(np.log(np.std(X, axis=0, ddof=1)))
 
     lower_bounds[cov_N - 1] = np.log(height) + np.log(tol)
     upper_bounds[cov_N - 1] = np.log(height * 10)
     plausible_lower_bounds[cov_N - 1] = np.log(height) + 0.5 * np.log(tol)
     plausible_upper_bounds[cov_N - 1] = np.log(height)
-    plausible_x0[cov_N - 1] = np.log(np.std(y, ddof=1))
+    plausible_x0[cov_N - 1] = np.log(y_std)
 
     # Plausible starting point
     i_nan = np.isnan(plausible_x0)

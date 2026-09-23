@@ -171,9 +171,9 @@ class SliceSampler:
         # np.spacing could return negative numbers so use nextafter
         self.UB_out = np.nextafter(self.UB, np.inf)
 
-        if widths is None:
+        widths_given = widths is not None
+        if not widths_given:
             self.widths = ((self.UB - self.LB) / 2).copy()
-            self.base_widths = None
         else:
             if np.size(widths) == 1:
                 self.widths = np.tile(widths, D)
@@ -183,9 +183,13 @@ class SliceSampler:
             # it.
             if not np.iscomplexobj(self.widths):
                 self.widths = self.widths.astype(float)
-            self.base_widths = self.widths.copy()
 
         self.widths[np.isinf(self.widths)] = 10
+        # The base widths are copied after the replacement above: the
+        # geometric mean of the adapted widths with an infinite base width
+        # is infinite, so the infinity would come back at the end of the
+        # burn-in and fill the chain with NaN.
+        self.base_widths = self.widths.copy() if widths_given else None
         self.widths[
             self.LB == self.UB
         ] = 1  # Widths is irrelevant when LB == UB, set to 1
@@ -234,11 +238,6 @@ class SliceSampler:
         self.adaptive = options.get("adaptive", True)
         self.log_prior = options.get("log_prior", None)
         self.diagnostics = options.get("diagnostics", True)
-        self.metropolis_pdf = options.get("metropolis_pdf", None)
-        self.metropolis_rnd = options.get("metopolis_rnd", None)
-        self.metropolis_flag = (
-            self.metropolis_pdf is not None and self.metropolis_rnd is not None
-        )
 
         # Logging
         self.logger = logging.getLogger("SliceSampler")
@@ -312,9 +311,8 @@ class SliceSampler:
                 points.
             **R** : array_like
                 Estimate of the potential scale reduction factor for each
-                sampled parameter. It is not finite for a parameter whose
-                chain is constant within each half of the sampled
-                sequence, which includes a parameter fixed by
+                sampled parameter. It is NaN for a parameter whose chain
+                did not move, which includes a parameter fixed by
                 ``LB == UB``, and NaN everywhere when there were too few
                 recorded samples to run the diagnostics.
             **eff_N** : array_like
@@ -328,16 +326,17 @@ class SliceSampler:
         Raises
         ------
         ValueError
-            Raised when `thin` is not a positive integer.
+            Raised when `thin` is not a whole number greater than zero.
         ValueError
-            Raised when `burn` is not a integer >= 0.
+            Raised when `burn` is not a whole number greater than or equal
+            to zero.
         ValueError
             Raised when the initial starting point X0 does not evaluate to a
             real number (e.g. Inf or NaN).
         """
 
         # Samplers pickled before rng was introduced use the legacy stream.
-        # Restore the attribute before either slice or Metropolis draws.
+        # Restore the attribute before the first draw.
         self.rng = resolve_rng(getattr(self, "rng", None))
 
         # Reference to x0 so it is updated as we go along, allowing us to
@@ -352,17 +351,32 @@ class SliceSampler:
             else:
                 burn = round(N / 3)
 
-        # Sanity checks
-        if not np.isscalar(thin) or thin <= 0:
+        # Sanity checks. Infinity equals its own floor, hence the test of
+        # finiteness.
+        if (
+            not np.isscalar(thin)
+            or not np.isfinite(thin)
+            or thin <= 0
+            or thin != np.floor(thin)
+        ):
             raise ValueError(
                 "The thinning factor option needs to be a positive integer."
             )
 
-        if not np.isscalar(burn) or burn < 0:
+        if (
+            not np.isscalar(burn)
+            or not np.isfinite(burn)
+            or burn < 0
+            or burn != np.floor(burn)
+        ):
             raise ValueError(
                 "The burn-in samples option needs to be a non-negative "
                 "integer."
             )
+
+        # Both count iterations from here on.
+        thin = int(thin)
+        burn = int(burn)
 
         if (
             burn == 0
@@ -417,12 +431,6 @@ class SliceSampler:
                     self.func_count,
                     log_Px,
                     action,
-                )
-
-            # Metropolis step (optional)
-            if self.metropolis_flag:
-                xx, log_Px, f_val, log_prior = self.__metropolis_step(
-                    xx, logdist_vec, log_Px, f_val, log_prior
                 )
 
             ## Slice sampling step.
@@ -544,12 +552,6 @@ class SliceSampler:
                 x_l[dd] = xprime[dd]
                 x_r[dd] = xprime[dd]
 
-            # Metropolis step (optional)
-            if self.metropolis_flag:
-                xx, log_Px, f_val, log_prior = self.__metropolis_step(
-                    xx, logdist_vec, log_Px, f_val, log_prior
-                )
-
             # Record samples and miscellaneous bookkeeping.
             record = i >= burn and np.mod(i - burn, thin) == 0
             if record:
@@ -564,32 +566,33 @@ class SliceSampler:
                 xx_sq_sum += xx**2
 
                 # End of burn-in, update widths if using adaptive method.
-                if i == burn - 1 and self.adaptive:
-                    burn_stored = np.floor(burn / 2)
-                    # There can be numerical error here but then width
-                    # has already shrunk to 0?
+                # A window of fewer than two iterations has no variance to
+                # estimate (one iteration gives exactly zero), so it adapts
+                # nothing.
+                burn_stored = np.floor(burn / 2)
+                if i == burn - 1 and self.adaptive and burn_stored >= 2:
+                    variance = (
+                        xx_sq_sum / burn_stored - (xx_sum / burn_stored) ** 2
+                    )
                     new_widths = np.fmin(
-                        5
-                        * np.sqrt(
-                            np.maximum(
-                                xx_sq_sum / burn_stored
-                                - (xx_sum / burn_stored) ** 2,
-                                0,
-                            )
-                        ),
+                        5 * np.sqrt(np.maximum(variance, 0)),
                         self.UB_out - self.LB_out,
                     )
                     if not np.all(np.isreal(new_widths)):
                         new_widths = self.widths
                     if self.base_widths is None:
-                        self.widths = new_widths
+                        adapted = new_widths
                     else:
                         # Max between new widths and geometric mean with
                         # user-supplied widths (i.e. bias towards keeping
                         # larger widths)
-                        self.widths = np.maximum(
+                        adapted = np.maximum(
                             new_widths, np.sqrt(new_widths * self.base_widths)
                         )
+                    # A coordinate whose estimate is not positive keeps the
+                    # width it has: a width of zero brackets nothing, so it
+                    # would stop the coordinate for the rest of the chain.
+                    self.widths = np.where(variance > 0, adapted, self.widths)
 
             if i < burn:
                 action = "burn"
@@ -673,15 +676,22 @@ class SliceSampler:
         R = self.__gelman_rubin(split_samples)
         eff_N = self.__effective_n(split_samples)
 
+        # A parameter whose recorded chain did not move has no variance to
+        # compare, so both statistics are rounding noise of its constant
+        # value: whether they come out non-finite depends on whether the
+        # mean of that value is exact. Recognize such a chain by its range
+        # and report both statistics as undefined.
+        frozen = np.ptp(samples, axis=0) == 0
+        R[frozen] = np.nan
+        eff_N[frozen] = np.nan
+
         # A parameter with LB == UB is fixed and never moves, so its
         # diagnostics are undefined by construction and say nothing about
-        # convergence. A parameter that is free to move but whose
-        # diagnostics are not finite has a chain that stayed constant
-        # within each half of the sequence, which is a failure:
-        # comparisons against NaN are all False, so without the explicit
-        # check below such a chain would pass every test.
+        # convergence. A parameter that is free to move and did not move is
+        # a failure: comparisons against NaN are all False, so without the
+        # explicit check below such a chain would pass every test.
         free = self.LB != self.UB
-        undefined = free & ~(np.isfinite(R) & np.isfinite(eff_N))
+        undefined = free & frozen
         checked = free & ~undefined
 
         diag_msg = None
@@ -762,22 +772,6 @@ class SliceSampler:
                 y = np.sum(f_val) + log_prior
 
         return y, f_val, log_prior
-
-    def __metropolis_step(self, x, log_f, log_Px, f_val, log_prior):
-        """Metropolis step."""
-        xx_new = self.metropolis_rnd()
-        log_Px_new, f_val_new, log_prior_new = log_f(xx_new)
-
-        # Acceptance rate
-        a = np.exp(log_Px_new - log_Px) * (
-            self.metropolis_pdf(x) / self.metropolis_pdf(xx_new)
-        )
-
-        # Accept proposal?
-        if self.rng.random() < a:
-            return xx_new, log_Px_new, f_val_new, log_prior_new
-
-        return x, log_Px, f_val, log_prior
 
     def __gelman_rubin(self, x, return_var=False):
         """Returns estimate of R for a set of traces.
@@ -881,13 +875,16 @@ class SliceSampler:
         -----
         The integrated autocorrelation time is estimated with Geyer's
         initial positive sequence: the autocorrelation estimates are summed
-        in consecutive pairs, and the first pair whose sum is not positive
-        ends the sum. The estimate is then floored at
+        in consecutive pairs starting from lag 0, so that the first pair is
+        ``(rho_0, rho_1)`` with ``rho_0 = 1``, and the first pair whose sum
+        is not positive ends the sum. The estimate is then floored at
         ``1 / log10(m * n)``, as in Stan and ArviZ, so that the effective
         sample size is positive and at most ``m * n * log10(m * n)``. An
         effective sample size larger than the number of draws is a valid
-        outcome and indicates anticorrelated samples. A trace that does not
-        move has no variance and gets an effective sample size of NaN.
+        outcome and indicates anticorrelated samples. For traces that do
+        not move the estimate is rounding noise of their constant value:
+        finite where its mean is inexact, NaN where the variance comes out
+        exactly zero. :py:meth:`sample` reports NaN for such a parameter.
         """
         if np.shape(x) < (2,):
             raise ValueError(

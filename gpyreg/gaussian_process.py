@@ -1,6 +1,7 @@
 """Module for Gaussian Processes."""
 
 import math
+import numbers
 import time
 import warnings
 from textwrap import indent
@@ -88,6 +89,22 @@ def _solve_triangular(a, b, trans=0, lower=False):
             f"singular matrix: resolution failed at diagonal {info - 1}"
         )
     raise ValueError(f"illegal value in {-info}-th argument of internal trtrs")
+
+
+def _check_hyperparameter_names(given, hyper_info, argument):
+    """Refuse a dictionary that names a hyperparameter the model has not."""
+    if given is None:
+        return
+    known = {info[0] for info in hyper_info}
+    unknown = sorted(set(given) - known)
+    if unknown:
+        raise ValueError(
+            f"Unknown hyperparameter(s) in `{argument}`: "
+            + ", ".join(unknown)
+            + ". The hyperparameters of this GP are "
+            + ", ".join(info[0] for info in hyper_info)
+            + "."
+        )
 
 
 class GP:
@@ -233,6 +250,9 @@ class GP:
         ValueError
             Raised when `bounds` is missing the entry of an expected
             hyperparameter.
+        ValueError
+            Raised when `bounds` is given, but a specified hyperparameter
+            is unknown.
         """
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -244,6 +264,7 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
+        _check_hyperparameter_names(bounds, hyper_info, "bounds")
         lower_bounds = np.full((hyp_N,), np.nan)
         upper_bounds = np.full((hyp_N,), np.nan)
 
@@ -328,6 +349,15 @@ class GP:
 
         return bounds_dict
 
+    def __hyperparameter_names(self, mask):
+        """The names of the hyperparameter blocks that a boolean mask over
+        the hyperparameter vector touches."""
+        return [
+            name
+            for name, pair in self.bounds_to_dict(mask, mask).items()
+            if np.any(pair[0])
+        ]
+
     def get_recommended_bounds(self, lower_bounds=None, upper_bounds=None):
         """
         Return the recommended hyperparameter lower and upper bounds as a dict.
@@ -355,6 +385,11 @@ class GP:
             Raise when GP does not have `X` or `y` set yet, or when provided
             bounds are not one of `"recommended"`/`None`, `"current"`, or
             array_like.
+        ValueError
+            Raised when a lower bound given is above the upper bound given
+            for the same hyperparameter. A pair that comes out inverted
+            once the recommendations fill its NaN entries is collapsed
+            onto its lower bound instead.
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
@@ -382,15 +417,25 @@ class GP:
                 upper_bounds = np.full_like(self.upper_bounds, np.nan)
             else:
                 raise ValueError(
-                    "`lower_bounds` should be 'recommended'/`None`, 'current',"
+                    "`upper_bounds` should be 'recommended'/`None`, 'current',"
                     " or an array."
                 )
         # Otherwise, use provided arrays as bounds, replacing nan values with
-        # recommended bounds, and avoiding mutation:
-        if isinstance(lower_bounds, (list, tuple, np.ndarray)):
-            lower_bounds = lower_bounds.copy()
-        if isinstance(upper_bounds, (list, tuple, np.ndarray)):
-            upper_bounds = upper_bounds.copy()
+        # recommended bounds. `np.array` takes any array_like and copies,
+        # so the caller's own arrays are not written into below.
+        lower_bounds = np.array(lower_bounds, dtype=float)
+        upper_bounds = np.array(upper_bounds, dtype=float)
+
+        # A pair the caller gave inverted is a mistake. A recommended pair
+        # that comes out inverted on a degenerate training set is
+        # collapsed below, as `gplite_train.m:142` collapses it.
+        inverted = lower_bounds > upper_bounds
+        if np.any(inverted):
+            raise ValueError(
+                "Lower bound above upper bound for the hyperparameter(s) "
+                + ", ".join(self.__hyperparameter_names(inverted))
+                + "."
+            )
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         mean_N = self.mean.hyperparameter_count(self.D)
@@ -436,7 +481,9 @@ class GP:
         Returns
         =======
         hyper_priors : dict
-            A dictionary of the current hyperparameter names and their priors.
+            A dictionary of the current hyperparameter names and their
+            priors, in the form :py:meth:`set_priors` takes, with ``None``
+            for a hyperparameter without a prior.
         """
 
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -457,23 +504,31 @@ class GP:
             upper = lower + info[1]
             i = range(lower, upper)
 
+            # The family of a block is read from its coordinates that
+            # have a prior; the others have NaN location and sigma
+            # (`set_priors`), which the returned arrays keep. NaN degrees
+            # of freedom belong to a Student's t family, as `set_priors`
+            # wrote them, and `fit` fills them with `df_base`.
+            p = np.isfinite(mu[i]) | np.isfinite(sigma[i])
+            df_p = df[i][p]
+            gaussian_df = np.all(df_p == 0) or np.all(df_p == np.inf)
+            student_t_df = np.all((df_p > 0) | np.isnan(df_p))
+
             prior_type = prior_params = None
-            if (
-                np.all(np.isfinite(a[i]))
-                and np.all(np.isfinite(b[i]))
-                and np.all(np.isfinite(sigma[i]))
-            ):
-                if df[i] == 0 or df[i] == np.inf:
+            if not np.any(p) or not np.all(np.isfinite(sigma[i][p])):
+                pass  # no prior, or none of the four families
+            elif np.all(np.isfinite(a[i][p])) and np.all(np.isfinite(b[i][p])):
+                if gaussian_df:
                     prior_type = "smoothbox"
                     prior_params = (a[i], b[i], sigma[i])
-                elif df[i] > 0:
+                elif student_t_df:
                     prior_type = "smoothbox_student_t"
                     prior_params = (a[i], b[i], sigma[i], df[i])
-            elif np.all(np.isfinite(mu[i])) and np.all(np.isfinite(sigma[i])):
-                if np.all(df[i] == 0) or np.all(df[i] == np.inf):
+            elif np.all(np.isfinite(mu[i][p])):
+                if gaussian_df:
                     prior_type = "gaussian"
                     prior_params = (mu[i], sigma[i])
-                elif np.all(df[i] > 0):
+                elif student_t_df:
                     prior_type = "student_t"
                     prior_params = (mu[i], sigma[i], df[i])
 
@@ -497,6 +552,16 @@ class GP:
             All hyperparameters need to appear in the dictionary.
             Use the value ``None`` to set no priors for a hyperparameter.
             If ``priors=None``, all hyperparameter priors are removed.
+            Within a block of several hyperparameters, a coordinate whose
+            location (``mu``, or ``a`` and ``b`` for the smooth-box
+            families) and ``sigma`` are both NaN has no prior.
+            Degrees of freedom ``df`` that are zero, infinite or NaN make
+            a ``"student_t"`` prior ``"gaussian"``, as
+            ``gplite_hypprior.m`` reads them, and a
+            ``"smoothbox_student_t"`` prior ``"smoothbox"``, gpyreg's own
+            reading (gplite has no smooth-box priors). For the duration
+            of :py:meth:`fit`, a NaN ``df`` takes the value of its option
+            ``df_base`` instead.
 
         Raises
         ------
@@ -506,6 +571,9 @@ class GP:
         ValueError
             Raised when ``priors`` is given, but a specified
             hyperparameter is unknown.
+        ValueError
+            Raised when a coordinate that has a prior is given a ``sigma``
+            that is not finite and positive.
         """
         self.no_prior = False
         if priors is None:
@@ -520,6 +588,7 @@ class GP:
         hyper_info = cov_hyper_info + noise_hyper_info + mean_hyper_info
 
         hyp_N = cov_N + mean_N + noise_N
+        _check_hyperparameter_names(priors, hyper_info, "priors")
         # Set up a hyperprior dictionary with default values which can
         # be updated individually later.
         hyper_priors = {
@@ -554,7 +623,8 @@ class GP:
                     mu, sigma = prior_params
                     hyper_priors["mu"][i] = mu
                     hyper_priors["sigma"][i] = sigma
-                    # Implicit flag for gaussian, is set to inf later.
+                    # Zero degrees of freedom flag the Gaussian
+                    # families; an infinite number does too.
                     hyper_priors["df"][i] = 0
                 elif prior_type == "student_t":
                     mu, sigma, df = prior_params
@@ -566,17 +636,52 @@ class GP:
                     hyper_priors["a"][i] = a
                     hyper_priors["b"][i] = b
                     hyper_priors["sigma"][i] = sigma
-                    # Implicit flag for gaussian, is set to inf later.
+                    # Zero degrees of freedom flag the Gaussian
+                    # families; an infinite number does too.
                     hyper_priors["df"][i] = 0
                 elif prior_type == "smoothbox_student_t":
                     a, b, sigma, df = prior_params
                     hyper_priors["a"][i] = a
                     hyper_priors["b"][i] = b
                     hyper_priors["sigma"][i] = sigma
-                    # Implicit flag for gaussian, is set to inf later.
                     hyper_priors["df"][i] = df
                 else:
                     raise ValueError("Unknown hyperprior type " + prior_type)
+
+                # The location of a coordinate is `mu` for the Gaussian
+                # and Student's t families and the box `[a, b]` for the
+                # smooth-box ones, whose `mu` stays NaN. A coordinate
+                # whose location and `sigma` are both NaN has no prior,
+                # and every other coordinate is scaled by its `sigma`.
+                # `gplite_hypprior.m` reads a coordinate as having no
+                # prior where either is not finite, which the smooth-box
+                # families, gpyreg's own, cannot share.
+                if prior_type in ("smoothbox", "smoothbox_student_t"):
+                    location = np.vstack(
+                        (hyper_priors["a"][i], hyper_priors["b"][i])
+                    )
+                else:
+                    location = hyper_priors["mu"][i][None, :]
+                scale = hyper_priors["sigma"][i]
+                has_prior = ~(
+                    np.all(np.isnan(location), axis=0) & np.isnan(scale)
+                )
+                scale = scale[has_prior]
+                problem = None
+                if np.any(np.isnan(scale)):
+                    problem = "a NaN sigma where its location is not NaN"
+                elif np.any(np.isinf(scale)):
+                    problem = "an infinite sigma"
+                elif np.any(scale <= 0.0):
+                    problem = "a sigma that is zero or negative"
+                if problem is not None:
+                    raise ValueError(
+                        f"The prior of {info[0]} has {problem}. A prior "
+                        "needs a finite, positive sigma; a hyperparameter "
+                        "without a prior is set to `None`, and a coordinate "
+                        "of a block without a prior has NaN for both its "
+                        "location and its sigma."
+                    )
 
             lower += info[1]
 
@@ -794,6 +899,14 @@ class GP:
         LinAlgError
             Raised when the Cholesky decomposition failed multiple times even
             by adding numerical stability values to the matrix.
+        ValueError
+            Raised when ``hyp`` is not a 2D array with one column per
+            hyperparameter of the GP.
+        ValueError
+            Raised when ``compute_posterior`` is ``True``, the GP has
+            training data and a new posterior is computed in full, and a
+            hyperparameter is NaN (not set), as it is on a GP whose
+            hyperparameters were never given.
         """
         X_new, y_new, s2_new = self._convert_shapes(X_new, y_new, s2_new)
         # Create local copies so we won't get trouble
@@ -806,12 +919,25 @@ class GP:
             s2_new = s2_new.copy()
 
         if hyp is not None:
+            hyp_N = (
+                self.covariance.hyperparameter_count(self.D)
+                + self.noise.hyperparameter_count()
+                + self.mean.hyperparameter_count(self.D)
+            )
+            if np.ndim(hyp) != 2 or np.shape(hyp)[1] != hyp_N:
+                raise ValueError(
+                    f"The hyperparameters have shape {np.shape(hyp)}, but "
+                    f"this GP has {hyp_N} hyperparameters and expects one "
+                    "row per hyperparameter sample."
+                )
             hyp = hyp.copy()
 
         # Check whether to do a rank-1 update. The shortcut extends the
         # existing posteriors, so it applies only while their
-        # hyperparameters stay in place: replacement hyperparameters need
-        # a full recomputation.
+        # hyperparameters stay in place (replacement hyperparameters need
+        # a full recomputation) and only while they carry their factors:
+        # after `clean` or an update with `compute_posterior=False` there
+        # is nothing to extend.
         rank_one_update = False
         if X_new is not None and y_new is not None and compute_posterior:
             if (
@@ -820,6 +946,8 @@ class GP:
                 and X_new.shape[0] == 1
                 and y_new.shape[0] == 1
                 and hyp is None
+                and self.posteriors is not None
+                and self.posteriors[0].alpha is not None
             ):
                 rank_one_update = True
         full_updates = []  # Keep track of unstable rank-1 updates
@@ -918,14 +1046,29 @@ class GP:
                         )
 
                 else:  # Low-noise parametrization
-                    alpha_update = np.dot(-L, Ks)
-                    v = -alpha_update / v_star[:, s]
-                    self.posteriors[s].L = np.block(
-                        [
-                            [L + np.dot(v, alpha_update.T), -v],
-                            [-v.T, -1 / v_star[:, s]],
-                        ]
-                    )
+                    # The extension divides by the predictive variance of
+                    # the new point, which `predict` clamps at the noise
+                    # level: a v_star that low carries no information
+                    # about the latent variance, so fall through to a full
+                    # recomputation as the branch above does.
+                    if v_star[0, s] <= sn2_eff:
+                        full_update_s = True
+                        full_updates.append(s)
+                        warnings.warn(
+                            "Rank-one update of the posterior factor "
+                            f"unstable for posterior {s}. Reverting to "
+                            "full update.",
+                            stacklevel=2,
+                        )
+                    else:
+                        alpha_update = np.dot(-L, Ks)
+                        v = -alpha_update / v_star[:, s]
+                        self.posteriors[s].L = np.block(
+                            [
+                                [L + np.dot(v, alpha_update.T), -v],
+                                [-v.T, -1 / v_star[:, s]],
+                            ]
+                        )
 
                 # Finish rank-1 update if computation was stable for posterior
                 # s
@@ -983,6 +1126,13 @@ class GP:
             self.posteriors = np.empty((s_N,), dtype=Posterior)
 
             if compute_posterior and self.X is not None and self.y is not None:
+                unset = np.any(np.isnan(hyp), axis=0)
+                if np.any(unset):
+                    raise ValueError(
+                        "Cannot compute the posterior: the hyperparameters "
+                        + ", ".join(self.__hyperparameter_names(unset))
+                        + " are NaN (not set)."
+                    )
                 for i in range(0, s_N):
                     self.posteriors[i] = self.__core_computation(
                         hyp[i, :], 0, 0
@@ -1050,7 +1200,13 @@ class GP:
                 **init_N** : int, defaults to 1024
                     Initial design size for hyperparameter optimization.
                 **df_base** : int, defaults to 7
-                    Default degrees of freedom for student's t prior.
+                    The degrees of freedom of a ``"student_t"`` or
+                    ``"smoothbox_student_t"`` prior whose ``df`` is NaN,
+                    filled into a copy of the priors for the duration of
+                    the fit, as ``gplite_train.m`` fills its local copy.
+                    The GP keeps the priors as they were set, and outside
+                    the fit a NaN ``df`` reads as ``"gaussian"`` or
+                    ``"smoothbox"`` (see :py:meth:`set_priors`).
                 **n_samples** : int, defaults to 10
                     Number of hyperparameters to sample.
                 **thin** : int, defaults to 5
@@ -1103,7 +1259,8 @@ class GP:
         Raises
         ------
         ValueError
-            Raised when the `sampler_name` is not slicesample.
+            Raised when ``n_samples`` is positive and ``sampler_name`` is
+            not ``'slicesample'``, after the optimization.
         """
         # Share one stream between the initial design and the sampler,
         # including when the caller supplies a seed rather than a generator.
@@ -1123,7 +1280,11 @@ class GP:
         step_size = options.get("step_size", None)  # Not used since no MALA
         tol_opt = options.get("tol_opt", 1e-5)
         tol_opt_mcmc = options.get("tol_opt_mcmc", 1e-3)
-        sampler_name = options.get("sampler", "slicesample")
+        # The documented name first, then the undocumented spelling
+        # that PyVBMC writes.
+        sampler_name = options.get(
+            "sampler_name", options.get("sampler", "slicesample")
+        )
         s_N = options.get("n_samples", 10)
         burn_in = options.get("burn", thin * s_N)
         lower_bounds = options.get("lower_bounds", "current")
@@ -1150,225 +1311,259 @@ class GP:
         mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
-        self.hyper_priors["df"][np.isnan(self.hyper_priors["df"])] = df_base
+        # The default degrees of freedom fill what a prior leaves
+        # unset for the duration of the fit alone: the objectives read
+        # the GP's own priors, and the GP keeps the priors the caller
+        # set, so a second fit with another `df_base` uses it
+        # (`gplite_train.m:113-117` builds its own copy the same way).
+        df_given = self.hyper_priors["df"]
+        df_filled = df_given.copy()
+        df_filled[np.isnan(df_filled)] = df_base
+        self.hyper_priors["df"] = df_filled
         self._prior_cache = None  # the prior's type masks depend on df
+        try:
 
-        # Set any unset bounds:
-        use_current_bounds = (
-            isinstance(lower_bounds, str)
-            and lower_bounds == "current"
-            and isinstance(upper_bounds, str)
-            and upper_bounds == "current"
-        )
-        if use_current_bounds and (
-            np.any(np.isnan(self.lower_bounds))
-            or np.any(np.isnan(self.upper_bounds))
-        ):  # If we're using the existing bounds, fill any nan's:
-            self.set_bounds(
-                self.get_recommended_bounds(
-                    self.lower_bounds, self.upper_bounds
+            # Set any unset bounds:
+            use_current_bounds = (
+                isinstance(lower_bounds, str)
+                and lower_bounds == "current"
+                and isinstance(upper_bounds, str)
+                and upper_bounds == "current"
+            )
+            if use_current_bounds and (
+                np.any(np.isnan(self.lower_bounds))
+                or np.any(np.isnan(self.upper_bounds))
+            ):  # If we're using the existing bounds, fill any nan's:
+                self.set_bounds(
+                    self.get_recommended_bounds(
+                        self.lower_bounds, self.upper_bounds
+                    )
                 )
+            else:  # Otherwise set the bounds according to the provided options:
+                self.set_bounds(
+                    self.get_recommended_bounds(lower_bounds, upper_bounds)
+                )
+
+            LB = self.lower_bounds
+            UB = self.upper_bounds
+
+            # Plausible bounds for generation of starting points
+            PLB = np.concatenate(
+                [
+                    cov_bounds_info["PLB"],
+                    noise_bounds_info["PLB"],
+                    mean_bounds_info["PLB"],
+                ]
             )
-        else:  # Otherwise set the bounds according to the provided options:
-            self.set_bounds(
-                self.get_recommended_bounds(lower_bounds, upper_bounds)
+            PUB = np.concatenate(
+                [
+                    cov_bounds_info["PUB"],
+                    noise_bounds_info["PUB"],
+                    mean_bounds_info["PUB"],
+                ]
             )
+            PLB = np.minimum(np.maximum(PLB, LB), UB)
+            PUB = np.maximum(np.minimum(PUB, UB), LB)
+            # With LB <= UB, which holds here, the two clips are one
+            # monotone map into the hard box, so an ordered plausible pair
+            # stays ordered. The noise recommends an inverted pair,
+            # [0.5 * log(tol), log(std(y))], for targets whose standard
+            # deviation is below 1e-3, as `gplite_noisefun.m:105-106`
+            # does; the clips keep it inverted unless the range of the
+            # targets is below 1e-6, where the hard pair collapses and
+            # takes both bounds with it. gplite clips the same way
+            # (`gplite_train.m:157-158`) and draws its design from the
+            # inverted pair; the space-filling design here needs the pair
+            # ordered, so an inverted one collapses onto its upper bound,
+            # which the clip left inside the hard box.
+            inverted = PLB > PUB
+            PLB[inverted] = PUB[inverted]
 
-        LB = self.lower_bounds
-        UB = self.upper_bounds
+            # If we are not provided with an initial hyperparameter guess then
+            # either use the current hyperparameters if they exist, or use
+            # plausible lower and upper bounds to guess.
+            if hyp0 is None:
+                if self.posteriors is not None:
+                    hyp0 = self.get_hyperparameters(as_array=True)
+                else:
+                    hyp0 = np.reshape(
+                        np.minimum(np.maximum((PLB + PUB) / 2, LB), UB),
+                        (1, -1),
+                    )
+            elif isinstance(hyp0, dict):
+                hyp0 = self.hyperparameters_from_dict(hyp0)
 
-        # Plausible bounds for generation of starting points
-        PLB = np.concatenate(
-            [
-                cov_bounds_info["PLB"],
-                noise_bounds_info["PLB"],
-                mean_bounds_info["PLB"],
-            ]
-        )
-        PUB = np.concatenate(
-            [
-                cov_bounds_info["PUB"],
-                noise_bounds_info["PUB"],
-                mean_bounds_info["PUB"],
-            ]
-        )
-        PLB = np.minimum(np.maximum(PLB, LB), UB)
-        PUB = np.maximum(np.minimum(PUB, UB), LB)
-
-        # If we are not provided with an initial hyperparameter guess then
-        # either use the current hyperparameters if they exist, or use
-        # plausible lower and upper bounds to guess.
-        if hyp0 is None:
-            if self.posteriors is not None:
-                hyp0 = self.get_hyperparameters(as_array=True)
+            ## Hyperparameter optimization
+            # Each no-gradient objective owns one factorization cache for the
+            # whole fit (consecutive evaluations that move only mean-function
+            # hyperparameters reuse the Cholesky factor, see
+            # __core_computation); the gradient objective of the optimizer gets
+            # none, it needs the kernel derivatives.
+            design_cache = {}
+            objective_f_1 = lambda hyp_: self.__gp_obj_fun(
+                hyp_, False, False, cache=design_cache
+            )
+            if s_N > 0:
+                tol = tol_opt_mcmc
             else:
-                hyp0 = np.reshape(
-                    np.minimum(np.maximum((PLB + PUB) / 2, LB), UB), (1, -1)
+                tol = tol_opt
+
+            # First evaluate GP log posterior on an informed space-filling design.
+            t1_s = time.time()
+
+            if init_N > 0:
+                X0, y0 = f_min_fill(
+                    objective_f_1,
+                    hyp0,
+                    LB,
+                    UB,
+                    PLB,
+                    PUB,
+                    self.hyper_priors,
+                    init_N,
+                    init_method,
+                    rng=rng,
                 )
-        elif isinstance(hyp0, dict):
-            hyp0 = self.hyperparameters_from_dict(hyp0)
+                # Make sure we have at least one hyperparameter to use
+                # later. A copy: the low-noise starting point below is
+                # written into these rows, and the sampler widths are the
+                # standard deviation of the design as it was returned
+                # (`gplite_train.m:206-207`).
+                hyp = X0[0 : np.maximum(opts_N, 1), :].copy()
 
-        ## Hyperparameter optimization
-        # Each no-gradient objective owns one factorization cache for the
-        # whole fit (consecutive evaluations that move only mean-function
-        # hyperparameters reuse the Cholesky factor, see
-        # __core_computation); the gradient objective of the optimizer gets
-        # none, it needs the kernel derivatives.
-        design_cache = {}
-        objective_f_1 = lambda hyp_: self.__gp_obj_fun(
-            hyp_, False, False, cache=design_cache
-        )
-        if s_N > 0 and sampler_name != "laplace":
-            tol = tol_opt_mcmc
-        else:
-            tol = tol_opt
+                # Extract a good low-noise starting point for the 2nd optimization.
+                if noise_N > 0 and 1 < opts_N < init_N:
+                    xx = X0[opts_N:, :]
+                    noise_y = y0[opts_N:]
+                    noise_params = xx[:, cov_N]
 
-        # First evaluate GP log posterior on an informed space-filling design.
-        t1_s = time.time()
+                    # Order by noise parameter magnitude.
+                    order = np.argsort(noise_params)
+                    xx = xx[order, :]
+                    noise_y = noise_y[order]
+                    # Take the best amongst bottom 20% vectors.
+                    idx_best = np.argmin(
+                        noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
+                    )
+                    hyp[1, :] = xx[idx_best, :]
 
-        if init_N > 0:
-            X0, y0 = f_min_fill(
-                objective_f_1,
-                hyp0,
-                LB,
-                UB,
-                PLB,
-                PUB,
-                self.hyper_priors,
-                init_N,
-                init_method,
-                rng=rng,
-            )
-            # Make sure we have at least one hyperparameter to use later.
-            hyp = X0[0 : np.maximum(opts_N, 1), :]
-
-            # Extract a good low-noise starting point for the 2nd optimization.
-            if noise_N > 0 and 1 < opts_N < init_N:
-                xx = X0[opts_N:, :]
-                noise_y = y0[opts_N:]
-                noise_params = xx[:, cov_N]
-
-                # Order by noise parameter magnitude.
-                order = np.argsort(noise_params)
-                xx = xx[order, :]
-                noise_y = noise_y[order]
-                # Take the best amongst bottom 20% vectors.
-                idx_best = np.argmin(
-                    noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
-                )
-                hyp[1, :] = xx[idx_best, :]
-
-            if init_N > 1:
-                widths_default = np.std(X0, axis=0, ddof=1)
+                if init_N > 1:
+                    widths_default = np.std(X0, axis=0, ddof=1)
+                else:
+                    widths_default = np.zeros(shape=PLB.shape)
             else:
-                widths_default = np.zeros(shape=PLB.shape)
-        else:
-            N = hyp0.shape[0]
-            nll = np.full((N,), -np.inf)
-            for i in range(0, N):
-                nll[i] = objective_f_1(hyp0[i, :])
-            order = np.argsort(nll)
-            hyp = hyp0[order, :]
-            widths_default = PUB - PLB
+                N = hyp0.shape[0]
+                # The initial value of `gplite_train.m:250`; the loop
+                # writes every entry.
+                nll = np.full((N,), np.inf)
+                for i in range(0, N):
+                    nll[i] = objective_f_1(hyp0[i, :])
+                order = np.argsort(nll)
+                hyp = hyp0[order, :]
+                widths_default = PUB - PLB
 
-        # Fix zero widths.
-        idx0 = widths_default == 0
-        if np.any(idx0):
-            if np.shape(hyp)[0] > 1:
-                std_hyp = np.std(hyp, axis=0, ddof=1)
-                widths_default[idx0] = std_hyp[idx0]
-                idx0 = widths_default == 0
-
+            # Fix zero widths.
+            idx0 = widths_default == 0
             if np.any(idx0):
-                widths_default[idx0] = np.minimum(1, UB[idx0] - LB[idx0])
+                if np.shape(hyp)[0] > 1:
+                    std_hyp = np.std(hyp, axis=0, ddof=1)
+                    widths_default[idx0] = std_hyp[idx0]
+                    idx0 = widths_default == 0
 
-        t1 = time.time() - t1_s
+                if np.any(idx0):
+                    widths_default[idx0] = np.minimum(1, UB[idx0] - LB[idx0])
 
-        # Check that hyperparameters are within bounds.
-        # Note that with infinite upper and lower bounds we have to be careful
-        # with spacing since it returns NaN. Furthermore, if LB == UB then
-        # we have to be careful about the lower bound not being larger than
-        # the upper bounds. Also, copy is necessary to avoid LB or UB
-        # getting modified.
-        eps_LB = np.reshape(LB.copy(), (1, -1))
-        eps_UB = np.reshape(UB.copy(), (1, -1))
-        LB_idx = (eps_LB != eps_UB) & np.isfinite(eps_LB)
-        UB_idx = (eps_LB != eps_UB) & np.isfinite(eps_UB)
-        # np.spacing could return negative numbers so use nextafter
-        eps_LB[LB_idx] = np.nextafter(eps_LB[LB_idx], np.inf)
-        eps_UB[UB_idx] = np.nextafter(eps_UB[UB_idx], -np.inf)
-        hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
+            t1 = time.time() - t1_s
 
-        # Perform optimization from most promising opts_N hyperparameter
-        # vectors.
-        objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
-        nll = np.full((np.maximum(opts_N, 1),), np.inf)
-        opt_results = []
+            # Check that hyperparameters are within bounds.
+            # Note that with infinite upper and lower bounds we have to be careful
+            # with spacing since it returns NaN. Furthermore, if LB == UB then
+            # we have to be careful about the lower bound not being larger than
+            # the upper bounds. Also, copy is necessary to avoid LB or UB
+            # getting modified.
+            eps_LB = np.reshape(LB.copy(), (1, -1))
+            eps_UB = np.reshape(UB.copy(), (1, -1))
+            LB_idx = (eps_LB != eps_UB) & np.isfinite(eps_LB)
+            UB_idx = (eps_LB != eps_UB) & np.isfinite(eps_UB)
+            # np.spacing could return negative numbers so use nextafter
+            eps_LB[LB_idx] = np.nextafter(eps_LB[LB_idx], np.inf)
+            eps_UB[UB_idx] = np.nextafter(eps_UB[UB_idx], -np.inf)
+            hyp = np.minimum(eps_UB, np.maximum(eps_LB, hyp))
 
-        t2_s = time.time()
-        # Make sure we don't overshoot.
-        opts_N = np.minimum(opts_N, hyp.shape[0])
-        for i in range(0, opts_N):
-            res = sp.optimize.minimize(
-                fun=objective_f_2,
-                x0=hyp[i, :],
-                jac=True,
-                bounds=list(zip(LB, UB)),
-                tol=tol,
+            # Perform optimization from most promising opts_N hyperparameter
+            # vectors.
+            objective_f_2 = lambda hyp_: self.__gp_obj_fun(hyp_, True, False)
+            nll = np.full((np.maximum(opts_N, 1),), np.inf)
+            opt_results = []
+
+            t2_s = time.time()
+            # Make sure we don't overshoot.
+            opts_N = np.minimum(opts_N, hyp.shape[0])
+            for i in range(0, opts_N):
+                res = sp.optimize.minimize(
+                    fun=objective_f_2,
+                    x0=hyp[i, :],
+                    jac=True,
+                    bounds=list(zip(LB, UB)),
+                    tol=tol,
+                )
+                opt_results.append(res)
+                hyp[i, :] = res.x
+                nll[i] = res.fun
+
+            # Take the best hyperparameter vector.
+            if opts_N > 0:
+                optimize_result = opt_results[np.argmin(nll)]
+                hyp_start = hyp[np.argmin(nll), :].copy()
+            else:
+                optimize_result = None
+                hyp_start = hyp[0, :].copy()
+            t2 = time.time() - t2_s
+
+            # In case n_samples is 0, just return the optimized hyperparameter
+            # result.
+            if s_N == 0:
+                hyp_start = np.reshape(hyp_start, (1, -1))
+                self.update(hyp=hyp_start)
+                return hyp_start, optimize_result, None
+
+            ## Sample from best hyperparameter vector using slice sampling
+
+            t3_s = time.time()
+            # Effective number of samples (thin after)
+            eff_s_N = s_N * thin
+
+            if sampler_name != "slicesample":
+                raise ValueError("Unknown sampler!")
+
+            sample_cache = {}
+            sample_f = lambda hyp_: self.__gp_obj_fun(
+                hyp_, False, True, cache=sample_cache
             )
-            opt_results.append(res)
-            hyp[i, :] = res.x
-            nll[i] = res.fun
+            options = {"display": "off", "diagnostics": False}
+            if widths is None:
+                widths = widths_default
+            else:
+                widths = np.minimum(widths, widths_default)
+            slicer = SliceSampler(
+                sample_f, hyp_start, widths, LB, UB, options, rng=rng
+            )
+            sampling_result = slicer.sample(eff_s_N, burn=burn_in)
 
-        # Take the best hyperparameter vector.
-        if opts_N > 0:
-            optimize_result = opt_results[np.argmin(nll)]
-            hyp_start = hyp[np.argmin(nll), :].copy()
-        else:
-            optimize_result = None
-            hyp_start = hyp[0, :].copy()
-        t2 = time.time() - t2_s
+            # Thin samples
+            hyp_pre_thin = sampling_result["samples"]
+            hyp = hyp_pre_thin[thin - 1 :: thin, :]
 
-        # In case n_samples is 0, just return the optimized hyperparameter
-        # result.
-        if s_N == 0:
-            hyp_start = np.reshape(hyp_start, (1, -1))
-            self.update(hyp=hyp_start)
-            return hyp_start, optimize_result, None
+            t3 = time.time() - t3_s
+            # print(t1, t2, t3)
 
-        ## Sample from best hyperparameter vector using slice sampling
-
-        t3_s = time.time()
-        # Effective number of samples (thin after)
-        eff_s_N = s_N * thin
-
-        if sampler_name != "slicesample":
-            raise ValueError("Unknown sampler!")
-
-        sample_cache = {}
-        sample_f = lambda hyp_: self.__gp_obj_fun(
-            hyp_, False, True, cache=sample_cache
-        )
-        options = {"display": "off", "diagnostics": False}
-        if widths is None:
-            widths = widths_default
-        else:
-            widths = np.minimum(widths, widths_default)
-        slicer = SliceSampler(
-            sample_f, hyp_start, widths, LB, UB, options, rng=rng
-        )
-        sampling_result = slicer.sample(eff_s_N, burn=burn_in)
-
-        # Thin samples
-        hyp_pre_thin = sampling_result["samples"]
-        hyp = hyp_pre_thin[thin - 1 :: thin, :]
-
-        t3 = time.time() - t3_s
-        # print(t1, t2, t3)
-
-        # Recompute GP with finalized hyperparameters.
-        self.update(hyp=hyp)
-        return hyp, optimize_result, sampling_result
+            # Recompute GP with finalized hyperparameters.
+            self.update(hyp=hyp)
+            return hyp, optimize_result, sampling_result
+        finally:
+            self.hyper_priors["df"] = df_given
+            self._prior_cache = None
+            self.__recompute_normalization_constants()
 
     def __recompute_normalization_constants(self):
         self.normalization_constants = np.full(self.lower_bounds.shape, 1.0)
@@ -1438,7 +1633,7 @@ class GP:
         sb_idx = (
             np.isfinite(a)
             & np.isfinite(b)
-            & (df == 0 | ~np.isfinite(df))
+            & ((df == 0) | ~np.isfinite(df))
             & ~np.isfinite(mu)
             & np.isfinite(sigma)
         )
@@ -1454,7 +1649,7 @@ class GP:
         g_idx = (
             ~u_idx
             & ~sb_idx
-            & (df == 0 | ~np.isfinite(df))
+            & ((df == 0) | ~np.isfinite(df))
             & np.isfinite(sigma)
         )
         t_idx = ~u_idx & ~sb_t_idx & (df > 0) & np.isfinite(df)
@@ -1480,13 +1675,15 @@ class GP:
                 sigma[sb_idx] * np.sqrt(2 * np.pi)
             )
         if cache["any_sb_t"]:
-            cache["C_sb_t"] = 1.0 + (
-                b[sb_t_idx] - a[sb_t_idx]
-            ) * sp.special.gamma(0.5 * (df[sb_t_idx] + 1)) / (
-                sp.special.gamma(0.5 * df[sb_t_idx])
-                * sigma[sb_t_idx]
-                * np.sqrt(df[sb_t_idx] * np.pi)
-            )
+            # The ratio of gamma functions through their logarithms: both
+            # overflow from a few hundred degrees of freedom, where the
+            # ratio itself is about sqrt(df / 2).
+            log_ratio = sp.special.gammaln(
+                0.5 * (df[sb_t_idx] + 1)
+            ) - sp.special.gammaln(0.5 * df[sb_t_idx])
+            cache["C_sb_t"] = 1.0 + (b[sb_t_idx] - a[sb_t_idx]) * np.exp(
+                log_ratio
+            ) / (sigma[sb_t_idx] * np.sqrt(df[sb_t_idx] * np.pi))
         self._prior_cache = cache
         return cache
 
@@ -1539,15 +1736,20 @@ class GP:
             ) ** 2
 
             if np.any(sb_idx_b | sb_idx_a):
+                tmp_idx = sb_idx_b | sb_idx_a
                 lp -= 0.5 * np.sum(
                     np.log(
-                        C**2 * 2 * np.pi * sigma[sb_idx_b | sb_idx_a] ** 2
+                        C[tmp_idx[sb_idx]] ** 2
+                        * 2
+                        * np.pi
+                        * sigma[tmp_idx] ** 2
                     )
-                    + z2_tmp[sb_idx_b | sb_idx_a]
+                    + z2_tmp[tmp_idx]
                 )
             if np.any(sb_idx_btw):
                 lp -= np.sum(
-                    np.log(C * sigma[sb_idx_btw]) + np.log(np.sqrt(2 * np.pi))
+                    np.log(C[sb_idx_btw[sb_idx]] * sigma[sb_idx_btw])
+                    + np.log(np.sqrt(2 * np.pi))
                 )
 
             if compute_grad:
@@ -1584,7 +1786,7 @@ class GP:
                 )
                 lp += np.sum(
                     -0.5 * np.log(np.pi * df[tmp_idx])
-                    - np.log(C * sigma[tmp_idx])
+                    - np.log(C[tmp_idx[sb_t_idx]] * sigma[tmp_idx])
                     - 0.5
                     * (df[tmp_idx] + 1)
                     * np.log1p(z2_tmp[tmp_idx] / df[tmp_idx])
@@ -1597,7 +1799,7 @@ class GP:
                 )
                 lp += np.sum(
                     -0.5 * np.log(np.pi * df[tmp_idx])
-                    - np.log(C * sigma[tmp_idx])
+                    - np.log(C[tmp_idx[sb_t_idx]] * sigma[tmp_idx])
                 )
 
             if compute_grad:
@@ -1672,7 +1874,8 @@ class GP:
             The gradient with respect to hyperparameters.
         """
         if isinstance(hyp, dict):
-            hyp = self.hyperparameters_from_dict(hyp)
+            # One dictionary is one row of the array form.
+            hyp = self.hyperparameters_from_dict(hyp)[0]
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(hyp, True, False)
             return -nlZ, -dnlZ
@@ -1682,6 +1885,12 @@ class GP:
         """Compute the (positive) log marginal likelihood of the GP with added
         log prior for given hyperparameters (that is, the unnormalized log
         posterior).
+
+        Each hyperparameter's prior is renormalized over its bounds, so the
+        value carries a constant that a hand-computed sum of the log
+        marginal likelihood and the prior densities does not. The constant
+        does not depend on the hyperparameters, and is zero for a
+        hyperparameter with no bounds.
 
         Parameters
         ==========
@@ -1704,7 +1913,8 @@ class GP:
             by adding numerical stability values to the matrix.
         """
         if isinstance(hyp, dict):
-            hyp = self.hyperparameters_from_dict(hyp)
+            # One dictionary is one row of the array form.
+            hyp = self.hyperparameters_from_dict(hyp)[0]
         if compute_grad:
             nlZ, dnlZ = self.__compute_nlZ(hyp, True, True)
             return -nlZ, -dnlZ
@@ -1770,8 +1980,9 @@ class GP:
             True values at the points.
         s2_star : ndarray, shape (M, 1), optional
             Noise variance at the points.
-        add_noise : bool, defaults to True
-            Whether to add noise to the prediction results.
+        add_noise : bool, defaults to ``False``
+            Whether to add the observation noise, which enters on the
+            diagonal, to the returned covariance.
 
         Returns
         =======
@@ -1779,7 +1990,10 @@ class GP:
             Posterior mean at the requested points for each hyperparameter
             sample.
         cov : ndarray, shape (M, M, sample_N)
-            Covariance matrix for each hyperparameter sample.
+            Covariance matrix for each hyperparameter sample. Its diagonal
+            is not clamped at zero, unlike the variances
+            :py:func:`predict` returns, so on a nearly singular posterior
+            an entry can come out slightly negative.
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
         s_N = self.posteriors.size
@@ -1845,11 +2059,15 @@ class GP:
                 sn2_mult = self.posteriors[s].sn2_mult
                 if sn2_mult is None:
                     sn2_mult = 1
-                # Also the noise function.
+                # Also the noise function. The observation noise is
+                # independent between points, so it enters on the diagonal;
+                # a constant noise function returns a scalar, which is
+                # broadcast to one entry per point.
                 sn2_star = self.noise.compute(
                     hyp[cov_N : cov_N + noise_N], x_star, y_star, s2_star
                 )
-                cov[s, :, :] += np.dot(np.eye(N_star), sn2_star) * sn2_mult
+                sn2_diag = np.broadcast_to(np.ravel(sn2_star), (N_star,))
+                cov[s, :, :] += np.diag(sn2_diag) * sn2_mult
 
         return mu, cov.transpose(1, 2, 0)
 
@@ -1865,7 +2083,7 @@ class GP:
         return_cross_covariance: bool = False,
     ):
         """
-        Compute the GP posterior mean and noise variance at given points.
+        Compute the GP posterior mean and variance at given points.
 
         Parameters
         ==========
@@ -1881,9 +2099,15 @@ class GP:
             Whether to return the results separately for each hyperparameter
             sample or averaged.
         return_lpd : bool, defaults to ``False``
-            Whether to return the log predictive density at the input points.
-            If separate_samples is ``False``, returns the lpd of the
-            corresponding mean approximation.
+            Whether to return the log predictive density at the input
+            points. The density always carries the observation noise,
+            whichever variance ``add_noise`` selects for ``s2``. With
+            ``separate_samples`` ``False`` it is the log density of a
+            Gaussian whose mean is the mean of the per-sample means and
+            whose variance is the mean of the per-sample predictive
+            variances plus the sample variance (``ddof=1``) of the
+            per-sample means, as ``gplite_pred.m`` pools them, and not the
+            average of the per-sample log densities.
         return_cross_covariance : bool, defaults to ``False``
             Whether to append the latent training-to-prediction kernel
             matrices to the return values. The matrices are kept separate for
@@ -1897,9 +2121,12 @@ class GP:
             separate samples the shape is ``(M, sample_N)`` while
             otherwise it is ``(M, 1)``.
         s2 : ndarray
-            Noise variance at each point. If we requested
-            separate samples the shape is ``(M, sample_N)`` while
-            otherwise it is ``(M, 1)``.
+            Variance at each point: the latent posterior variance, or, with
+            ``add_noise``, that variance plus the observation noise. Pooled
+            over several hyperparameter samples, it is the mean of the
+            per-sample variances plus the sample variance (``ddof=1``) of
+            the per-sample means. If we requested separate samples the
+            shape is ``(M, sample_N)`` while otherwise it is ``(M, 1)``.
         lpd : ndarray, optional
             Log predictive density at each point. Returned when
             ``return_lpd`` is ``True`` and shaped like ``mu``.
@@ -2089,12 +2316,18 @@ class GP:
         mu : array_like
             Either a array of shape ``(N, D)`` with each row containing the
             mean of a single Gaussian measure, or a single floating point
-            number which is interpreted as an array of shape ``(1, D)``.
+            number which is interpreted as an array of shape ``(1, D)``. A
+            one-dimensional array of length ``D`` is one measure of ``D``
+            dimensions, as ``gplite_quad.m``'s ``size(mu, 1)`` reads a row
+            vector.
         sigma : array_like
             Either a array of shape ``(N, D)`` with each row containing the
             standard deviation of a single Gaussian measure, or a single
             floating point number which is interpreted as an array of shape
-            ``(1, D)``.
+            ``(1, D)``, or an array of shape ``(N, 1)`` with one standard
+            deviation per measure, the same in every dimension. A
+            one-dimensional array of length ``D`` is one measure, as for
+            ``mu``.
         compute_var : bool, defaults to False
             Whether to compute variance for each integral.
         separate_samples : bool, defaults to False
@@ -2104,7 +2337,7 @@ class GP:
         Returns
         =======
         F : ndarray
-            The conputed integrals in an array with shape ``(N, 1)`` if
+            The computed integrals in an array with shape ``(N, 1)`` if
             samples are averaged and shape ``(N, hyp_samples)`` if
             requested separately.
         F_var : ndarray, optional
@@ -2116,7 +2349,12 @@ class GP:
         ------
         ValueError
             Raised when the method is called and the covariance of the GP is
-            not squared exponential.
+            not squared exponential, or the mean function is none of the
+            zero, constant and negative quadratic means.
+        ValueError
+            Raised when the GP has no training data or no posterior
+            factors, or when ``mu`` does not have one column per input
+            dimension, or ``sigma`` neither one nor one per dimension.
         """
 
         if not isinstance(
@@ -2125,6 +2363,28 @@ class GP:
             raise ValueError(
                 "Bayesian quadrature only supports the squared exponential "
                 "kernel."
+            )
+        if not isinstance(
+            self.mean,
+            (
+                gpyreg.mean_functions.ZeroMean,
+                gpyreg.mean_functions.ConstantMean,
+                gpyreg.mean_functions.NegativeQuadratic,
+            ),
+        ):
+            raise ValueError(
+                "Bayesian quadrature only supports the zero, constant and "
+                "negative quadratic mean functions."
+            )
+        if self.X is None or self.y is None:
+            raise ValueError(
+                "Bayesian quadrature needs the training data of the GP, "
+                "which has none."
+            )
+        if self.posteriors is None or self.posteriors[0].alpha is None:
+            raise ValueError(
+                "Bayesian quadrature needs the posterior factors of the "
+                "GP; call `update` with `compute_posterior=True` first."
             )
 
         N, D = self.X.shape
@@ -2136,12 +2396,24 @@ class GP:
         # mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
 
+        # A one-dimensional input is one measure of D dimensions, as
+        # `gplite_quad.m:26`'s `size(mu, 1)` reads a row vector.
+        mu = np.atleast_2d(np.asarray(mu, dtype=float))
+        sigma = np.atleast_2d(np.asarray(sigma, dtype=float))
         if np.size(mu) == 1:
             mu = np.tile(mu, (1, D))
+        # A sigma of one column holds one standard deviation per measure,
+        # the same in every dimension, which `gplite_quad.m` broadcasts.
+        if sigma.shape[1] == 1:
+            sigma = np.tile(sigma, (1, D))
+        if mu.shape[1] != D or sigma.shape[1] != D:
+            raise ValueError(
+                "Each Gaussian measure needs one column per input "
+                f"dimension, {D} of them, and sigma may also have one "
+                f"column: mu has {mu.shape[1]} and sigma {sigma.shape[1]}."
+            )
 
         N_star = mu.shape[0]
-        if np.size(sigma) == 1:
-            sigma = np.tile(sigma, (1, D))
 
         quadratic_mean_fun = isinstance(
             self.mean, gpyreg.mean_functions.NegativeQuadratic
@@ -2186,14 +2458,15 @@ class GP:
             L_chol = self.posteriors[s].L_chol
 
             if compute_var and L_chol:
-                # Normalization of the Cholesky factor, matching the
-                # posterior computation: L = chol((K + sn2_mult * sn2) / sl)
-                # with sl the minimum total training noise variance,
-                # including any user-provided variance, times sn2_mult.
-                sn2 = self.noise.compute(
-                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
-                )
-                sl = np.min(sn2) * self.posteriors[s].sn2_mult
+                # Normalization of the stored Cholesky factor,
+                # L = chol((K + sn2_mult * sn2) / sl). The scale is the one
+                # the factor was built with, which a rank-one update keeps
+                # and the minimum of the current training noise need not
+                # reproduce. Posteriors pickled before the scale was stored
+                # lack the attribute and recover it from sW.
+                sl = getattr(self.posteriors[s], "sl", None)
+                if sl is None:
+                    sl = 1.0 / self.posteriors[s].sW[0, 0] ** 2
 
             # Compute posterior mean of the integral
             tau = np.sqrt(sigma**2 + ell**2)
@@ -2254,7 +2527,6 @@ class GP:
 
         return F
 
-    # sigma doesn't work, requires gplite_quad implementation
     # quantile doesn't work, requires gplite_qpred implementation
     def plot(
         self,
@@ -2534,6 +2806,19 @@ class GP:
         =======
         f_star : ndarray, shape (M, 1)
             The values of the drawn function at the requested points.
+
+        Raises
+        ------
+        LinAlgError
+            Raised when the covariance of the draw, as computed, has a
+            negative eigenvalue beyond the rounding of the prior variance
+            at ``X_star``.
+        LinAlgError
+            Raised when the posterior holds the negative inverse of the
+            training covariance, as it does where the smallest noise
+            variance at the training inputs is below 1e-6, and the
+            Cholesky decomposition of that covariance fails even after
+            its noise is multiplied tenfold, up to ten times.
         """
         rng = resolve_rng(rng)
         N_star = X_star.shape[0]
@@ -2581,16 +2866,34 @@ class GP:
                     trans=1,
                     check_finite=False,
                 )
-                C = K_star - np.dot(V.T, V)  # Predictive variances
             else:
-                LKs = np.dot(L, Ks)
-                C = K_star + np.dot(Ks.T, LKs)
+                # The posterior holds the explicit inverse
+                # -inv(K + sn2_mult * diag(sn2)), whose rounding grows as
+                # the noise shrinks, and a covariance formed from it would
+                # carry that rounding. Factor the matrix itself instead,
+                # with the kernel, noise and multiplier of the posterior.
+                K = self.covariance.compute(hyp[0:cov_N], self.X)
+                sn2 = self.noise.compute(
+                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
+                )
+                L_K, __, __ = self.__training_cholesky(
+                    K, sn2, False, self.posteriors[s].sn2_mult
+                )
+                V = sp.linalg.solve_triangular(
+                    L_K, Ks, trans=1, check_finite=False
+                )
+            C = K_star - np.dot(V.T, V)  # Predictive variances
 
         # Enforce symmetry if lost due to numerical errors.
         C = (C + C.T) / 2
 
-        # Draw random function
-        T = self.__robust_cholesky(C)
+        # Draw random function. The predictive covariance is the prior
+        # covariance minus what the data explain, so its rounding is
+        # that of the prior variance at the test points, however small
+        # the difference. The observation noise is drawn apart, below.
+        T = self.__robust_cholesky(
+            C, scale=np.max(np.diag(K_star), initial=0.0)
+        )
         f_star = np.dot(T.T, rng.standard_normal((T.shape[0], 1))) + f_mu
 
         # Add observation noise.
@@ -2611,30 +2914,159 @@ class GP:
         return f_star
 
     @staticmethod
-    def __robust_cholesky(sigma):
-        """Cholesky-like decomposition for a covariance matrix."""
+    def __robust_cholesky(sigma, scale=None):
+        """Cholesky-like decomposition for a covariance matrix.
+
+        Returns a factor ``T`` with ``T.T @ T == sigma`` up to rounding,
+        from the eigendecomposition where the direct Cholesky
+        decomposition fails.
+
+        Parameters
+        ==========
+        sigma : ndarray, shape (n, n)
+            The covariance matrix.
+        scale : float, optional
+            The magnitude of the terms that formed ``sigma``, which sets
+            the rounding tolerance where ``sigma`` is a difference of
+            larger terms. Defaults to the largest absolute eigenvalue of
+            ``sigma``, which also bounds the tolerance from below.
+
+        Raises
+        ------
+        LinAlgError
+            Raised when ``sigma`` has a negative eigenvalue beyond the
+            rounding tolerance, so that no such factor exists.
+        """
         try:
             T = sp.linalg.cholesky(sigma, check_finite=False)
         except sp.linalg.LinAlgError:
-            D, U = sp.linalg.eig((sigma + sigma.T) / 2)
+            # The symmetric solver: real eigenvectors, and an orthogonal
+            # basis of a repeated eigenvalue, both of which the general
+            # solver may fail to return.
+            D, U = sp.linalg.eigh((sigma + sigma.T) / 2)
+            # Sign convention: the largest entry of each eigenvector is
+            # positive. Flipping a whole column leaves U D U^T unchanged.
             maxidx = np.argmax(np.abs(U), axis=0)
-            negidx = U[maxidx] < 0
-            U[negidx] *= -1
+            negidx = U[maxidx, np.arange(U.shape[1])] < 0
+            U[:, negidx] *= -1
 
-            D = np.real(D)  # symmetric so all are real
-            # the abs is there to make sure we don't have issues
-            # if np.spacing returns negative values
+            # Which eigenvalues carry the matrix rather than its
+            # rounding (`gplite_rnd.m:102`). The abs is there to make sure
+            # we don't have issues if np.spacing returns negative values.
             tol = np.abs(np.spacing(np.max(D))) * D.shape[0]
             t = np.abs(D) > tol
-            D = D[t]
-            p = np.sum(D < 0)  # negative eigenvalues
 
-            if p == 0:
-                T = np.dot(np.diag(np.sqrt(D)), np.real(U[:, t]).T)
-            else:
-                T = np.zeros(sigma.shape)
+            # A surviving eigenvalue that is negative but of rounding size
+            # is a zero of a semidefinite matrix: the symmetric solver is
+            # backward stable, so an eigenvalue of a matrix of spectral
+            # norm max|D| carries an error of order n * eps * max|D|, and
+            # the factor of ten leaves room for the constant that bound
+            # hides. A matrix formed as the difference of larger terms
+            # carries the rounding of those terms, of order n * eps *
+            # scale, however small the difference. A near-singular
+            # predictive covariance, the case that brings a draw here,
+            # has such eigenvalues of both signs.
+            magnitude = np.max(np.abs(D))
+            if scale is not None:
+                magnitude = max(magnitude, scale)
+            rounding = 10 * D.shape[0] * np.finfo(D.dtype).eps * magnitude
+            negative = t & (D < 0)
+            if np.any(D[negative] <= -rounding):
+                # Not a covariance matrix: it has no factor.
+                raise sp.linalg.LinAlgError(
+                    "Matrix is not positive semidefinite: its smallest "
+                    f"eigenvalue is {np.min(D):.6g}, beyond the rounding "
+                    f"tolerance {rounding:.6g}."
+                )
+            t &= ~negative
+            T = np.dot(np.diag(np.sqrt(D[t])), U[:, t].T)
 
         return T
+
+    @staticmethod
+    def __training_cholesky(K, sn2, L_chol, sn2_mult=1):
+        """Cholesky factor of the training covariance with its noise.
+
+        Factors ``(K + sn2_mult * diag(sn2)) / sl``, multiplying
+        ``sn2_mult`` by ten after each failed attempt, up to ten attempts.
+
+        Parameters
+        ==========
+        K : ndarray, shape (N, N)
+            The kernel matrix at the training inputs.
+        sn2 : float or ndarray, shape (N, 1)
+            The noise variance at the training inputs.
+        L_chol : bool
+            Whether the matrix is scaled by ``sl = min(sn2) * sn2_mult``
+            before it is factored (the Cholesky representation of the
+            posterior) or not (``sl = 1``, the matrix whose negative
+            inverse the low-noise representation holds).
+        sn2_mult : int, defaults to 1
+            The noise multiplier of the first attempt.
+
+        Returns
+        =======
+        L : ndarray, shape (N, N)
+            The upper triangular Cholesky factor.
+        sl : float
+            The scale the matrix was divided by before it was factored.
+        sn2_mult : int
+            The noise multiplier of the attempt that succeeded.
+
+        Raises
+        ======
+        LinAlgError
+            Raised when every attempt failed.
+        """
+        N = K.shape[0]
+        L = None
+        # The noise enters on the diagonal only: adding it in place to
+        # a copy gives the entries of `K / sl + diag(...)` exactly
+        # (adding 0.0 off the diagonal leaves an entry unchanged)
+        # without forming and adding an N x N identity on every
+        # evaluation. The copy is made C-contiguous, the layout the
+        # old sum with a C-ordered identity produced (the factorization
+        # scipy computes depends on the layout at rounding level).
+        # Use float64 so custom float32 kernels do not lose small
+        # diagonal noise that the old sum with an identity preserved.
+        if L_chol:
+            if np.isscalar(sn2):
+                sn2_div = sn2
+                sn2_diag = 1.0
+            else:
+                sn2_div = np.min(sn2)
+                sn2_diag = sn2.ravel() / sn2_div
+            for i in range(0, 10):
+                try:  # Cholesky decomposition until it works
+                    A = np.ascontiguousarray(
+                        K / (sn2_div * sn2_mult), dtype=np.float64
+                    )
+                    A.flat[:: N + 1] += sn2_diag
+                    L = sp.linalg.cholesky(A, check_finite=False)
+                except sp.linalg.LinAlgError:
+                    sn2_mult *= 10
+                    continue
+                break
+            sl = sn2_div * sn2_mult
+        else:
+            sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
+
+            for i in range(0, 10):
+                try:
+                    A = np.array(K, dtype=np.float64, order="C")
+                    A.flat[:: N + 1] += sn2_mult * sn2_diag
+                    L = sp.linalg.cholesky(A, check_finite=False)
+                except sp.linalg.LinAlgError:
+                    sn2_mult *= 10
+                    continue
+                break
+            sl = 1
+
+        if L is None:
+            raise sp.linalg.LinAlgError(
+                "Singular matrix for L Cholesky decomposition"
+            )
+        return L, sl, sn2_mult
 
     def __core_computation(
         self, hyp, compute_nlZ, compute_nlZ_grad, cache=None
@@ -2711,65 +3143,19 @@ class GP:
         if hit:
             L, sl, logdet = cache["L"], cache["sl"], cache["logdet"]
         else:
-            sn2_mult = 1  # Effective noise variance multiplier
-
             L_chol = np.min(sn2) >= 1e-6
-            L = None
-            # The noise enters on the diagonal only: adding it in place to
-            # a copy gives the entries of `K / sl + diag(...)` exactly
-            # (adding 0.0 off the diagonal leaves an entry unchanged)
-            # without forming and adding an N x N identity on every
-            # evaluation. The copy is made C-contiguous, the layout the
-            # old sum with a C-ordered identity produced (the factorization
-            # scipy computes depends on the layout at rounding level).
-            # Use float64 so custom float32 kernels do not lose small
-            # diagonal noise that the old sum with an identity preserved.
+            L, sl, sn2_mult = self.__training_cholesky(K, sn2, L_chol)
+
             if L_chol:
-                if np.isscalar(sn2):
-                    sn2_div = sn2
-                    sn2_diag = 1.0
-                else:
-                    sn2_div = np.min(sn2)
-                    sn2_diag = sn2.ravel() / sn2_div
-                for i in range(0, 10):
-                    try:  # Cholesky decomposition until it works
-                        A = np.ascontiguousarray(
-                            K / (sn2_div * sn2_mult), dtype=np.float64
-                        )
-                        A.flat[:: N + 1] += sn2_diag
-                        L = sp.linalg.cholesky(A, check_finite=False)
-                    except sp.linalg.LinAlgError:
-                        sn2_mult *= 10
-                        continue
-                    break
-                sl = sn2_div * sn2_mult
                 pL = L
-            else:
-                sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
-
-                for i in range(0, 10):
-                    try:
-                        A = np.array(K, dtype=np.float64, order="C")
-                        A.flat[:: N + 1] += sn2_mult * sn2_diag
-                        L = sp.linalg.cholesky(A, check_finite=False)
-                    except sp.linalg.LinAlgError:
-                        sn2_mult *= 10
-                        continue
-                    break
-                sl = 1
-                if not compute_nlZ:
-                    pL = sp.linalg.solve_triangular(
-                        -L,
-                        sp.linalg.solve_triangular(
-                            L, np.eye(N), trans=1.0, check_finite=False
-                        ),
-                        trans=0,
-                        check_finite=False,
-                    )
-
-            if L is None:
-                raise sp.linalg.LinAlgError(
-                    "Singular matrix for L Cholesky decomposition"
+            elif not compute_nlZ:
+                pL = sp.linalg.solve_triangular(
+                    -L,
+                    sp.linalg.solve_triangular(
+                        L, np.eye(N), trans=1.0, check_finite=False
+                    ),
+                    trans=0,
+                    check_finite=False,
                 )
             logdet = None
 
@@ -2811,12 +3197,16 @@ class GP:
                 # Gradient of GP likelihood
                 if np.isscalar(sn2):
                     tr_Q = np.trace(Q)
+                    # The noise gradient is (1, noise_N) where the total
+                    # noise does not vary by point, and (N, noise_N) where
+                    # the noise function has a feature that could make it
+                    # vary; a constant total noise has the same row
+                    # everywhere, so the entry of hyperparameter i is that
+                    # of the first row. (`gplite_core.m:244` indexes the
+                    # array linearly and reads another entry.)
+                    dsn2_row = np.atleast_2d(dsn2)[0, :]
                     for i in range(0, noise_N):
-                        # Casting to a scalar suppress deprecation warnings in pytest runs.
-                        # "(Numpy) Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future."
-                        dnlZ[cov_N + i] = (
-                            0.5 * sn2_mult * np.dot(dsn2[i], tr_Q)
-                        ).item()
+                        dnlZ[cov_N + i] = 0.5 * sn2_mult * dsn2_row[i] * tr_Q
                 else:
                     dg_Q = np.diag(Q)
                     for i in range(0, noise_N):
@@ -2857,11 +3247,11 @@ class GP:
             if X.ndim == 1:
                 X = X[None, :]
             if X.ndim != 2:
-                raise AssertionError("X need to be an array of shape (N, D)")
+                raise ValueError("X need to be an array of shape (N, D)")
             N, D = X.shape
             if D != self.D:
-                raise AssertionError(
-                    f"The dimension of input data {D}"
+                raise ValueError(
+                    f"The dimension of input data {D} "
                     f"doesn't match GP's input dimension {self.D}."
                 )
         else:
@@ -2874,16 +3264,25 @@ class GP:
 
         if y is not None:
             y = y.reshape(N, 1)
-        if isinstance(s2, float) or isinstance(s2, int):
-            s2 = s2 * np.ones((N, 1))
-        elif isinstance(s2, np.ndarray):
+        if isinstance(s2, np.ndarray) and s2.ndim > 0:
+            # One variance per input, as `gplite_pred.m:16-23` requires:
+            # a row of N is not a column of N.
+            if s2.shape[0] != N:
+                raise ValueError(
+                    f"The noise variance has {s2.shape[0]} rows, but the "
+                    f"input data has {N}."
+                )
             s2 = s2.reshape(N, 1)
+        elif isinstance(s2, numbers.Number) or isinstance(s2, np.ndarray):
+            # A number, a NumPy scalar or a 0-d array: the same variance
+            # at every input.
+            s2 = float(s2) * np.ones((N, 1))
         elif s2 is None:
             s2 = None  # noiseless case
         else:
             raise TypeError(
-                "s2 type need to be \
-                            Union[np.ndarray, float, int, None]."
+                "s2 type need to be "
+                "Union[np.ndarray, numbers.Number, None]."
             )
         return X, y, s2
 

@@ -128,3 +128,15 @@ def test_uuinv():
         )
         assert np.isclose(sum(x == B[0]) / np.size(x), (1 - w) / 2, atol=2e-3)
         assert np.isclose(sum(x == B[3]) / np.size(x), (1 - w) / 2, atol=2e-3)
+
+
+def test_uuinv_marks_values_outside_the_unit_interval():
+    """A p outside [0, 1] is not a quantile, in each of the three cases the
+    inverse distinguishes: the plausible box alone, the degenerate mixture
+    of a uniform and two deltas, and the general mixture."""
+    p = np.array([-0.1, 0.25, 1.1])
+    for B in ([0, 10, 30, 66], [0, 0, 66, 66]):
+        for w in (0, 0.6, 1):
+            x = uuinv(p, B, w)
+            assert np.all(np.isnan(x[[0, 2]])), (B, w)
+            assert np.isfinite(x[1]), (B, w)
