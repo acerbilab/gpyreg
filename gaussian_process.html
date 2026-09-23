@@ -194,6 +194,7 @@
 <li class="toctree-l1"><a class="reference internal" href="release_notes.html">Release notes</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Gaussian processes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="isotropic_covariance_functions.html">Isotropic covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="noise_functions.html">Noise functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a></li>
@@ -589,7 +590,13 @@ noise variances are used.</p>
 </dd>
 <dt><strong>init_N</strong><span class="classifier">int, defaults to 1024</span></dt><dd><p>Initial design size for hyperparameter optimization.</p>
 </dd>
-<dt><strong>df_base</strong><span class="classifier">int, defaults to 7</span></dt><dd><p>Default degrees of freedom for student’s t prior.</p>
+<dt><strong>df_base</strong><span class="classifier">int, defaults to 7</span></dt><dd><p>The degrees of freedom of a <code class="docutils literal notranslate"><span class="pre">&quot;student_t&quot;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&quot;smoothbox_student_t&quot;</span></code> prior whose <code class="docutils literal notranslate"><span class="pre">df</span></code> is NaN,
+filled into a copy of the priors for the duration of
+the fit, as <code class="docutils literal notranslate"><span class="pre">gplite_train.m</span></code> fills its local copy.
+The GP keeps the priors as they were set, and outside
+the fit a NaN <code class="docutils literal notranslate"><span class="pre">df</span></code> reads as <code class="docutils literal notranslate"><span class="pre">&quot;gaussian&quot;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&quot;smoothbox&quot;</span></code> (see <a class="reference internal" href="#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_priors()</span></code></a>).</p>
 </dd>
 <dt><strong>n_samples</strong><span class="classifier">int, defaults to 10</span></dt><dd><p>Number of hyperparameters to sample.</p>
 </dd>
@@ -647,7 +654,8 @@ sampling run, and None otherwise.</p>
 </dd>
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt>ValueError</dt><dd><p>Raised when the <cite>sampler_name</cite> is not slicesample.</p>
+<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">n_samples</span></code> is positive and <code class="docutils literal notranslate"><span class="pre">sampler_name</span></code> is
+not <code class="docutils literal notranslate"><span class="pre">'slicesample'</span></code>, after the optimization.</p>
 </dd>
 </dl>
 </dd>
@@ -700,7 +708,9 @@ sample.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>hyper_priors</strong><span class="classifier">dict</span></dt><dd><p>A dictionary of the current hyperparameter names and their priors.</p>
+<dt><strong>hyper_priors</strong><span class="classifier">dict</span></dt><dd><p>A dictionary of the current hyperparameter names and their
+priors, in the form <a class="reference internal" href="#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_priors()</span></code></a> takes, with <code class="docutils literal notranslate"><span class="pre">None</span></code>
+for a hyperparameter without a prior.</p>
 </dd>
 </dl>
 </dd>
@@ -736,6 +746,11 @@ upper bounds.</p>
 <dt>ValueError</dt><dd><p>Raise when GP does not have <cite>X</cite> or <cite>y</cite> set yet, or when provided
 bounds are not one of <cite>“recommended”</cite>/<cite>None</cite>, <cite>“current”</cite>, or
 array_like.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when a lower bound given is above the upper bound given
+for the same hyperparameter. A pair that comes out inverted
+once the recommendations fill its NaN entries is collapsed
+onto its lower bound instead.</p>
 </dd>
 </dl>
 </dd>
@@ -828,6 +843,11 @@ hyperparameters.</p>
 <dd><p>Compute the (positive) log marginal likelihood of the GP with added
 log prior for given hyperparameters (that is, the unnormalized log
 posterior).</p>
+<p>Each hyperparameter’s prior is renormalized over its bounds, so the
+value carries a constant that a hand-computed sum of the log
+marginal likelihood and the prior densities does not. The constant
+does not depend on the hyperparameters, and is zero for a
+hyperparameter with no bounds.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
@@ -891,7 +911,7 @@ point.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.predict">
 <span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">separate_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_lpd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_cross_covariance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict" title="Link to this definition">#</a></dt>
-<dd><p>Compute the GP posterior mean and noise variance at given points.</p>
+<dd><p>Compute the GP posterior mean and variance at given points.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl>
@@ -906,9 +926,15 @@ point.</p>
 <dt><strong>separate_samples</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to return the results separately for each hyperparameter
 sample or averaged.</p>
 </dd>
-<dt><strong>return_lpd</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to return the log predictive density at the input points.
-If separate_samples is <code class="docutils literal notranslate"><span class="pre">False</span></code>, returns the lpd of the
-corresponding mean approximation.</p>
+<dt><strong>return_lpd</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to return the log predictive density at the input
+points. The density always carries the observation noise,
+whichever variance <code class="docutils literal notranslate"><span class="pre">add_noise</span></code> selects for <code class="docutils literal notranslate"><span class="pre">s2</span></code>. With
+<code class="docutils literal notranslate"><span class="pre">separate_samples</span></code> <code class="docutils literal notranslate"><span class="pre">False</span></code> it is the log density of a
+Gaussian whose mean is the mean of the per-sample means and
+whose variance is the mean of the per-sample predictive
+variances plus the sample variance (<code class="docutils literal notranslate"><span class="pre">ddof=1</span></code>) of the
+per-sample means, as <code class="docutils literal notranslate"><span class="pre">gplite_pred.m</span></code> pools them, and not the
+average of the per-sample log densities.</p>
 </dd>
 <dt><strong>return_cross_covariance</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to append the latent training-to-prediction kernel
 matrices to the return values. The matrices are kept separate for
@@ -923,9 +949,12 @@ each hyperparameter sample even when <code class="docutils literal notranslate">
 separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">sample_N)</span></code> while
 otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">1)</span></code>.</p>
 </dd>
-<dt><strong>s2</strong><span class="classifier">ndarray</span></dt><dd><p>Noise variance at each point. If we requested
-separate samples the shape is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">sample_N)</span></code> while
-otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">1)</span></code>.</p>
+<dt><strong>s2</strong><span class="classifier">ndarray</span></dt><dd><p>Variance at each point: the latent posterior variance, or, with
+<code class="docutils literal notranslate"><span class="pre">add_noise</span></code>, that variance plus the observation noise. Pooled
+over several hyperparameter samples, it is the mean of the
+per-sample variances plus the sample variance (<code class="docutils literal notranslate"><span class="pre">ddof=1</span></code>) of
+the per-sample means. If we requested separate samples the
+shape is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">sample_N)</span></code> while otherwise it is <code class="docutils literal notranslate"><span class="pre">(M,</span> <span class="pre">1)</span></code>.</p>
 </dd>
 <dt><strong>lpd</strong><span class="classifier">ndarray, optional</span></dt><dd><p>Log predictive density at each point. Returned when
 <code class="docutils literal notranslate"><span class="pre">return_lpd</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code> and shaped like <code class="docutils literal notranslate"><span class="pre">mu</span></code>.</p>
@@ -949,16 +978,17 @@ and <code class="docutils literal notranslate"><span class="pre">add_noise</span
 <span class="sig-name descname"><span class="pre">predict_full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_noise</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.predict_full" title="Link to this definition">#</a></dt>
 <dd><p>Compute the GP posterior mean and full covariance matrix for each
 hyperparameter sample.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><dl class="simple">
+<dd class="field-odd"><dl>
 <dt><strong>x_star</strong><span class="classifier">ndarray, shape (M, D)</span></dt><dd><p>The points we want to predict the values at.</p>
 </dd>
 <dt><strong>y_star</strong><span class="classifier">ndarray, shape (M, 1), optional</span></dt><dd><p>True values at the points.</p>
 </dd>
 <dt><strong>s2_star</strong><span class="classifier">ndarray, shape (M, 1), optional</span></dt><dd><p>Noise variance at the points.</p>
 </dd>
-<dt><strong>add_noise</strong><span class="classifier">bool, defaults to True</span></dt><dd><p>Whether to add noise to the prediction results.</p>
+<dt><strong>add_noise</strong><span class="classifier">bool, defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code></span></dt><dd><p>Whether to add the observation noise, which enters on the
+diagonal, to the returned covariance.</p>
 </dd>
 </dl>
 </dd>
@@ -967,7 +997,10 @@ hyperparameter sample.</p>
 <dt><strong>mu</strong><span class="classifier">ndarray, shape (M, sample_N)</span></dt><dd><p>Posterior mean at the requested points for each hyperparameter
 sample.</p>
 </dd>
-<dt><strong>cov</strong><span class="classifier">ndarray, shape (M, M, sample_N)</span></dt><dd><p>Covariance matrix for each hyperparameter sample.</p>
+<dt><strong>cov</strong><span class="classifier">ndarray, shape (M, M, sample_N)</span></dt><dd><p>Covariance matrix for each hyperparameter sample. Its diagonal
+is not clamped at zero, unlike the variances
+<a class="reference internal" href="#gpyreg.GP.predict" title="gpyreg.GP.predict"><code class="xref py py-func docutils literal notranslate"><span class="pre">predict()</span></code></a> returns, so on a nearly singular posterior
+an entry can come out slightly negative.</p>
 </dd>
 </dl>
 </dd>
@@ -985,12 +1018,18 @@ Process with respect to a given Gaussian measure.</p>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>mu</strong><span class="classifier">array_like</span></dt><dd><p>Either a array of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">D)</span></code> with each row containing the
 mean of a single Gaussian measure, or a single floating point
-number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>.</p>
+number which is interpreted as an array of shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>. A
+one-dimensional array of length <code class="docutils literal notranslate"><span class="pre">D</span></code> is one measure of <code class="docutils literal notranslate"><span class="pre">D</span></code>
+dimensions, as <code class="docutils literal notranslate"><span class="pre">gplite_quad.m</span></code>’s <code class="docutils literal notranslate"><span class="pre">size(mu,</span> <span class="pre">1)</span></code> reads a row
+vector.</p>
 </dd>
 <dt><strong>sigma</strong><span class="classifier">array_like</span></dt><dd><p>Either a array of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">D)</span></code> with each row containing the
 standard deviation of a single Gaussian measure, or a single
 floating point number which is interpreted as an array of shape
-<code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">D)</span></code>, or an array of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code> with one standard
+deviation per measure, the same in every dimension. A
+one-dimensional array of length <code class="docutils literal notranslate"><span class="pre">D</span></code> is one measure, as for
+<code class="docutils literal notranslate"><span class="pre">mu</span></code>.</p>
 </dd>
 <dt><strong>compute_var</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute variance for each integral.</p>
 </dd>
@@ -1001,7 +1040,7 @@ sample, or averaged.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
-<dt><strong>F</strong><span class="classifier">ndarray</span></dt><dd><p>The conputed integrals in an array with shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code> if
+<dt><strong>F</strong><span class="classifier">ndarray</span></dt><dd><p>The computed integrals in an array with shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code> if
 samples are averaged and shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">hyp_samples)</span></code> if
 requested separately.</p>
 </dd>
@@ -1014,7 +1053,12 @@ shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <s
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
 <dt>ValueError</dt><dd><p>Raised when the method is called and the covariance of the GP is
-not squared exponential.</p>
+not squared exponential, or the mean function is none of the
+zero, constant and negative quadratic means.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the GP has no training data or no posterior
+factors, or when <code class="docutils literal notranslate"><span class="pre">mu</span></code> does not have one column per input
+dimension, or <code class="docutils literal notranslate"><span class="pre">sigma</span></code> neither one nor one per dimension.</p>
 </dd>
 </dl>
 </dd>
@@ -1045,6 +1089,20 @@ stream, as before generators were supported. See
 </dd>
 </dl>
 </dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>LinAlgError</dt><dd><p>Raised when the covariance of the draw, as computed, has a
+negative eigenvalue beyond the rounding of the prior variance
+at <code class="docutils literal notranslate"><span class="pre">X_star</span></code>.</p>
+</dd>
+<dt>LinAlgError</dt><dd><p>Raised when the posterior holds the negative inverse of the
+training covariance, as it does where the smallest noise
+variance at the training inputs is below 1e-6, and the
+Cholesky decomposition of that covariance fails even after
+its noise is multiplied tenfold, up to ten times.</p>
+</dd>
+</dl>
+</dd>
 </dl>
 </dd></dl>
 
@@ -1068,6 +1126,9 @@ default recommended values.</p>
 <dd class="field-even"><dl class="simple">
 <dt>ValueError</dt><dd><p>Raised when <cite>bounds</cite> is missing the entry of an expected
 hyperparameter.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>bounds</cite> is given, but a specified hyperparameter
+is unknown.</p>
 </dd>
 </dl>
 </dd>
@@ -1112,7 +1173,17 @@ is equivalent.</p>
 <dt><strong>priors</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of GP hyperparameter names and tuples of their priors.
 All hyperparameters need to appear in the dictionary.
 Use the value <code class="docutils literal notranslate"><span class="pre">None</span></code> to set no priors for a hyperparameter.
-If <code class="docutils literal notranslate"><span class="pre">priors=None</span></code>, all hyperparameter priors are removed.</p>
+If <code class="docutils literal notranslate"><span class="pre">priors=None</span></code>, all hyperparameter priors are removed.
+Within a block of several hyperparameters, a coordinate whose
+location (<code class="docutils literal notranslate"><span class="pre">mu</span></code>, or <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> for the smooth-box
+families) and <code class="docutils literal notranslate"><span class="pre">sigma</span></code> are both NaN has no prior.
+Degrees of freedom <code class="docutils literal notranslate"><span class="pre">df</span></code> that are zero, infinite or NaN make
+a <code class="docutils literal notranslate"><span class="pre">&quot;student_t&quot;</span></code> prior <code class="docutils literal notranslate"><span class="pre">&quot;gaussian&quot;</span></code>, as
+<code class="docutils literal notranslate"><span class="pre">gplite_hypprior.m</span></code> reads them, and a
+<code class="docutils literal notranslate"><span class="pre">&quot;smoothbox_student_t&quot;</span></code> prior <code class="docutils literal notranslate"><span class="pre">&quot;smoothbox&quot;</span></code>, gpyreg’s own
+reading (gplite has no smooth-box priors). For the duration
+of <a class="reference internal" href="#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">fit()</span></code></a>, a NaN <code class="docutils literal notranslate"><span class="pre">df</span></code> takes the value of its option
+<code class="docutils literal notranslate"><span class="pre">df_base</span></code> instead.</p>
 </dd>
 </dl>
 </dd>
@@ -1123,6 +1194,9 @@ expected hyperparameter.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">priors</span></code> is given, but a specified
 hyperparameter is unknown.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when a coordinate that has a prior is given a <code class="docutils literal notranslate"><span class="pre">sigma</span></code>
+that is not finite and positive.</p>
 </dd>
 </dl>
 </dd>
@@ -1157,6 +1231,14 @@ hyperparameter sample.</p>
 <dd class="field-even"><dl class="simple">
 <dt>LinAlgError</dt><dd><p>Raised when the Cholesky decomposition failed multiple times even
 by adding numerical stability values to the matrix.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">hyp</span></code> is not a 2D array with one column per
+hyperparameter of the GP.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">compute_posterior</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, the GP has
+training data and a new posterior is computed in full, and a
+hyperparameter is NaN (not set), as it is on a GP whose
+hyperparameters were never given.</p>
 </dd>
 </dl>
 </dd>

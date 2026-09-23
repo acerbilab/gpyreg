@@ -194,6 +194,7 @@
 <li class="toctree-l1"><a class="reference internal" href="release_notes.html">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="isotropic_covariance_functions.html">Isotropic covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Noise functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a></li>
@@ -451,6 +452,10 @@
 <dd><p>Gaussian noise function.</p>
 <p>Total noise variance is is obtained by summing the independent
 contribution of each noise feature.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">constant_add</span> <span class="pre">=</span> <span class="pre">False</span></code> the constant contribution is not zero
+but <code class="docutils literal notranslate"><span class="pre">np.spacing(1)</span></code>, about 2.2e-16: a nugget that keeps a covariance
+matrix with no other noise factorizable. <code class="docutils literal notranslate"><span class="pre">gplite_noisefun.m</span></code> has the
+same nugget.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">

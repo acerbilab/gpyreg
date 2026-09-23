@@ -1,0 +1,806 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Isotropic covariance functions &#8212; GPyReg</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'isotropic_covariance_functions';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://acerbilab.github.io/gpyreg/isotropic_covariance_functions.html" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Mean functions" href="mean_functions.html" />
+    <link rel="prev" title="Covariance functions" href="covariance_functions.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">GPyReg</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="release_notes.html">Release notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Isotropic covariance functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="noise_functions.html">Noise functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="rng.html">Random number generation</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/acerbilab/gpyreg" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/acerbilab/gpyreg/edit/main/isotropic_covariance_functions.rst" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/acerbilab/gpyreg/issues/new?title=Issue%20on%20page%20%2Fisotropic_covariance_functions.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/isotropic_covariance_functions.rst" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.rst</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Isotropic covariance functions</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-isotropic-covariance-functions"><code class="docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#abstractisotropickernel"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.get_bounds_info"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel.get_bounds_info()</span></code></a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_count"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel.hyperparameter_count()</span></code></a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_info"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel.hyperparameter_info()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#maternisotropic"><code class="docutils literal notranslate"><span class="pre">MaternIsotropic</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.MaternIsotropic"><code class="docutils literal notranslate"><span class="pre">MaternIsotropic</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.MaternIsotropic.compute"><code class="docutils literal notranslate"><span class="pre">MaternIsotropic.compute()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#squaredexponentialisotropic"><code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic"><code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic.compute"><code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic.compute()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="isotropic-covariance-functions">
+<h1>Isotropic covariance functions<a class="headerlink" href="#isotropic-covariance-functions" title="Link to this heading">#</a></h1>
+<section id="gpyreg-isotropic-covariance-functions">
+<h2><code class="docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions</span></code><a class="headerlink" href="#gpyreg-isotropic-covariance-functions" title="Link to this heading">#</a></h2>
+<p>The isotropic kernels use a single length scale for every input dimension, so they have two hyperparameters whatever the dimensionality. Each is implemented as a subclass of <a class="reference internal" href="#abstractisotropickernel"><span class="std std-ref">AbstractIsotropicKernel</span></a>, which fixes those two hyperparameters and the bounds recommended for them (<code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>, <code class="docutils literal notranslate"><span class="pre">hyperparameter_info</span></code> and <code class="docutils literal notranslate"><span class="pre">get_bounds_info</span></code>), and of the kernel of the same family in <a class="reference internal" href="covariance_functions.html#gpyreg-covariance-functions"><span class="std std-ref">gpyreg.covariance_functions</span></a>, from which it inherits the rest, such as the degree of the Matern kernel; each defines its own <code class="docutils literal notranslate"><span class="pre">compute</span></code>. An instance is passed to <code class="docutils literal notranslate"><span class="pre">gpyreg.GP</span></code> at initialization in the same way as an anisotropic one.</p>
+<section id="abstractisotropickernel">
+<h3><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code><a class="headerlink" href="#abstractisotropickernel" title="Link to this heading">#</a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.isotropic_covariance_functions.</span></span><span class="sig-name descname"><span class="pre">AbstractIsotropicKernel</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.AbstractKernel" title="gpyreg.covariance_functions.AbstractKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractKernel</span></code></a></p>
+<p>Abstract base class for isotropic kernel functions.</p>
+<p>The two default hyperparameters are the log-lengthscale and
+log-outputscale.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.get_bounds_info">
+<span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.get_bounds_info" title="Link to this definition">#</a></dt>
+<dd><p>Return information on the lower, upper, plausible lower
+and plausible upper bounds of the hyperparameters of this
+covariance function.</p>
+<dl class="field-list">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a test point.</p>
+</dd>
+<dt><strong>y</strong><span class="classifier">ndarray, shape (N, 1)</span></dt><dd><p>A 2D array where each row is a test target.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl>
+<dt>cov_bound_info: dict</dt><dd><p>A dictionary containing the bound info with the following elements:</p>
+<dl class="simple">
+<dt><strong>LB</strong><span class="classifier">np.ndarray, shape (cov_N, 1)</span></dt><dd><p>The lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>UB</strong><span class="classifier">np.ndarray, shape (cov_N, 1)</span></dt><dd><p>The upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PLB</strong><span class="classifier">np.ndarray, shape (cov_N, 1)</span></dt><dd><p>The plausible lower bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>PUB</strong><span class="classifier">np.ndarray, shape (cov_N, 1)</span></dt><dd><p>The plausible upper bounds of the hyperparameters.</p>
+</dd>
+<dt><strong>x0</strong><span class="classifier">np.ndarray, shape (cov_N, 1)</span></dt><dd><p>The plausible starting point.</p>
+</dd>
+</dl>
+<p>where <code class="docutils literal notranslate"><span class="pre">cov_N</span></code> is the number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_count">
+<span class="sig-name descname"><span class="pre">hyperparameter_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_count" title="Link to this definition">#</a></dt>
+<dd><p>Return the number of hyperparameters this covariance function has.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the kernel.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>count</strong><span class="classifier">int</span></dt><dd><p>The number of hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_info">
+<span class="sig-name descname"><span class="pre">hyperparameter_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">D</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_info" title="Link to this definition">#</a></dt>
+<dd><p>Return information on the names of hyperparameters for setting
+them in other parts of the program.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>D</strong><span class="classifier">int</span></dt><dd><p>The dimensionality of the kernel.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>hyper_info</strong><span class="classifier">array_like</span></dt><dd><p>A list of tuples of hyperparameter names and their number,
+in the order they are in the hyperparameter array.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="maternisotropic">
+<h3><code class="docutils literal notranslate"><span class="pre">MaternIsotropic</span></code><a class="headerlink" href="#maternisotropic" title="Link to this heading">#</a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.MaternIsotropic">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.isotropic_covariance_functions.</span></span><span class="sig-name descname"><span class="pre">MaternIsotropic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">degree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.MaternIsotropic" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel" title="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a>, <a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.Matern" title="gpyreg.covariance_functions.Matern"><code class="xref py py-class docutils literal notranslate"><span class="pre">Matern</span></code></a></p>
+<p>Isotropic Matern kernel.</p>
+<p>Overrides <cite>compute</cite>. Inherits <cite>hyperparameter_count</cite> and
+<cite>hyperparameter_info</cite> from <a class="reference internal" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel" title="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a>. Inherits other
+methods from <code class="xref py py-class docutils literal notranslate"><span class="pre">Matern</span></code>.</p>
+<dl class="field-list">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl>
+<dt><strong>degree</strong><span class="classifier">{1, 3, 5}</span></dt><dd><p>The degree of the isotropic Matern kernel.</p>
+<p>Currently the only supported degrees are 1, 3, 5, and if
+some other degree is provided a <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> exception is raised.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.MaternIsotropic.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_diag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.MaternIsotropic.compute" title="Link to this definition">#</a></dt>
+<dd><p>Compute the covariance matrix for given training points
+and test points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (cov_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">cov_N</span></code> is
+the number of hyperparameters.</p>
+</dd>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a training point.</p>
+</dd>
+<dt><strong>X_star</strong><span class="classifier">ndarray, shape (M, D), optional</span></dt><dd><p>A 2D array where each row is a test point. If this is not
+given, the self-covariance matrix is being computed.</p>
+</dd>
+<dt><strong>compute_diag</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to only compute the diagonal of the self-covariance
+matrix.</p>
+</dd>
+<dt><strong>compute_grad</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute the gradient with respect to the
+hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code>.</p>
+</dd>
+<dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
+hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
+the gradient is available for the full covariance matrix only.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="squaredexponentialisotropic">
+<h3><code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic</span></code><a class="headerlink" href="#squaredexponentialisotropic" title="Link to this heading">#</a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.isotropic_covariance_functions.</span></span><span class="sig-name descname"><span class="pre">SquaredExponentialIsotropic</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel" title="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a>, <a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.SquaredExponential" title="gpyreg.covariance_functions.SquaredExponential"><code class="xref py py-class docutils literal notranslate"><span class="pre">SquaredExponential</span></code></a></p>
+<p>Isotropic squared exponential kernel.</p>
+<p>Overrides <cite>compute</cite>. Inherits <cite>hyperparameter_count</cite> and
+<cite>hyperparameter_info</cite> from <a class="reference internal" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel" title="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a>. Inherits other
+methods from <code class="xref py py-class docutils literal notranslate"><span class="pre">SquaredExponential</span></code>.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_diag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic.compute" title="Link to this definition">#</a></dt>
+<dd><p>Compute the covariance matrix for given training points
+and test points.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>hyp</strong><span class="classifier">ndarray, shape (cov_N,)</span></dt><dd><p>A 1D array of hyperparameters, where <code class="docutils literal notranslate"><span class="pre">cov_N</span></code> is
+the number of hyperparameters.</p>
+</dd>
+<dt><strong>X</strong><span class="classifier">ndarray, shape (N, D)</span></dt><dd><p>A 2D array where each row is a training point.</p>
+</dd>
+<dt><strong>X_star</strong><span class="classifier">ndarray, shape (M, D), optional</span></dt><dd><p>A 2D array where each row is a test point. If this is not
+given, the self-covariance matrix is being computed.</p>
+</dd>
+<dt><strong>compute_diag</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to only compute the diagonal of the self-covariance
+matrix.</p>
+</dd>
+<dt><strong>compute_grad</strong><span class="classifier">bool, defaults to False</span></dt><dd><p>Whether to compute the gradient with respect to the
+hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code>.</p>
+</dd>
+<dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
+hyperparameters.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
+the gradient is available for the full covariance matrix only.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="covariance_functions.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Covariance functions</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="mean_functions.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Mean functions</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg-isotropic-covariance-functions"><code class="docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#abstractisotropickernel"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.get_bounds_info"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel.get_bounds_info()</span></code></a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_count"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel.hyperparameter_count()</span></code></a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_info"><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel.hyperparameter_info()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#maternisotropic"><code class="docutils literal notranslate"><span class="pre">MaternIsotropic</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.MaternIsotropic"><code class="docutils literal notranslate"><span class="pre">MaternIsotropic</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.MaternIsotropic.compute"><code class="docutils literal notranslate"><span class="pre">MaternIsotropic.compute()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#squaredexponentialisotropic"><code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic"><code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic.compute"><code class="docutils literal notranslate"><span class="pre">SquaredExponentialIsotropic.compute()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Machine and Human Intelligence research group (PI: Luigi Acerbi, University of Helsinki)
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

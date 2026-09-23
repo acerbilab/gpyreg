@@ -194,6 +194,7 @@
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="isotropic_covariance_functions.html">Isotropic covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="noise_functions.html">Noise functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a></li>
@@ -414,6 +415,7 @@
             </div>
             <nav aria-label="Page">
                 <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.3.0 (unreleased)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.2.1 (2026-09-14)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.2.0 (2026-09-13)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.1.0 (2026-09-05)</a></li>
@@ -430,6 +432,278 @@
                   
   <section id="release-notes">
 <h1>Release notes<a class="headerlink" href="#release-notes" title="Link to this heading">#</a></h1>
+<section id="unreleased">
+<h2>1.3.0 (unreleased)<a class="headerlink" href="#unreleased" title="Link to this heading">#</a></h2>
+<p>A point marked <strong>Upgrading</strong> says what a script written for 1.2.1 may have
+to change.</p>
+<ul class="simple">
+<li><p>The recommended bounds of the hyperparameters take the statistics of
+the training inputs per input dimension. The starting value of each
+length scale is the logarithm of the standard deviation of its own
+dimension, and the location and the scale of
+<a class="reference internal" href="mean_functions.html#gpyreg.mean_functions.NegativeQuadratic" title="gpyreg.mean_functions.NegativeQuadratic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.mean_functions.NegativeQuadratic</span></code></a> have, per dimension, a
+hard box, a plausible box and a starting value built from that
+dimension’s minimum, maximum, median, width and standard deviation.
+They were taken over all the entries of <code class="docutils literal notranslate"><span class="pre">X</span></code> at once, one number for
+every dimension, which mixes the locations of the dimensions with their
+spreads: where the dimensions lie apart, every recommendation came out
+as wide as the widest gap between them. The per-dimension statistics
+are those of MATLAB’s gplite. With one input dimension the two agree,
+and nothing changes. In more than one, a <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> with
+that mean function takes its plausible box from the recommendation,
+and its hard box wherever the caller leaves it unset, so its
+space-filling design, its default starting point and its slice sampler
+change, and its hyperparameters move; a fit that starts from given
+hyperparameters (<code class="docutils literal notranslate"><span class="pre">hyp0</span></code>, or those the GP already has), with no
+space-filling design (<code class="docutils literal notranslate"><span class="pre">init_N</span> <span class="pre">=</span> <span class="pre">0</span></code>) and no hyperparameter samples
+(<code class="docutils literal notranslate"><span class="pre">n_samples</span> <span class="pre">=</span> <span class="pre">0</span></code>), changes only where its start or its optimizer
+meets a hard bound that moved. <code class="docutils literal notranslate"><span class="pre">fit</span></code> does not start from the
+recommended length scales, which reach a caller that reads them from
+<code class="docutils literal notranslate"><span class="pre">get_bounds_info</span></code>; the bounds of the length scales were per dimension
+already.</p></li>
+<li><p>The recommended bounds and starting length scale of the isotropic
+kernels take the means of the logarithms of the per-dimension widths
+and standard deviations, as MATLAB’s gplite does, where they took the
+logarithm of the mean width and the standard deviation pooled over all
+entries of <code class="docutils literal notranslate"><span class="pre">X</span></code>. With one input dimension the two agree; in more than
+one, a fit with
+<a class="reference internal" href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic" title="gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic</span></code></a>
+or <a class="reference internal" href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.MaternIsotropic" title="gpyreg.isotropic_covariance_functions.MaternIsotropic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions.MaternIsotropic</span></code></a> takes
+a different plausible box for the length scale than in 1.2.1, and a
+different hard box wherever the caller leaves it unset.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> takes its starting points as a copy of the
+space-filling design, so the default widths of the slice sampler are
+the standard deviation of the design as it was drawn; a fit that draws
+hyperparameter samples with a noise hyperparameter and
+<code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">&lt;</span> <span class="pre">opts_N</span> <span class="pre">&lt;</span> <span class="pre">init_N</span></code>, as at the defaults, sees its samples move.</p></li>
+<li><p>The plausible upper bound of the shape parameter of
+<a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD" title="gpyreg.covariance_functions.RationalQuadraticARD"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.RationalQuadraticARD</span></code></a> is its own
+(5) and the output scale keeps the range of the targets; the shape’s
+line wrote into the output scale’s slot. The plausible box of a fit
+with that kernel changes, and with it the space-filling design and the
+default starting point.</p></li>
+<li><p>Slice sampling with a burn-in of two or three iterations no longer
+returns the same point once per requested sample: a coordinate whose
+burn-in variance estimate is not positive keeps the width it has
+instead of being floored to zero, and a window of fewer than two
+iterations adapts nothing.</p></li>
+<li><p>An infinite entry of <code class="docutils literal notranslate"><span class="pre">SliceSampler(widths=...)</span></code>, which the
+documentation of <code class="docutils literal notranslate"><span class="pre">widths</span></code> allows for an unbounded coordinate, no
+longer comes back after the burn-in and fills the chain with NaN.</p></li>
+<li><p><a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.Matern" title="gpyreg.covariance_functions.Matern"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.Matern</span></code></a> and
+<a class="reference internal" href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.MaternIsotropic" title="gpyreg.isotropic_covariance_functions.MaternIsotropic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions.MaternIsotropic</span></code></a> of degree
+1 can be fitted: the gradient with respect to the length scale is zero,
+not NaN, where two inputs coincide, so the gradient of the marginal
+likelihood is finite.</p></li>
+<li><p>A training set whose targets are all equal and finite is given a range
+of one, with a warning, instead of bounds of <code class="docutils literal notranslate"><span class="pre">-inf</span></code> that ended
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> with <code class="docutils literal notranslate"><span class="pre">KeyError:</span> <span class="pre">(-inf,</span> <span class="pre">-inf)</span></code>; such a fit now
+completes.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.quad" title="gpyreg.GP.quad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.quad()</span></code></a> with <code class="docutils literal notranslate"><span class="pre">compute_var=True</span></code> normalizes by the
+noise scale the stored Cholesky factor carries, so the variance of an
+integral is right after a rank-one <a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> that
+appended a point of lower total noise, where it used to be clamped to
+machine epsilon.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.random_function" title="gpyreg.GP.random_function"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.random_function()</span></code></a> draws a sample where the predictive
+covariance is numerically singular, as it is on a dense
+one-dimensional grid: eigenvalues that are negative but of rounding
+size count as the zeros they are, where the draw used to collapse onto
+the predictive mean without a word. The rounding is measured against
+the prior variance at the test points, from which the predictive
+covariance is formed by subtraction, so a grid inside the training data
+draws as well. This holds in both representations of the posterior.
+Where the smallest noise variance at the training inputs is below 1e-6,
+as it can be after a default fit on noiseless targets, the posterior
+holds the inverse of the training covariance instead of its Cholesky
+factor (the low-noise representation). The predictive covariance that
+1.2.1 formed from that inverse carried a rounding error that grows as
+the noise shrinks, so that the draws of 1.2.1 from such a posterior
+often came out as the predictive mean, inside the training data and
+outside it;
+the draw now forms the covariance from a Cholesky factor of the
+training covariance. It raises <code class="docutils literal notranslate"><span class="pre">LinAlgError</span></code> where the covariance it
+computes has a negative eigenvalue beyond the rounding of the prior
+variance, and, in the low-noise representation, where the Cholesky
+decomposition of the training covariance fails even with the noise
+raised. The eigenvalue fallback also fixes the signs of whole
+eigenvectors and uses the symmetric eigensolver, so the factor it
+builds is a factor of the matrix it was given; a draw at closely spaced
+or duplicated test points came from the wrong covariance before. Draws
+through the eigenvalue fallback, and draws from a posterior in the
+low-noise representation, change for a given generator.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.predict_full" title="gpyreg.GP.predict_full"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.predict_full()</span></code></a> with <code class="docutils literal notranslate"><span class="pre">add_noise=True</span></code> adds the
+observation noise on the diagonal; with a noise that varies from point
+to point the returned matrix was neither symmetric nor a covariance
+matrix, while its diagonal was already right. A constant noise
+function is unaffected.</p></li>
+<li><p>A hyperprior whose degrees of freedom are infinite or NaN is the
+Gaussian family it names, MATLAB’s <code class="docutils literal notranslate"><span class="pre">HPRIOR.nu</span> <span class="pre">=</span> <span class="pre">Inf</span></code> convention,
+where it used to contribute no prior at all; <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>
+fills NaN degrees of freedom with its option <code class="docutils literal notranslate"><span class="pre">df_base</span></code> for its own
+duration (below). A smooth-box prior set on a block of several
+hyperparameters has one normalization constant per coordinate of the
+block, where it doubled the log density with two coordinates on
+different sides of the box and raised with three.
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.get_priors" title="gpyreg.GP.get_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.get_priors()</span></code></a> returns, in the form
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_priors()</span></code></a> reads back, such a smooth-box prior, where
+it raised, and a prior with NaN degrees of freedom or a block with a
+coordinate that has no prior, where it returned <code class="docutils literal notranslate"><span class="pre">None</span></code>; so
+<code class="docutils literal notranslate"><span class="pre">set_priors(get_priors())</span></code> keeps them.</p></li>
+<li><p>A single-observation <a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> of a posterior in the
+low-noise representation falls through to a full recomputation, with a
+warning, where rounding drives the latent variance of the new point to
+zero or below, as it can for an observation at an existing training
+input, and its predictive variance is the noise alone; the Cholesky
+representation already did so for its own stability test.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> collapses an inverted plausible pair onto its
+upper bound, inside the hard box, before the space-filling design,
+which needs the pair ordered. For training targets whose standard
+deviation is below 1e-3 (the noise’s plausible lower bound) and whose
+range is above 1e-6 (below that the hard pair collapses first), the
+noise’s recommended plausible pair is inverted, and in 1.2.1 a fit with
+a space-filling design whose noise has no prior raised
+<code class="docutils literal notranslate"><span class="pre">AssertionError</span></code>.</p></li>
+<li><p>The convergence diagnostics of <a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler" title="gpyreg.slice_sample.SliceSampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler</span></code></a>
+recognize a parameter whose recorded chain did not move by its range,
+whatever value it is frozen at: <code class="docutils literal notranslate"><span class="pre">R</span></code> and <code class="docutils literal notranslate"><span class="pre">eff_N</span></code> are NaN for it, and
+for a free parameter <code class="docutils literal notranslate"><span class="pre">exit_flag</span></code> is -3, with the “did not move”
+message. Before, this held only for a constant whose mean is exact, and
+a parameter fixed by <code class="docutils literal notranslate"><span class="pre">LB</span> <span class="pre">==</span> <span class="pre">UB</span></code> at, say, 0.3 reported finite <code class="docutils literal notranslate"><span class="pre">R</span></code>
+and <code class="docutils literal notranslate"><span class="pre">eff_N</span></code> that were rounding noise.</p></li>
+<li><p>The normalization constant of a smooth-box Student’s t prior, and the
+cumulative distribution and quantile functions of that distribution,
+are computed through the logarithms of the gamma functions, so degrees
+of freedom above about 340 no longer make the log posterior NaN.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_likelihood" title="gpyreg.GP.log_likelihood"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_likelihood()</span></code></a> and <a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_posterior" title="gpyreg.GP.log_posterior"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_posterior()</span></code></a>
+accept the dictionary of hyperparameters their docstrings document.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> reads the sampler under <code class="docutils literal notranslate"><span class="pre">sampler_name</span></code>, the
+name it documents, as well as under <code class="docutils literal notranslate"><span class="pre">sampler</span></code>, and fills <code class="docutils literal notranslate"><span class="pre">df_base</span></code>
+into a copy of the priors for its own duration, so a fitted GP keeps
+the priors the caller set and a second fit with another value uses it.
+A prior left with NaN degrees of freedom therefore reads as Gaussian
+outside the fit, in <a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_posterior" title="gpyreg.GP.log_posterior"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_posterior()</span></code></a> after it for one,
+where 1.2.1 wrote <code class="docutils literal notranslate"><span class="pre">df_base</span></code> into the GP’s priors and read a Student’s
+t from then on. <strong>Upgrading:</strong> a script that relies on that Student’s t
+after the fit gives the prior its degrees of freedom.</p></li>
+<li><p>A single-observation <a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> on a GP that carries no
+posterior factors, after <a class="reference internal" href="gaussian_process.html#gpyreg.GP.clean" title="gpyreg.GP.clean"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.clean()</span></code></a> or after an update
+with <code class="docutils literal notranslate"><span class="pre">compute_posterior=False</span></code>, recomputes the posterior in full
+instead of raising <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p></li>
+<li><p>The gradient of the marginal likelihood no longer raises where the
+noise function carries a scale for a user-provided variance that is
+never given.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP.quad" title="gpyreg.GP.quad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.quad()</span></code></a> reads a one-dimensional <code class="docutils literal notranslate"><span class="pre">mu</span></code> or <code class="docutils literal notranslate"><span class="pre">sigma</span></code> of
+length <code class="docutils literal notranslate"><span class="pre">D</span></code> as one measure in <code class="docutils literal notranslate"><span class="pre">D</span></code> dimensions, as MATLAB’s gplite
+does, where 1.2.1 raised.</p></li>
+<li><p>Inputs that 1.2.1 took in silence are refused with a message: a
+coordinate that has a prior needs a finite, positive <code class="docutils literal notranslate"><span class="pre">sigma</span></code> (a
+hyperparameter without a prior is written as <code class="docutils literal notranslate"><span class="pre">None</span></code>, and a coordinate
+of a block without one as NaN location and <code class="docutils literal notranslate"><span class="pre">sigma</span></code>, as 1.2.1 accepted
+it); <a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_priors()</span></code></a> and <a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_bounds" title="gpyreg.GP.set_bounds"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_bounds()</span></code></a>
+reject a hyperparameter name the model has not;
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.get_recommended_bounds" title="gpyreg.GP.get_recommended_bounds"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.get_recommended_bounds()</span></code></a> takes any array_like and
+rejects a bound pair given inverted, and so does <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>,
+which fills its bounds through it; <a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> with
+<code class="docutils literal notranslate"><span class="pre">hyp</span></code> checks the width of the hyperparameter row, and with
+<code class="docutils literal notranslate"><span class="pre">compute_posterior=True</span></code> refuses hyperparameters that are NaN (never
+set), naming them; <a class="reference internal" href="gaussian_process.html#gpyreg.GP.quad" title="gpyreg.GP.quad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.quad()</span></code></a> refuses a mean function it
+cannot place, and a <code class="docutils literal notranslate"><span class="pre">mu</span></code> with more columns than input dimensions, for
+which 1.2.1 ignored the extra columns, broadcast them into a wrong
+integral or raised a broadcasting error, depending on the mean function
+and the dimension; and a noise
+variance given as an array whose row count is
+not that of the inputs is refused, where 1.2.1 reshaped any array of
+<code class="docutils literal notranslate"><span class="pre">N</span></code> entries into a column and failed on any other. Inputs on which
+1.2.1 failed with an error from inside the computation are refused
+with a message that names the problem: <a class="reference internal" href="gaussian_process.html#gpyreg.GP.quad" title="gpyreg.GP.quad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.quad()</span></code></a> refuses
+a GP without training data or posterior factors, where 1.2.1 raised
+<code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> or <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>, and a <code class="docutils literal notranslate"><span class="pre">mu</span></code> with fewer columns
+than input dimensions, where it raised <code class="docutils literal notranslate"><span class="pre">IndexError</span></code>; and
+<a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler.sample" title="gpyreg.slice_sample.SliceSampler.sample"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler.sample()</span></code></a> refuses a <code class="docutils literal notranslate"><span class="pre">thin</span></code> or
+<code class="docutils literal notranslate"><span class="pre">burn</span></code> that is not a whole number, an infinite one included, with
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> instead of raising <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> from <code class="docutils literal notranslate"><span class="pre">range</span></code>. A noise
+variance may be any number or 0-d array; <code class="docutils literal notranslate"><span class="pre">quad</span></code> takes a <code class="docutils literal notranslate"><span class="pre">sigma</span></code> of
+one column, one standard deviation per measure in every dimension, as
+1.2.1 and gplite take it, and refuses a <code class="docutils literal notranslate"><span class="pre">sigma</span></code> of any other width
+than one or the number of input dimensions; and <code class="docutils literal notranslate"><span class="pre">SliceSampler.sample</span></code>
+takes a <code class="docutils literal notranslate"><span class="pre">thin</span></code> or <code class="docutils literal notranslate"><span class="pre">burn</span></code> that is a whole number of any type, a
+float such as 2.0 included, where 1.2.1 took integers only. A failed
+Cholesky decomposition reports <code class="docutils literal notranslate"><span class="pre">LinAlgError</span></code> in both noise
+representations, where the low-noise one raised <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>, and the
+checks of the shape of the inputs raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> where they raised
+<code class="docutils literal notranslate"><span class="pre">AssertionError</span></code>. <strong>Upgrading:</strong> each refusal of an input that 1.2.1
+took in silence can stop a script that ran under 1.2.1, and so can the
+new type of an exception where a script catches the old one; such a
+script changes as follows:</p>
+<ul>
+<li><p>a name the model has not, which set nothing, is left out;</p></li>
+<li><p>a prior whose <code class="docutils literal notranslate"><span class="pre">sigma</span></code> is infinite, zero or negative, or NaN beside
+a location, is given a positive <code class="docutils literal notranslate"><span class="pre">sigma</span></code>, or is replaced by <code class="docutils literal notranslate"><span class="pre">None</span></code>
+where no prior is meant (1.2.1 took the absolute value of a negative
+<code class="docutils literal notranslate"><span class="pre">sigma</span></code> in the log prior);</p></li>
+<li><p>a bound pair given inverted, which 1.2.1 collapsed onto its lower
+bound, is given in order (equal bounds fix a hyperparameter);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">update(hyp=...)</span></code> is given one column per hyperparameter of the
+GP, where 1.2.1 stored a row of another width and read it by offset;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gp.update(X_new=X,</span> <span class="pre">y_new=y)</span></code> on a GP whose hyperparameters were
+never set, which 1.2.1 completed with NaN posterior factors, gives
+the data to <code class="docutils literal notranslate"><span class="pre">gp.fit(X,</span> <span class="pre">y)</span></code> instead. A following <code class="docutils literal notranslate"><span class="pre">gp.fit()</span></code> found
+hyperparameters in 1.2.1 only where it drew no hyperparameter samples
+(<code class="docutils literal notranslate"><span class="pre">n_samples=0</span></code>) and started from a space-filling design (<code class="docutils literal notranslate"><span class="pre">init_N</span></code>
+above zero, as at the default); for such a fit,
+<code class="docutils literal notranslate"><span class="pre">compute_posterior=False</span></code> in the update keeps the pattern working;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quad</span></code> with another mean function, whose integral 1.2.1 computed
+as if that mean were a constant equal to its first hyperparameter,
+has no replacement;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quad</span></code> with a <code class="docutils literal notranslate"><span class="pre">mu</span></code> of more columns than input dimensions, whose
+extra columns 1.2.1 ignored or broadcast into a wrong integral, is
+given one column per dimension;</p></li>
+<li><p>a noise variance given as a row of <code class="docutils literal notranslate"><span class="pre">N</span></code> is given as a column;</p></li>
+<li><p>a script that catches the exception of a check whose type changed
+catches the new one: <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> for a shape check (an <code class="docutils literal notranslate"><span class="pre">X</span></code> that
+is not two-dimensional, or whose number of columns is not the GP’s
+<code class="docutils literal notranslate"><span class="pre">D</span></code>), which raised <code class="docutils literal notranslate"><span class="pre">AssertionError</span></code>, for <code class="docutils literal notranslate"><span class="pre">quad</span></code> on a GP without
+training data or posterior factors (<code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> or
+<code class="docutils literal notranslate"><span class="pre">TypeError</span></code>) or with a <code class="docutils literal notranslate"><span class="pre">mu</span></code> of fewer columns than input
+dimensions (<code class="docutils literal notranslate"><span class="pre">IndexError</span></code>),
+and for a <code class="docutils literal notranslate"><span class="pre">thin</span></code> or <code class="docutils literal notranslate"><span class="pre">burn</span></code> that is not a whole number
+(<code class="docutils literal notranslate"><span class="pre">TypeError</span></code>); <code class="docutils literal notranslate"><span class="pre">LinAlgError</span></code> for a failed Cholesky decomposition
+in the low-noise representation (<code class="docutils literal notranslate"><span class="pre">TypeError</span></code>).</p></li>
+</ul>
+</li>
+<li><p>The covariance kernels refuse <code class="docutils literal notranslate"><span class="pre">compute(compute_diag=True,</span>
+<span class="pre">compute_grad=True)</span></code> with <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. <strong>Upgrading:</strong> that
+combination returned the diagonal beside the gradient of the full
+matrix, a pair that meant nothing; ask for the two separately.</p></li>
+<li><p>The undocumented Metropolis step of
+<a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler" title="gpyreg.slice_sample.SliceSampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler</span></code></a> is removed, with its options
+and the attributes <code class="docutils literal notranslate"><span class="pre">metropolis_pdf</span></code>, <code class="docutils literal notranslate"><span class="pre">metropolis_rnd</span></code> and
+<code class="docutils literal notranslate"><span class="pre">metropolis_flag</span></code>. <strong>Upgrading:</strong> its options never turned the step
+on (their key was misspelled), but setting the three attributes
+directly did run it; a script that sets them now samples without the
+step, with no error.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uuinv</span></code> returns NaN for a <code class="docutils literal notranslate"><span class="pre">p</span></code> outside [0, 1] in every case, not only
+in the general one, and its documentation states the mixture it
+implements: the weight outside the plausible box is spread over the
+two tails in proportion to their lengths.</p></li>
+<li><p>Documentation: the isotropic kernels have a page;
+<code class="docutils literal notranslate"><span class="pre">AbstractKernel.compute</span></code> documents the <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code> shape of the
+diagonal it returns; <a class="reference internal" href="noise_functions.html#gpyreg.noise_functions.GaussianNoise" title="gpyreg.noise_functions.GaussianNoise"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.noise_functions.GaussianNoise</span></code></a>
+documents the <code class="docutils literal notranslate"><span class="pre">np.spacing(1)</span></code> nugget it keeps with
+<code class="docutils literal notranslate"><span class="pre">constant_add=False</span></code>; the default of <code class="docutils literal notranslate"><span class="pre">add_noise</span></code> of
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.predict_full" title="gpyreg.GP.predict_full"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.predict_full()</span></code></a>, that its diagonal is not clamped and
+can be negative on a nearly singular posterior; which variance
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.predict" title="gpyreg.GP.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.predict()</span></code></a> returns by default, and how it pools the
+variances of several hyperparameter samples; that the log predictive
+density always carries the observation noise and over several
+hyperparameter samples is the density of the Gaussian with the pooled
+mean and variance; that <a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_posterior" title="gpyreg.GP.log_posterior"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_posterior()</span></code></a> renormalizes
+each prior over its bounds; what NaN degrees of freedom of a prior
+mean, in <a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_priors()</span></code></a> and in the <code class="docutils literal notranslate"><span class="pre">df_base</span></code> option of
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a>; and, in the docstring of the sampler’s effective
+sample size, that its autocorrelations are paired from lag 0.</p></li>
+</ul>
+</section>
 <section id="id1">
 <h2>1.2.1 (2026-09-14)<a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
 <ul class="simple">
@@ -570,6 +844,7 @@ older sampler saves resume using the global stream.</p></li>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.3.0 (unreleased)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.2.1 (2026-09-14)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.2.0 (2026-09-13)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.1.0 (2026-09-05)</a></li>

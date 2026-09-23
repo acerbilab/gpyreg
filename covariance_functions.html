@@ -48,7 +48,7 @@
     <link rel="canonical" href="https://acerbilab.github.io/gpyreg/covariance_functions.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Mean functions" href="mean_functions.html" />
+    <link rel="next" title="Isotropic covariance functions" href="isotropic_covariance_functions.html" />
     <link rel="prev" title="Gaussian processes" href="gaussian_process.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -194,6 +194,7 @@
 <li class="toctree-l1"><a class="reference internal" href="release_notes.html">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Covariance functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="isotropic_covariance_functions.html">Isotropic covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="noise_functions.html">Noise functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a></li>
@@ -500,7 +501,7 @@ hyperparameters.</p>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
-<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,)</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code>.</p>
 </dd>
 <dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
@@ -512,6 +513,9 @@ hyperparameters.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
+the gradient is available for the full covariance matrix only.</p>
 </dd>
 </dl>
 </dd>
@@ -634,7 +638,7 @@ hyperparameters.</p>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
-<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,)</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code>.</p>
 </dd>
 <dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
@@ -646,6 +650,9 @@ hyperparameters.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
+the gradient is available for the full covariance matrix only.</p>
 </dd>
 </dl>
 </dd>
@@ -778,7 +785,7 @@ hyperparameters.</p>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
-<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,)</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code>.</p>
 </dd>
 <dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
@@ -790,6 +797,9 @@ hyperparameters.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
+the gradient is available for the full covariance matrix only.</p>
 </dd>
 </dl>
 </dd>
@@ -833,7 +843,7 @@ hyperparameters.</p>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
 <dt><strong>K</strong><span class="classifier">ndarray</span></dt><dd><p>The covariance matrix which is by default of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">N)</span></code>. If
-<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,)</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">compute_diag</span> <span class="pre">=</span> <span class="pre">True</span></code> the shape is <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">1)</span></code>.</p>
 </dd>
 <dt><strong>dK</strong><span class="classifier">ndarray, shape (N, N, cov_N), optional</span></dt><dd><p>The gradient of the covariance matrix with respect to the
 hyperparameters.</p>
@@ -845,6 +855,9 @@ hyperparameters.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> has not the expected number of hyperparameters.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp</cite> is not an 1D array but of higher dimension.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
+the gradient is available for the full covariance matrix only.</p>
 </dd>
 </dl>
 </dd>
@@ -878,11 +891,11 @@ hyperparameters.</p>
       </div>
     </a>
     <a class="right-next"
-       href="mean_functions.html"
+       href="isotropic_covariance_functions.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Mean functions</p>
+        <p class="prev-next-title">Isotropic covariance functions</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

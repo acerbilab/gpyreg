@@ -189,6 +189,7 @@
 <li class="toctree-l1"><a class="reference internal" href="release_notes.html">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="gaussian_process.html">Gaussian processes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="covariance_functions.html">Covariance functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="isotropic_covariance_functions.html">Isotropic covariance functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mean_functions.html">Mean functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="noise_functions.html">Noise functions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="slice_sample.html">Slice sampling</a></li>
@@ -370,6 +371,10 @@
 <h2 id="A">A</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel">AbstractIsotropicKernel (class in gpyreg.isotropic_covariance_functions)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="covariance_functions.html#gpyreg.covariance_functions.AbstractKernel">AbstractKernel (class in gpyreg.covariance_functions)</a>
 </li>
   </ul></td>
@@ -396,6 +401,10 @@
         <li><a href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD.compute">(gpyreg.covariance_functions.RationalQuadraticARD method)</a>
 </li>
         <li><a href="covariance_functions.html#gpyreg.covariance_functions.SquaredExponential.compute">(gpyreg.covariance_functions.SquaredExponential method)</a>
+</li>
+        <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.MaternIsotropic.compute">(gpyreg.isotropic_covariance_functions.MaternIsotropic method)</a>
+</li>
+        <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic.compute">(gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic method)</a>
 </li>
         <li><a href="mean_functions.html#gpyreg.mean_functions.ConstantMean.compute">(gpyreg.mean_functions.ConstantMean method)</a>
 </li>
@@ -441,6 +450,8 @@
       <ul>
         <li><a href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD.get_bounds_info">(gpyreg.covariance_functions.RationalQuadraticARD method)</a>
 </li>
+        <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.get_bounds_info">(gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel method)</a>
+</li>
         <li><a href="mean_functions.html#gpyreg.mean_functions.ConstantMean.get_bounds_info">(gpyreg.mean_functions.ConstantMean method)</a>
 </li>
         <li><a href="mean_functions.html#gpyreg.mean_functions.NegativeQuadratic.get_bounds_info">(gpyreg.mean_functions.NegativeQuadratic method)</a>
@@ -471,6 +482,8 @@
       <ul>
         <li><a href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD.hyperparameter_count">(gpyreg.covariance_functions.RationalQuadraticARD method)</a>
 </li>
+        <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_count">(gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel method)</a>
+</li>
         <li><a href="mean_functions.html#gpyreg.mean_functions.ConstantMean.hyperparameter_count">(gpyreg.mean_functions.ConstantMean static method)</a>
 </li>
         <li><a href="mean_functions.html#gpyreg.mean_functions.NegativeQuadratic.hyperparameter_count">(gpyreg.mean_functions.NegativeQuadratic static method)</a>
@@ -484,6 +497,8 @@
 
       <ul>
         <li><a href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD.hyperparameter_info">(gpyreg.covariance_functions.RationalQuadraticARD method)</a>
+</li>
+        <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.hyperparameter_info">(gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel method)</a>
 </li>
         <li><a href="mean_functions.html#gpyreg.mean_functions.ConstantMean.hyperparameter_info">(gpyreg.mean_functions.ConstantMean static method)</a>
 </li>
@@ -519,6 +534,10 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="covariance_functions.html#gpyreg.covariance_functions.Matern">Matern (class in gpyreg.covariance_functions)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.MaternIsotropic">MaternIsotropic (class in gpyreg.isotropic_covariance_functions)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -587,6 +606,8 @@
       <li><a href="slice_sample.html#gpyreg.slice_sample.SliceSampler">SliceSampler (class in gpyreg.slice_sample)</a>
 </li>
       <li><a href="covariance_functions.html#gpyreg.covariance_functions.SquaredExponential">SquaredExponential (class in gpyreg.covariance_functions)</a>
+</li>
+      <li><a href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic">SquaredExponentialIsotropic (class in gpyreg.isotropic_covariance_functions)</a>
 </li>
   </ul></td>
 </tr></table>
