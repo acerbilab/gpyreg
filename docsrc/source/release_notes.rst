@@ -107,7 +107,10 @@ to change.
   is unchanged, to the last bit. **Upgrading:** the predictions of a GP
   in the low-noise representation, and its posterior after single-point
   updates, change; a script that compares them with values stored from
-  1.3.1 stores them again.
+  1.3.1 stores them again. PyBADS reaches this representation: at its
+  default options the lower bound of its GP noise is a variance of about
+  1.4e-7, so a fit that ends at that bound, as on a noiseless target,
+  predicts different values and can take the search elsewhere.
 * :meth:`gpyreg.GP.quad` with ``compute_var=True`` forms the variance of
   an integral from the same Cholesky factor in the low-noise
   representation, where it formed it from the inverse and carried its
