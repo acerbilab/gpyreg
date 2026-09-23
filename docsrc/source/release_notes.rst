@@ -47,9 +47,10 @@ to change.
   mark of the GP as having priors or none included. A Student's t block
   whose degrees of freedom mix zero with NaN or a number, such as
   ``[0, nan]`` or ``[0, 3]``, came back as ``None``, which dropped the
-  prior; degrees of freedom infinite throughout came back as the Gaussian
-  family, which ``set_priors`` writes with zero; and a family set on a
-  block with no prior in any coordinate came back as ``None``. Such a
+  prior; degrees of freedom infinite throughout, or zero on the
+  coordinates that have a prior and NaN on the others, came back as the
+  Gaussian family, which ``set_priors`` writes with zero; and a family set
+  on a block with no prior in any coordinate came back as ``None``. Such a
   block, whose location and ``sigma`` are NaN throughout, comes back under
   the Gaussian or the Student's t family that its degrees of freedom name:
   as ``"gaussian"`` where it was set with ``"gaussian"`` or
@@ -59,20 +60,29 @@ to change.
   ``"student_t"`` where it was set with one of them and other degrees of
   freedom. ``get_priors`` raises ``ValueError``, with ``set_priors``'
   message, for priors that ``set_priors`` refuses, as priors written into
-  ``hyper_priors`` directly can be, where it returned a block that
-  ``set_priors`` then refused, or ``None``. **Upgrading:** a script that
-  compares what ``get_priors`` returns finds a Student's t family with
-  infinite degrees of freedom under its own name, and a block without a
+  ``hyper_priors`` directly can be, and those of a GP pickled by gpyreg
+  1.2.x or earlier, whose ``set_priors`` took any ``sigma``, where it
+  returned a block that ``set_priors`` then refused (for a negative
+  ``sigma``, among others), or ``None`` (for a NaN ``sigma`` beside a
+  location). **Upgrading:** a script that compares what ``get_priors``
+  returns finds a Student's t family with infinite degrees of freedom, or
+  with degrees of freedom of zero where it has a prior and NaN elsewhere,
+  under its own name, not as the Gaussian family, and a block without a
   prior in any coordinate, unless its degrees of freedom are NaN
   throughout, under the family just given, not ``None``; a script that
   writes priors into ``hyper_priors`` directly sets them through
-  ``set_priors`` instead.
+  ``set_priors`` instead; and one that calls ``get_priors`` on a GP
+  pickled by gpyreg 1.2.x or earlier whose priors ``set_priors`` refuses
+  sets the priors of that GP again with ``set_priors`` first.
 * :meth:`gpyreg.GP.set_bounds` refuses with ``ValueError`` a lower bound
   above the upper bound of the same hyperparameter, naming it, as
   :meth:`gpyreg.GP.get_recommended_bounds` and :meth:`gpyreg.GP.fit`
   already did, and leaves the bounds as they were. It stored the inverted
-  pair, which the next ``fit`` refused. **Upgrading:** a script that set
-  an inverted pair and never fitted gives the pair in order.
+  pair, which the next ``fit`` refused where it took both its lower and
+  its upper bounds from the GP, as it does by default, and ignored where
+  it was given its own ``lower_bounds`` and ``upper_bounds``.
+  **Upgrading:** a script that set an inverted pair, and never fitted or
+  fitted with bounds of its own, gives the pair in order.
 * :meth:`gpyreg.GP.fit` takes its option ``thin`` as a whole number of an
   integer or a float type, as :meth:`gpyreg.slice_sample.SliceSampler.sample`
   takes it, where a whole float such as 2.0 raised ``TypeError`` from the
@@ -106,8 +116,9 @@ to change.
   ``thin`` or ``burn`` of ``sample``, and so as ``burn`` of ``fit``, which
   ``sample`` refused; one holding a whole float raised ``TypeError``, or
   that refusal.
-  **Upgrading:** a script that passes a negative ``opts_N`` or ``init_N``
-  passes ``0``; one that passes a bool as a count passes the integer; and
+  **Upgrading:** a script that passes a negative ``opts_N`` or ``init_N``,
+  or a NaN ``init_N``, passes ``0``; one that passes a bool as a count
+  passes the integer; and
   one that asks ``sample`` for zero samples does not call it.
 * :meth:`gpyreg.GP.fit` checks its option ``burn`` with its other counts,
   before it changes anything and whether or not it draws hyperparameter

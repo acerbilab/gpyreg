@@ -3478,7 +3478,8 @@ def test_set_bounds_refuses_an_inverted_pair():
     the hyperparameter, as ``get_recommended_bounds`` and ``fit`` refuse
     it, and leaves the bounds as they were; equal bounds, which fix a
     hyperparameter, are taken. It stored the inverted pair, which the
-    next ``fit`` refused."""
+    next ``fit`` refused where it took both its lower and its upper bounds
+    from the GP, and ignored where it was given its own."""
     gp = _gp_2d()
     bounds = {name: None for name in _no_priors()}
     bounds["mean_const"] = (-1.0, 1.0)
