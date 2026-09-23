@@ -10,20 +10,29 @@ to change.
 * :meth:`gpyreg.GP.get_recommended_bounds`, through which
   :meth:`gpyreg.GP.fit` fills the bounds that the caller leaves unset,
   refuses with ``ValueError`` training inputs without spread in a column,
-  as a single training point has none in any column, and the message
-  names the columns and the hyperparameters concerned. The recommended
-  bounds of a length scale of the kernel, and of the scale of
+  as a single training point has none in any column, where a
+  hyperparameter whose recommended bounds take their scale from that
+  column has no finite lower bound from the caller, and the message names
+  the columns and the hyperparameters concerned. The recommended bounds of
+  a length scale of the kernel, and of the scale of
   :class:`gpyreg.mean_functions.NegativeQuadratic`, take their scale from
   the width of the inputs, and a column of width zero gave them the pair
-  ``(-inf, -inf)``, on which the optimizer of ``fit`` ended with
-  ``KeyError``; with a lower bound of ``-inf`` from the caller instead,
-  the fit returned a log length scale of ``-inf``, a length scale of
-  zero, from which its predictions were NaN. Such a
-  hyperparameter is fitted between finite lower and upper bounds that the
-  caller gives it. **Upgrading:** a script that catches the ``KeyError``
-  catches ``ValueError``, and a script that fits on such inputs, or reads
-  the recommended bounds for them, gives the hyperparameters that the
-  message names finite bounds first.
+  ``(-inf, -inf)``. With the lower bound of such a hyperparameter left
+  unset or given as ``-inf``, the optimizer of ``fit`` ended with
+  ``KeyError`` where the upper bound was unset or ``-inf`` as well, as it
+  did with a lower bound of ``+inf``. Beside a finite upper bound or one
+  of ``+inf``, the fit returned ``-inf`` for the logarithm of the scale,
+  a length scale (or scale of the mean) of zero, from which its
+  predictions were NaN, except on some fits to a single training point,
+  which ended at the upper bound, or at NaN where that was ``+inf`` and
+  then raised ``ValueError``; with hyperparameter samples, its slice
+  sampler raised ``ValueError``. A finite lower bound from the caller is
+  taken, and an upper bound left unset collapses onto it, as before: the
+  fit runs as it did, to the last bit. **Upgrading:** a script that
+  catches the ``KeyError`` catches
+  ``ValueError``, and a script that fits on such inputs, or reads the
+  recommended bounds for them, gives the hyperparameters that the message
+  names a finite lower bound first.
 * :meth:`gpyreg.GP.set_priors` leaves the GP as it was when it refuses its
   argument. On a GP without priors, a refused call marked the GP as
   having priors, so that ``str`` reported them as present and

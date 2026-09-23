@@ -237,7 +237,7 @@ def test_inputs_without_spread_fit_between_given_bounds(
 ):
     """A length scale whose column has no spread is fitted between finite
     bounds that the caller gives it, set on the GP or passed to ``fit``;
-    a bound left to the recommendation, or an infinite one, is still
+    a lower bound left to the recommendation, or an infinite one, is still
     refused."""
     X, y, columns = _WITHOUT_SPREAD[data]
     mean = NegativeQuadratic()
@@ -296,3 +296,67 @@ def test_inputs_without_spread_fit_between_given_bounds(
                 },
                 rng=1,
             )
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("n_samples", [0, 3])
+@pytest.mark.parametrize(
+    "upper", [np.nan, np.inf], ids=["upper_unset", "upper_inf"]
+)
+@pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
+@pytest.mark.parametrize(
+    "kernel", _KERNELS, ids=lambda kernel: type(kernel).__name__
+)
+def test_inputs_without_spread_fit_from_a_finite_lower_bound(
+    kernel, data, upper, n_samples
+):
+    """A length scale whose column has no spread, and the scale of the
+    negative quadratic mean in that column, need a finite lower bound from
+    the caller and nothing more: an upper bound of +inf is taken as given,
+    and one left unset, whose recommendation is -inf, collapses onto the
+    lower bound. A lower bound that is not finite, left unset or given as
+    NaN or an infinity, is refused whatever the upper bound."""
+    X, y, columns = _WITHOUT_SPREAD[data]
+    names = ("covariance_log_lengthscale", "mean_log_scale")
+
+    def given(values):
+        # The coordinates of the columns without spread; an isotropic
+        # kernel has one length scale for every column.
+        return columns if len(values) == 2 else [0]
+
+    def bounds_without_spread(gp, lower):
+        # The pair (lower, upper) for the coordinates without spread; the
+        # others are left to the recommendation.
+        bounds = gp.get_bounds()
+        for name in names:
+            pair = np.full((2, len(bounds[name][0])), np.nan)
+            pair[:, given(pair[0])] = [[lower], [upper]]
+            bounds[name] = (pair[0], pair[1])
+        return bounds
+
+    gp = _gp(kernel, NegativeQuadratic())
+    gp.set_bounds(bounds_without_spread(gp, -3.0))
+
+    hyp, _, _ = gp.fit(
+        X, y, options={"n_samples": n_samples, "init_N": 64}, rng=1
+    )
+
+    assert np.all(np.isfinite(hyp))
+    # An upper bound left unset collapses onto the lower bound.
+    expected_upper = -3.0 if np.isnan(upper) else upper
+    fitted_bounds = gp.get_bounds()
+    for fitted in gp.hyperparameters_to_dict(hyp):
+        for name in names:
+            lower, upper_used = fitted_bounds[name]
+            j = given(lower)
+            assert np.all(lower[j] == -3.0)
+            assert np.all(upper_used[j] == expected_upper)
+            assert np.all(fitted[name][j] >= -3.0)
+    mu, s2 = gp.predict(X)
+    assert np.all(np.isfinite(mu)) and np.all(np.isfinite(s2))
+
+    for lower in (np.nan, -np.inf, np.inf):
+        gp = _gp(kernel, NegativeQuadratic())
+        gp.set_bounds(bounds_without_spread(gp, lower))
+        with pytest.raises(ValueError, match="no spread"):
+            gp.fit(X, y, options={"n_samples": n_samples, "init_N": 16}, rng=1)

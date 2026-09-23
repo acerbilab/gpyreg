@@ -489,8 +489,9 @@ class GP:
             hyperparameter whose recommended bounds take their scale from
             the spread of that column (a length scale of the kernel, or
             the scale of :class:`gpyreg.mean_functions.NegativeQuadratic`)
-            is not given finite lower and upper bounds: its recommended
-            bounds are both ``-inf``.
+            is not given a finite lower bound: its recommended bounds are
+            both ``-inf``, and an upper bound left unset collapses onto
+            the lower bound given.
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
@@ -546,49 +547,6 @@ class GP:
         mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
         noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
 
-        # The recommendations take the scale of a length scale from the
-        # width of its column of the training inputs (of every column,
-        # for an isotropic kernel), through its logarithm, and so do they
-        # for the scale of the negative quadratic mean. A column without
-        # spread has width zero, which puts both bounds at -inf: a box
-        # that holds no value, which the optimizer of `fit` cannot take.
-        # A single training point has no spread in any column. Such a
-        # scale is fitted only between finite bounds that the caller
-        # gives it.
-        recommended_ub = np.concatenate(
-            [
-                cov_bounds_info["UB"],
-                noise_bounds_info["UB"],
-                mean_bounds_info["UB"],
-            ]
-        )
-        empty = (recommended_ub == -np.inf) & ~(
-            np.isfinite(lower_bounds) & np.isfinite(upper_bounds)
-        )
-        if np.any(empty):
-            names = ", ".join(self.__hyperparameter_names(empty))
-            width = np.max(self.X, axis=0) - np.min(self.X, axis=0)
-            columns = ", ".join(
-                f"X[:, {j}]" for j in np.flatnonzero(width == 0)
-            )
-            if columns:
-                reason = (
-                    f"The training inputs have no spread in {columns}: "
-                    "each of these columns holds a single value. The "
-                    f"recommended bounds of {names}, which take their "
-                    "scale from that spread, are empty (-inf to -inf)"
-                )
-            else:
-                reason = (
-                    f"The recommended upper bound of {names} is -inf, "
-                    "which leaves no value"
-                )
-            raise ValueError(
-                reason + ", so these hyperparameters need finite lower "
-                "and upper bounds from the caller (`set_bounds`, or the "
-                "options `lower_bounds` and `upper_bounds` of `fit`)."
-            )
-
         lb = lower_bounds
         ub = upper_bounds
 
@@ -614,6 +572,51 @@ class GP:
 
         lb = np.concatenate([lb_cov, lb_noise, lb_mean])
         ub = np.concatenate([ub_cov, ub_noise, ub_mean])
+
+        # The recommendations take the scale of a length scale from the
+        # width of its column of the training inputs (of every column,
+        # for an isotropic kernel), through its logarithm, and so do they
+        # for the scale of the negative quadratic mean. A column without
+        # spread has width zero, which puts both bounds at -inf: a box
+        # that holds no value, which the optimizer of `fit` cannot take,
+        # and from a lower bound of -inf the fit can reach a scale of
+        # zero, where the predictions are NaN. A single training point
+        # has no spread in any column. Such a scale is fitted from a
+        # finite lower bound that the caller gives it, onto which an
+        # upper bound left unset collapses below.
+        recommended_ub = np.concatenate(
+            [
+                cov_bounds_info["UB"],
+                noise_bounds_info["UB"],
+                mean_bounds_info["UB"],
+            ]
+        )
+        empty = (recommended_ub == -np.inf) & ~np.isfinite(lb)
+        if np.any(empty):
+            names = ", ".join(self.__hyperparameter_names(empty))
+            width = np.max(self.X, axis=0) - np.min(self.X, axis=0)
+            columns = ", ".join(
+                f"X[:, {j}]" for j in np.flatnonzero(width == 0)
+            )
+            if columns:
+                reason = (
+                    f"The training inputs have no spread in {columns}: "
+                    "each of these columns holds a single value. The "
+                    f"recommended bounds of {names}, which take their "
+                    "scale from that spread, are empty (-inf to -inf)"
+                )
+            else:
+                reason = (
+                    f"The recommended upper bound of {names} is -inf, "
+                    "which leaves no value"
+                )
+            raise ValueError(
+                reason + ", so these hyperparameters need a finite lower "
+                "bound from the caller (`set_bounds`, or the option "
+                "`lower_bounds` of `fit`), which is their upper bound as "
+                "well where that is left unset."
+            )
+
         ub = np.maximum(lb, ub)
 
         return self.bounds_to_dict(lb, ub)
@@ -1416,7 +1419,7 @@ class GP:
             a lower bound given is above its upper bound, or when a column
             of the training inputs has no spread and a hyperparameter
             whose recommended bounds take their scale from it is not given
-            finite bounds.
+            a finite lower bound.
         ValueError
             Raised when the option ``opts_N``, ``init_N`` or ``n_samples``
             is not a whole number of at least zero, or the option ``thin``
