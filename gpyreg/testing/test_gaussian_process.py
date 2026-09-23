@@ -663,7 +663,10 @@ def test_update_aligns_user_provided_noise():
     assert np.array_equal(f_s2, f_s2_ref)
 
 
-def test_split_update():
+@pytest.mark.parametrize("N_s", [1, 2])
+def test_split_update(N_s):
+    """Data added in two updates give the posteriors that the same data
+    added at once give, for one hyperparameter sample and for several."""
     N = 20
     D = 2
     rng = np.random.default_rng(17)
@@ -681,7 +684,6 @@ def test_split_update():
     mean_N = gp.mean.hyperparameter_count(D)
     noise_N = gp.noise.hyperparameter_count()
 
-    N_s = 2
     hyp = rng.standard_normal((N_s, cov_N + noise_N + mean_N))
     hyp[:, D] *= 0.2
     hyp[:, D + 1 : D + 1 + noise_N] *= 0.3
@@ -716,14 +718,17 @@ def test_split_update():
     # These should be exactly the same.
     assert np.all(gp.X == gp1.X)
     assert np.all(gp.y == gp1.y)
-    assert np.all(gp.posteriors[0].hyp == gp1.posteriors[0].hyp)
+    assert np.size(gp.posteriors) == np.size(gp1.posteriors) == N_s
 
-    # These only approximately the same I think.
-    assert np.all(np.isclose(gp.posteriors[0].alpha, gp1.posteriors[0].alpha))
-    assert np.all(np.isclose(gp.posteriors[0].sW, gp1.posteriors[0].sW))
-    assert np.all(np.isclose(gp.posteriors[0].L, gp1.posteriors[0].L))
-    assert np.isclose(gp.posteriors[0].sn2_mult, gp1.posteriors[0].sn2_mult)
-    assert gp.posteriors[0].L_chol and gp1.posteriors[0].L_chol
+    for post, post1, row in zip(gp.posteriors, gp1.posteriors, hyp):
+        assert np.all(post.hyp == row)
+        assert np.all(post1.hyp == row)
+        # These only approximately the same I think.
+        assert np.all(np.isclose(post.alpha, post1.alpha))
+        assert np.all(np.isclose(post.sW, post1.sW))
+        assert np.all(np.isclose(post.L, post1.L))
+        assert np.isclose(post.sn2_mult, post1.sn2_mult)
+        assert post.L_chol and post1.L_chol
 
 
 @pytest.mark.filterwarnings(
