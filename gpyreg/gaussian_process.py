@@ -109,6 +109,84 @@ def _check_hyperparameter_names(given, hyper_info, argument):
         )
 
 
+def _write_prior_block(hyper_priors, name, i, prior_type, prior_params):
+    """Write the prior of the hyperparameter block ``name``, at the indices
+    ``i`` of the arrays of ``hyper_priors``, as :py:meth:`GP.set_priors`
+    takes it, and refuse one that it does not take."""
+    if prior_type == "gaussian":
+        mu, sigma = prior_params
+        hyper_priors["mu"][i] = mu
+        hyper_priors["sigma"][i] = sigma
+        # Zero degrees of freedom flag the Gaussian families; an infinite
+        # number does too.
+        hyper_priors["df"][i] = 0
+    elif prior_type == "student_t":
+        mu, sigma, df = prior_params
+        hyper_priors["mu"][i] = mu
+        hyper_priors["sigma"][i] = sigma
+        hyper_priors["df"][i] = df
+    elif prior_type == "smoothbox":
+        a, b, sigma = prior_params
+        hyper_priors["a"][i] = a
+        hyper_priors["b"][i] = b
+        hyper_priors["sigma"][i] = sigma
+        # Zero degrees of freedom flag the Gaussian families; an infinite
+        # number does too.
+        hyper_priors["df"][i] = 0
+    elif prior_type == "smoothbox_student_t":
+        a, b, sigma, df = prior_params
+        hyper_priors["a"][i] = a
+        hyper_priors["b"][i] = b
+        hyper_priors["sigma"][i] = sigma
+        hyper_priors["df"][i] = df
+    else:
+        raise ValueError("Unknown hyperprior type " + prior_type)
+
+    # The location of a coordinate is `mu` for the Gaussian and Student's t
+    # families and the box `[a, b]` for the smooth-box ones, whose `mu`
+    # stays NaN. A coordinate whose location and `sigma` are both NaN has
+    # no prior, and every other coordinate needs a finite location, with
+    # `a <= b` for a box, and a finite, positive `sigma`. A box of zero
+    # width, `a == b`, has no plateau and a normalizer of one: it is the
+    # Gaussian or the Student's t centred at `a`. `gplite_hypprior.m` reads
+    # a coordinate as having no prior where its `mu` or its `sigma` is not
+    # finite, a reading that the smooth-box families, gpyreg's own, cannot
+    # share.
+    if prior_type in ("smoothbox", "smoothbox_student_t"):
+        location = np.vstack((hyper_priors["a"][i], hyper_priors["b"][i]))
+        location_name = "end of its box (a or b)"
+    else:
+        location = hyper_priors["mu"][i][None, :]
+        location_name = "mu"
+    scale = hyper_priors["sigma"][i]
+    has_prior = ~(np.all(np.isnan(location), axis=0) & np.isnan(scale))
+    scale = scale[has_prior]
+    location = location[:, has_prior]
+    problem = None
+    if np.any(np.isnan(scale)):
+        problem = "a NaN sigma where its location is not NaN"
+    elif np.any(np.isinf(scale)):
+        problem = "an infinite sigma"
+    elif np.any(scale <= 0.0):
+        problem = "a sigma that is zero or negative"
+    elif np.any(np.isnan(location)):
+        problem = f"a NaN {location_name} where its sigma is not NaN"
+    elif np.any(np.isinf(location)):
+        problem = f"an infinite {location_name}"
+    elif prior_type in ("smoothbox", "smoothbox_student_t") and (
+        np.any(location[0] > location[1])
+    ):
+        problem = "a lower end a of its box above its upper end b"
+    if problem is not None:
+        raise ValueError(
+            f"The prior of {name} has {problem}. A prior needs a finite "
+            "location, with a <= b for a smooth box, and a finite, positive "
+            "sigma; a hyperparameter without a prior is set to `None`, and a "
+            "coordinate of a block without a prior has NaN for both its "
+            "location and its sigma."
+        )
+
+
 class GP:
     """
     A single Gaussian Process (GP).
@@ -535,8 +613,26 @@ class GP:
         =======
         hyper_priors : dict
             A dictionary of the current hyperparameter names and their
-            priors, in the form :py:meth:`set_priors` takes, with ``None``
-            for a hyperparameter without a prior.
+            priors, in the form :py:meth:`set_priors` takes, which
+            ``set_priors`` writes back as the GP holds them, so that
+            ``set_priors(get_priors())`` changes nothing. A hyperparameter
+            has ``None``, as ``set_priors`` takes it for no prior, where
+            all of its prior's entries are NaN. Any other prior holds the
+            arrays of its entries, NaN included, under the name of the
+            family it was set with, or of the matching Gaussian family
+            where a Student's t family was set with zero degrees of
+            freedom throughout.
+
+        Raises
+        ------
+        ValueError
+            Raised when the priors that the GP holds are not in a form
+            ``set_priors`` takes, as priors written into ``hyper_priors``
+            directly, or by a version of gpyreg that took them, may not
+            be: a coordinate that has a location (``mu``, or the ends of a
+            smooth box) and a ``sigma`` that is not finite and positive,
+            or the reverse; an inverted smooth box; or a block that holds
+            both a ``mu`` and the ends of a smooth box.
         """
 
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -547,49 +643,57 @@ class GP:
         hyper_priors = {}
         lower = 0
 
-        mu = self.hyper_priors["mu"].copy()
-        sigma = self.hyper_priors["sigma"].copy()
-        df = self.hyper_priors["df"].copy()
-        a = self.hyper_priors["a"].copy()
-        b = self.hyper_priors["b"].copy()
-
         for info in hyper_info:
             upper = lower + info[1]
             i = range(lower, upper)
+            mu, sigma, df, a, b = (
+                self.hyper_priors[key][i]
+                for key in ("mu", "sigma", "df", "a", "b")
+            )
 
-            # The family of a block is read from its coordinates that
-            # have a prior; the others have NaN location and sigma
-            # (`set_priors`), which the returned arrays keep. NaN degrees
-            # of freedom belong to a Student's t family, as `set_priors`
-            # wrote them, and `fit` fills them with `df_base`.
-            p = np.isfinite(mu[i]) | np.isfinite(sigma[i])
-            df_p = df[i][p]
-            gaussian_df = np.all(df_p == 0) or np.all(df_p == np.inf)
-            student_t_df = np.all((df_p > 0) | np.isnan(df_p))
-
-            prior_type = prior_params = None
-            if not np.any(p) or not np.all(np.isfinite(sigma[i][p])):
-                pass  # no prior, or none of the four families
-            elif np.all(np.isfinite(a[i][p])) and np.all(np.isfinite(b[i][p])):
-                if gaussian_df:
-                    prior_type = "smoothbox"
-                    prior_params = (a[i], b[i], sigma[i])
-                elif student_t_df:
-                    prior_type = "smoothbox_student_t"
-                    prior_params = (a[i], b[i], sigma[i], df[i])
-            elif np.all(np.isfinite(mu[i][p])):
-                if gaussian_df:
-                    prior_type = "gaussian"
-                    prior_params = (mu[i], sigma[i])
-                elif student_t_df:
-                    prior_type = "student_t"
-                    prior_params = (mu[i], sigma[i], df[i])
-
-            if prior_type is not None and prior_params is not None:
-                hyper_priors[info[0]] = (prior_type, prior_params)
+            # `set_priors` writes all five entries of a block given `None`
+            # as NaN, the zero degrees of freedom of a Gaussian family
+            # across the whole block, and the given ones, NaN, zero and
+            # infinite included, for a Student's t family; it leaves `a`
+            # and `b` NaN for the Gaussian and Student's t families, and
+            # `mu` NaN for the smooth-box ones. Read in this order, the
+            # entries give back the prior that writes them.
+            gaussian = np.all(df == 0)
+            if all(np.all(np.isnan(v)) for v in (mu, sigma, df, a, b)):
+                vals = None
+            elif np.all(np.isnan(a)) and np.all(np.isnan(b)):
+                if gaussian:
+                    vals = ("gaussian", (mu, sigma))
+                else:
+                    vals = ("student_t", (mu, sigma, df))
+            elif np.all(np.isnan(mu)):
+                if gaussian:
+                    vals = ("smoothbox", (a, b, sigma))
+                else:
+                    vals = ("smoothbox_student_t", (a, b, sigma, df))
             else:
-                hyper_priors[info[0]] = None
+                raise ValueError(
+                    f"`get_priors` cannot return the prior of {info[0]}: "
+                    "the GP holds both a `mu` and the ends of a smooth box "
+                    "for it, which no prior that `set_priors` takes has."
+                )
 
+            if vals is not None:
+                # The checks of `set_priors`, on a scratch copy.
+                scratch = {
+                    key: np.full((info[1],), np.nan)
+                    for key in ("mu", "sigma", "df", "a", "b")
+                }
+                try:
+                    _write_prior_block(scratch, info[0], range(info[1]), *vals)
+                except ValueError as err:
+                    raise ValueError(
+                        f"`get_priors` cannot return the prior of {info[0]} "
+                        "that the GP holds, because `set_priors` refuses "
+                        f"it. {err}"
+                    ) from None
+
+            hyper_priors[info[0]] = vals
             lower += info[1]
 
         return hyper_priors
@@ -675,89 +779,13 @@ class GP:
                 non_trivial_flag = True
                 upper = lower + info[1]
                 prior_type, prior_params = vals
-                i = range(lower, upper)
-
-                if prior_type == "gaussian":
-                    mu, sigma = prior_params
-                    hyper_priors["mu"][i] = mu
-                    hyper_priors["sigma"][i] = sigma
-                    # Zero degrees of freedom flag the Gaussian
-                    # families; an infinite number does too.
-                    hyper_priors["df"][i] = 0
-                elif prior_type == "student_t":
-                    mu, sigma, df = prior_params
-                    hyper_priors["mu"][i] = mu
-                    hyper_priors["sigma"][i] = sigma
-                    hyper_priors["df"][i] = df
-                elif prior_type == "smoothbox":
-                    a, b, sigma = prior_params
-                    hyper_priors["a"][i] = a
-                    hyper_priors["b"][i] = b
-                    hyper_priors["sigma"][i] = sigma
-                    # Zero degrees of freedom flag the Gaussian
-                    # families; an infinite number does too.
-                    hyper_priors["df"][i] = 0
-                elif prior_type == "smoothbox_student_t":
-                    a, b, sigma, df = prior_params
-                    hyper_priors["a"][i] = a
-                    hyper_priors["b"][i] = b
-                    hyper_priors["sigma"][i] = sigma
-                    hyper_priors["df"][i] = df
-                else:
-                    raise ValueError("Unknown hyperprior type " + prior_type)
-
-                # The location of a coordinate is `mu` for the Gaussian
-                # and Student's t families and the box `[a, b]` for the
-                # smooth-box ones, whose `mu` stays NaN. A coordinate
-                # whose location and `sigma` are both NaN has no prior,
-                # and every other coordinate needs a finite location, with
-                # `a <= b` for a box, and a finite, positive `sigma`. A box
-                # of zero width, `a == b`, has no plateau and a normalizer
-                # of one: it is the Gaussian or the Student's t centred at
-                # `a`. `gplite_hypprior.m` reads a coordinate as having no
-                # prior where its `mu` or its `sigma` is not finite, a
-                # reading that the smooth-box families, gpyreg's own,
-                # cannot share.
-                if prior_type in ("smoothbox", "smoothbox_student_t"):
-                    location = np.vstack(
-                        (hyper_priors["a"][i], hyper_priors["b"][i])
-                    )
-                    location_name = "end of its box (a or b)"
-                else:
-                    location = hyper_priors["mu"][i][None, :]
-                    location_name = "mu"
-                scale = hyper_priors["sigma"][i]
-                has_prior = ~(
-                    np.all(np.isnan(location), axis=0) & np.isnan(scale)
+                _write_prior_block(
+                    hyper_priors,
+                    info[0],
+                    range(lower, upper),
+                    prior_type,
+                    prior_params,
                 )
-                scale = scale[has_prior]
-                location = location[:, has_prior]
-                problem = None
-                if np.any(np.isnan(scale)):
-                    problem = "a NaN sigma where its location is not NaN"
-                elif np.any(np.isinf(scale)):
-                    problem = "an infinite sigma"
-                elif np.any(scale <= 0.0):
-                    problem = "a sigma that is zero or negative"
-                elif np.any(np.isnan(location)):
-                    problem = (
-                        f"a NaN {location_name} where its sigma is not NaN"
-                    )
-                elif np.any(np.isinf(location)):
-                    problem = f"an infinite {location_name}"
-                elif prior_type in ("smoothbox", "smoothbox_student_t") and (
-                    np.any(location[0] > location[1])
-                ):
-                    problem = "a lower end a of its box above its upper end b"
-                if problem is not None:
-                    raise ValueError(
-                        f"The prior of {info[0]} has {problem}. A prior "
-                        "needs a finite location, with a <= b for a smooth "
-                        "box, and a finite, positive sigma; a hyperparameter "
-                        "without a prior is set to `None`, and a coordinate "
-                        "of a block without a prior has NaN for both its "
-                        "location and its sigma."
-                    )
 
             lower += info[1]
 

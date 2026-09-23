@@ -2735,6 +2735,101 @@ def test_get_priors_returns_what_set_priors_reads_back(family, params):
 @pytest.mark.parametrize(
     "family, params",
     [
+        # Degrees of freedom that mix zero, NaN, infinity and a number,
+        # which `set_priors` writes as they are given.
+        ("student_t", ([0.3, 0.1], [1.2, 0.5], [0.0, np.nan])),
+        ("student_t", ([0.3, 0.1], [1.2, 0.5], [0.0, 3.0])),
+        ("student_t", ([0.3, 0.1], [1.2, 0.5], [np.inf, 0.0])),
+        (
+            "smoothbox_student_t",
+            ([-1.0, 0.0], [1.0, 0.5], [0.7, 0.2], [0.0, np.nan]),
+        ),
+        (
+            "smoothbox_student_t",
+            ([-1.0, 0.0], [1.0, 0.5], [0.7, 0.2], [0.0, 4.0]),
+        ),
+        # Degrees of freedom that name a Gaussian family throughout.
+        ("student_t", (0.3, 1.2, np.inf)),
+        ("student_t", (0.3, 1.2, 0.0)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, np.inf)),
+        ("smoothbox_student_t", (-1.0, 1.0, 0.7, 0.0)),
+        # A family set on a block without a prior in any coordinate.
+        ("gaussian", (np.nan, np.nan)),
+        ("student_t", (np.nan, np.nan, 3.0)),
+        ("smoothbox", (np.nan, np.nan, np.nan)),
+    ],
+)
+def test_set_priors_of_get_priors_changes_nothing(family, params):
+    """``set_priors(get_priors())`` writes back every array of the priors
+    as the GP holds them, and the flag that says whether it has any, for
+    any prior that ``set_priors`` takes. A Student's t block whose degrees
+    of freedom mix zero with NaN or a number came back as ``None``, which
+    dropped it; one whose degrees of freedom are infinite throughout came
+    back as a Gaussian family with zero; and a family set on a block
+    without a prior came back as ``None``, with NaN degrees of freedom."""
+    gp = _gp_2d()
+    priors = _no_priors()
+    priors["covariance_log_lengthscale"] = (family, params)
+    priors["mean_const"] = ("student_t", (0.0, 2.0, 5.0))
+    gp.set_priors(priors)
+
+    other = _gp_2d()
+    other.set_priors(gp.get_priors())
+
+    for key, value in gp.hyper_priors.items():
+        assert np.array_equal(other.hyper_priors[key], value, equal_nan=True)
+    assert other.no_prior is gp.no_prior
+
+
+@pytest.mark.parametrize(
+    "written, problem",
+    [
+        # A smooth-box coordinate with finite ends and a NaN sigma.
+        (
+            {"a": [-1.0, 0.0], "b": [1.0, 0.5], "sigma": [0.7, np.nan]},
+            "a NaN sigma",
+        ),
+        # A Gaussian coordinate with a mu and a NaN sigma.
+        ({"mu": [0.3, 0.1], "sigma": [1.2, np.nan]}, "a NaN sigma"),
+        ({"mu": [0.3, 0.1], "sigma": [1.2, -0.5]}, "zero or negative"),
+        (
+            {"a": [1.0, 0.0], "b": [-1.0, 0.5], "sigma": [0.7, 0.2]},
+            "above its upper end",
+        ),
+        # A mu beside the ends of a smooth box.
+        (
+            {
+                "mu": [0.3, np.nan],
+                "a": [np.nan, 0.0],
+                "b": [np.nan, 0.5],
+                "sigma": [1.2, 0.2],
+            },
+            "both a `mu` and the ends of a smooth box",
+        ),
+    ],
+)
+def test_get_priors_refuses_priors_that_set_priors_refuses(written, problem):
+    """``get_priors`` returns the priors in the form ``set_priors`` takes.
+    Priors written into ``hyper_priors`` directly that ``set_priors``
+    refuses have no such form, and ``get_priors`` says what is wrong with
+    them, naming the hyperparameter, where it returned a block that
+    ``set_priors`` then refused, or ``None``, which dropped the prior."""
+    gp = _gp_2d()
+    gp.hyper_priors["df"][0:2] = 0.0
+    for key, value in written.items():
+        gp.hyper_priors[key][0:2] = value
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.get_priors()
+
+    message = execinfo.value.args[0]
+    assert "covariance_log_lengthscale" in message
+    assert problem in message
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
         ("gaussian", ([0.0, 0.3], [np.nan, 1.2])),
         ("student_t", ([0.0, 0.3], [np.nan, 1.2], 5.0)),
         ("smoothbox", ([-1.0, -1.0], [1.0, 1.0], [np.nan, 0.7])),

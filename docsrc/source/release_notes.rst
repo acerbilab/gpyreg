@@ -27,6 +27,23 @@ to change.
   argument. On a GP without priors, a refused call marked the GP as
   having priors, so that ``str`` reported them as present and
   :meth:`gpyreg.GP.fit` added to its objective a log prior of zero.
+* :meth:`gpyreg.GP.get_priors` returns every prior that
+  :meth:`gpyreg.GP.set_priors` takes in a form that ``set_priors`` writes
+  back as it was, so ``set_priors(get_priors())`` changes nothing. A
+  Student's t block whose degrees of freedom mix zero with NaN or a
+  number, such as ``[0, nan]`` or ``[0, 3]``, came back as ``None``, which
+  dropped the prior; degrees of freedom infinite throughout came back as
+  the Gaussian family, which ``set_priors`` writes with zero; and a family
+  set on a block with no prior in any coordinate came back as ``None``.
+  ``get_priors`` raises ``ValueError``, with ``set_priors``' message, for
+  priors that ``set_priors`` refuses, as priors written into
+  ``hyper_priors`` directly can be, where it returned a block that
+  ``set_priors`` then refused, or ``None``. **Upgrading:** a script that
+  compares what ``get_priors`` returns finds a Student's t family with
+  infinite degrees of freedom under its own name, and a family set on a
+  block without a prior under that family's name, not ``None``; a script
+  that writes priors into ``hyper_priors`` directly sets them through
+  ``set_priors`` instead.
 
 1.3.1 (2026-09-23)
 ------------------
