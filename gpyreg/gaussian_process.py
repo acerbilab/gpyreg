@@ -557,8 +557,9 @@ class GP:
             Within a block of several hyperparameters, a coordinate whose
             location (``mu``, or ``a`` and ``b`` for the smooth-box
             families) and ``sigma`` are both NaN has no prior; every other
-            coordinate needs a finite location and a finite, positive
-            ``sigma``.
+            coordinate needs a finite location, with ``a <= b``, and a
+            finite, positive ``sigma``. A smooth box with ``a == b`` is the
+            Gaussian (or Student's t) centred at ``a``.
             Degrees of freedom ``df`` that are zero, infinite or NaN make
             a ``"student_t"`` prior ``"gaussian"``, as
             ``gplite_hypprior.m`` reads them, and a
@@ -578,7 +579,7 @@ class GP:
         ValueError
             Raised when a coordinate that has a prior is given a ``sigma``
             that is not finite and positive, or a location that is not
-            finite.
+            finite, or a smooth box whose ``a`` is above its ``b``.
         """
         self.no_prior = False
         if priors is None:
@@ -657,11 +658,14 @@ class GP:
                 # and Student's t families and the box `[a, b]` for the
                 # smooth-box ones, whose `mu` stays NaN. A coordinate
                 # whose location and `sigma` are both NaN has no prior,
-                # and every other coordinate needs a finite location and
-                # a finite, positive `sigma`. `gplite_hypprior.m` reads a
-                # coordinate as having no prior where its `mu` or its
-                # `sigma` is not finite, a reading that the smooth-box
-                # families, gpyreg's own, cannot share.
+                # and every other coordinate needs a finite location, with
+                # `a <= b` for a box, and a finite, positive `sigma`. A box
+                # of zero width, `a == b`, has no plateau and a normalizer
+                # of one: it is the Gaussian or the Student's t centred at
+                # `a`. `gplite_hypprior.m` reads a coordinate as having no
+                # prior where its `mu` or its `sigma` is not finite, a
+                # reading that the smooth-box families, gpyreg's own,
+                # cannot share.
                 if prior_type in ("smoothbox", "smoothbox_student_t"):
                     location = np.vstack(
                         (hyper_priors["a"][i], hyper_priors["b"][i])
@@ -689,13 +693,18 @@ class GP:
                     )
                 elif np.any(np.isinf(location)):
                     problem = f"an infinite {location_name}"
+                elif prior_type in ("smoothbox", "smoothbox_student_t") and (
+                    np.any(location[0] > location[1])
+                ):
+                    problem = "a lower end a of its box above its upper end b"
                 if problem is not None:
                     raise ValueError(
                         f"The prior of {info[0]} has {problem}. A prior "
-                        "needs a finite location and a finite, positive "
-                        "sigma; a hyperparameter without a prior is set to "
-                        "`None`, and a coordinate of a block without a "
-                        "prior has NaN for both its location and its sigma."
+                        "needs a finite location, with a <= b for a smooth "
+                        "box, and a finite, positive sigma; a hyperparameter "
+                        "without a prior is set to `None`, and a coordinate "
+                        "of a block without a prior has NaN for both its "
+                        "location and its sigma."
                     )
 
             lower += info[1]

@@ -2631,6 +2631,10 @@ def test_set_priors_takes_a_coordinate_without_a_prior(family, params):
         ("student_t", (0.3, 1.2, 3.0)),
         ("smoothbox", (-1.0, 1.0, 0.7)),
         ("smoothbox_student_t", (-1.0, 1.0, 0.7, 4.0)),
+        # Smooth boxes of zero width, on the whole block and on one
+        # coordinate.
+        ("smoothbox", (0.5, 0.5, 0.7)),
+        ("smoothbox_student_t", ([-1.0, 0.5], [1.0, 0.5], 0.7, 4.0)),
     ],
 )
 def test_get_priors_returns_what_set_priors_reads_back(family, params):
@@ -2748,6 +2752,60 @@ def test_set_priors_refuses_a_location_that_is_not_finite_in_a_block():
     message = execinfo.value.args[0]
     assert "covariance_log_lengthscale" in message
     assert "infinite mu" in message
+
+
+@pytest.mark.parametrize(
+    "family, params",
+    [
+        ("smoothbox", (1.0, -1.0, 0.7)),
+        ("smoothbox_student_t", (3.0, -3.0, 0.7, 4.0)),
+        # One coordinate of a block, beside a coordinate without a prior.
+        ("smoothbox", ([np.nan, 1.0], [np.nan, 0.9], [np.nan, 0.7])),
+    ],
+)
+def test_set_priors_refuses_an_inverted_smooth_box(family, params):
+    """A smooth box needs its lower end ``a`` at or below its upper end
+    ``b``: an inverted box has a normalizer below one, or negative, and a
+    log prior that is wrong or NaN. The message names the hyperparameter
+    and says what is wrong with its box."""
+    priors = _no_priors()
+    if np.ndim(params[0]) == 0:
+        priors["mean_const"] = (family, params)
+        name, gp = "mean_const", _gp_1d()
+    else:
+        priors["covariance_log_lengthscale"] = (family, params)
+        name, gp = "covariance_log_lengthscale", _gp_2d()
+    with pytest.raises(ValueError) as execinfo:
+        gp.set_priors(priors)
+    message = execinfo.value.args[0]
+    assert name in message
+    assert "above its upper end" in message
+    assert "None" in message
+
+
+@pytest.mark.parametrize("family", ["smoothbox", "smoothbox_student_t"])
+def test_smooth_box_of_zero_width(family):
+    """A smooth box whose two ends are equal has no plateau and is the
+    Gaussian, or the Student's t, centred at that point with the box's
+    scale; ``set_priors`` takes it, and the log prior is that density."""
+    if family == "smoothbox":
+        params = (0.5, 0.5, 0.7)
+        density = scipy.stats.norm(loc=0.5, scale=0.7)
+    else:
+        params = (0.5, 0.5, 0.7, 4.0)
+        density = scipy.stats.t(4.0, loc=0.5, scale=0.7)
+    priors = _no_priors()
+    priors["mean_const"] = (family, params)
+
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    gp = _gp_1d()
+    hyp = np.array([0.0, 0.0, np.log(0.1), 0.0])
+    gp.update(X_new=X, y_new=np.sin(X), hyp=hyp[None, :])
+    gp.set_priors(priors)
+    for mean_const in (-0.4, 0.5, 1.9):
+        hyp[3] = mean_const
+        log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+        assert np.isclose(log_prior, density.logpdf(mean_const), rtol=1e-12)
 
 
 def test_set_priors_and_set_bounds_refuse_an_unknown_hyperparameter():

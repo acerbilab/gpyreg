@@ -46,6 +46,12 @@ to change.
   with NaN for both its location and its ``sigma``. **Upgrading:** a
   script that wrote a non-finite ``mu`` for no prior, which gplite reads
   that way, sets the hyperparameter's prior to ``None``.
+* :meth:`gpyreg.GP.set_priors` refuses, with a message that says what is
+  wrong, a smooth box of either family whose lower end ``a`` is above its
+  upper end ``b``. 1.3.0 took such a box, whose normalization constant is
+  then below one or negative, and gave a log prior that was wrong or NaN.
+  A smooth box with ``a == b``, which has no plateau and is the Gaussian
+  or the Student's t centred at ``a``, is taken as before.
 
 1.3.0 (2026-09-23)
 ------------------
