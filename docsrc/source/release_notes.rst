@@ -17,7 +17,8 @@ to change.
   the width of the inputs, and a column of width zero gave them the pair
   ``(-inf, -inf)``, on which the optimizer of ``fit`` ended with
   ``KeyError``; with a lower bound of ``-inf`` from the caller instead,
-  the fit returned an infinite length scale and predicted NaN. Such a
+  the fit returned a log length scale of ``-inf``, a length scale of
+  zero, from which its predictions were NaN. Such a
   hyperparameter is fitted between finite lower and upper bounds that the
   caller gives it. **Upgrading:** a script that catches the ``KeyError``
   catches ``ValueError``, and a script that fits on such inputs, or reads
