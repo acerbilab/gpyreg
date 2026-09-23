@@ -380,9 +380,10 @@ class SliceSampler:
                 burn = round(N / 3)
 
         # Sanity checks. Infinity equals its own floor, hence the test of
-        # finiteness.
+        # finiteness; a bool is no count, as it is none for N.
         if (
-            not np.isscalar(thin)
+            isinstance(thin, (bool, np.bool_))
+            or not np.isscalar(thin)
             or not np.isfinite(thin)
             or thin <= 0
             or thin != np.floor(thin)
@@ -392,7 +393,8 @@ class SliceSampler:
             )
 
         if (
-            not np.isscalar(burn)
+            isinstance(burn, (bool, np.bool_))
+            or not np.isscalar(burn)
             or not np.isfinite(burn)
             or burn < 0
             or burn != np.floor(burn)

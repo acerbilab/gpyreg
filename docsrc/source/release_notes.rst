@@ -74,7 +74,9 @@ to change.
   :meth:`gpyreg.slice_sample.SliceSampler.sample` takes its number of
   samples ``N`` the same way, and refuses with ``ValueError`` one that is
   not a whole number greater than zero, where a whole float, a fraction or
-  a bool raised ``TypeError`` and zero returned an empty chain.
+  a bool raised ``TypeError`` and zero returned an empty chain; it refuses
+  a bool as ``thin`` or ``burn`` as well, which ran as the integer it
+  stands for.
   **Upgrading:** a script that passes a negative ``opts_N`` or ``init_N``
   passes ``0``; one that passes a bool as a count passes the integer; and
   one that asks ``sample`` for zero samples does not call it.

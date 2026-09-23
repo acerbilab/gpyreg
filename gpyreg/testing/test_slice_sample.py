@@ -691,6 +691,25 @@ def test_sample_refuses_a_number_of_samples_that_is_not_positive(N):
     assert "The number of samples N" in execinfo.value.args[0]
 
 
+@pytest.mark.parametrize(
+    "keyword, value",
+    [
+        ("thin", True),
+        ("thin", np.bool_(True)),
+        ("burn", True),
+        ("burn", False),
+        ("burn", np.bool_(False)),
+    ],
+)
+def test_sample_refuses_a_boolean_thin_or_burn(keyword, value):
+    """``thin`` and ``burn`` are counts, and a bool is no count, as it is
+    none for the number of samples and for the counts of ``GP.fit``. A
+    bool ran as the integer it stands for."""
+    sampler = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    with pytest.raises(ValueError):
+        sampler.sample(3, **{keyword: value})
+
+
 def test_generator_runs_are_reproducible_and_independent_of_global_state():
     """With ``rng`` a ``Generator``, two samplers seeded alike give the same
     chain whatever the global legacy state does, one generator shared across
