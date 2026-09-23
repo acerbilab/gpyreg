@@ -660,6 +660,37 @@ def test_sample_sanity_checks():
     )
 
 
+@pytest.mark.parametrize("N", [3.0, np.float64(3.0), np.int64(3)])
+def test_sample_takes_a_whole_number_of_samples_of_any_type(N):
+    """The number of samples is a count, which ``sample`` takes as a whole
+    number of an integer or a float type, as it takes ``thin`` and
+    ``burn`` and as ``GP.fit`` takes its counts; the chain is that of the
+    integer. A whole float raised ``TypeError``."""
+
+    def chain(n):
+        sampler = SliceSampler(
+            norm.logpdf,
+            np.array([0.5]),
+            options=options,
+            rng=np.random.default_rng(0),
+        )
+        return sampler.sample(n)["samples"]
+
+    assert np.array_equal(chain(N), chain(3))
+
+
+@pytest.mark.parametrize("N", [2.5, 0, 0.0, -1, True, np.inf, np.nan, "3"])
+def test_sample_refuses_a_number_of_samples_that_is_not_positive(N):
+    """A number of samples that is not a whole number greater than zero is
+    refused. A fraction or a bool raised ``TypeError``, a negative number
+    NumPy's error for a negative dimension, an infinity ``OverflowError``,
+    and zero returned an empty chain."""
+    sampler = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    with pytest.raises(ValueError) as execinfo:
+        sampler.sample(N)
+    assert "The number of samples N" in execinfo.value.args[0]
+
+
 def test_generator_runs_are_reproducible_and_independent_of_global_state():
     """With ``rng`` a ``Generator``, two samplers seeded alike give the same
     chain whatever the global legacy state does, one generator shared across

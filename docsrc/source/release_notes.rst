@@ -62,6 +62,22 @@ to change.
   **Upgrading:** a script that passes ``thin=True`` passes ``1``, and one
   that gives a fit with ``n_samples=0`` a ``thin`` that is not a whole
   number greater than zero leaves it out.
+* :meth:`gpyreg.GP.fit` takes its other counts, ``n_samples``, ``opts_N``
+  and ``init_N``, as whole numbers of an integer or a float type, where a
+  whole float such as 2.0 raised ``TypeError``, and refuses with
+  ``ValueError``, before it changes anything, one that is not a whole
+  number of at least zero: a fraction, which raised ``TypeError`` or
+  another ``ValueError`` after the optimization; a negative number, with
+  which ``opts_N`` and ``init_N`` ran as zero and ``n_samples`` raised
+  after the optimization; a NaN ``init_N``, which ran as zero; and a bool,
+  which ran as the integer it stands for.
+  :meth:`gpyreg.slice_sample.SliceSampler.sample` takes its number of
+  samples ``N`` the same way, and refuses with ``ValueError`` one that is
+  not a whole number greater than zero, where a whole float, a fraction or
+  a bool raised ``TypeError`` and zero returned an empty chain.
+  **Upgrading:** a script that passes a negative ``opts_N`` or ``init_N``
+  passes ``0``; one that passes a bool as a count passes the integer; and
+  one that asks ``sample`` for zero samples does not call it.
 * Where the smallest noise variance at the training inputs is below 1e-6,
   as it can be after a fit on noiseless targets, the posterior holds the
   negative inverse of the training covariance (the low-noise

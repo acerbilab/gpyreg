@@ -23,7 +23,7 @@ from gpyreg.f_min_fill import (
 )
 from gpyreg.formatting import full_repr
 from gpyreg.rng import random_integer, resolve_rng
-from gpyreg.slice_sample import SliceSampler
+from gpyreg.slice_sample import SliceSampler, _whole_number
 
 # Reuse the Cholesky factor across consecutive log-posterior evaluations of
 # one fit when only mean-function hyperparameters moved (see
@@ -107,24 +107,6 @@ def _check_hyperparameter_names(given, hyper_info, argument):
             + ", ".join(info[0] for info in hyper_info)
             + "."
         )
-
-
-def _positive_whole_number(value, name):
-    """Return ``value`` as an ``int`` where it is a whole number greater than
-    zero, of an integer or a float type, and refuse any other value, a bool
-    included, with a ``ValueError`` that names the option ``name``."""
-    if (
-        isinstance(value, (bool, np.bool_))
-        or not isinstance(value, numbers.Real)
-        or not np.isfinite(value)
-        or value != np.floor(value)
-        or value < 1
-    ):
-        raise ValueError(
-            f"The option {name} needs to be a whole number greater than "
-            f"zero, of an integer or a float type, not {value!r}."
-        )
-    return int(value)
 
 
 def _write_prior_block(hyper_priors, name, i, prior_type, prior_params):
@@ -1352,7 +1334,10 @@ class GP:
             current noise variances of the GP. If not given the current
             noise variances are used.
         options : dict, optional
-            A dictionary of options for training. The possible options are:
+            A dictionary of options for training. The counts among them,
+            ``opts_N``, ``init_N``, ``n_samples`` and ``thin``, are whole
+            numbers of an integer or a float type (2.0 is taken as 2). The
+            possible options are:
 
                 **opts_N** : int, defaults to 3
                     Number of hyperparameter optimization runs.
@@ -1429,10 +1414,11 @@ class GP:
             whose recommended bounds take their scale from it is not given
             finite bounds.
         ValueError
-            Raised when the option ``thin`` is not a whole number greater
-            than zero: a fraction, zero, a negative number, an infinity,
-            NaN, a bool or a value that is not a number, before the fit
-            changes anything.
+            Raised when the option ``opts_N``, ``init_N`` or ``n_samples``
+            is not a whole number of at least zero, or the option ``thin``
+            not a whole number of at least one: a fraction, a number below
+            that, an infinity, NaN, a bool or a value that is not a number,
+            before the fit changes anything.
         ValueError
             Raised when ``n_samples`` is positive and ``sampler_name`` is
             not ``'slicesample'``, after the optimization.
@@ -1451,11 +1437,17 @@ class GP:
         ## Default options
         if options is None:
             options = {}
-        opts_N = options.get("opts_N", 3)
-        init_N = options.get("init_N", 2**10)
+        # Counts, which the fit slices and loops with: a whole number of
+        # either type is converted, and any other value is refused before
+        # the fit changes anything.
+        opts_N = _whole_number(
+            options.get("opts_N", 3), "The option opts_N", 0
+        )
+        init_N = _whole_number(
+            options.get("init_N", 2**10), "The option init_N", 0
+        )
         init_method = options.get("init_method", "sobol")
-        # A count that the fit slices with, so a whole float is converted.
-        thin = _positive_whole_number(options.get("thin", 5), "thin")
+        thin = _whole_number(options.get("thin", 5), "The option thin", 1)
         df_base = options.get("df_base", 7)
         widths = options.get("widths", None)
         log_p = options.get("log_P", None)  # Not used since no slicelite
@@ -1468,7 +1460,9 @@ class GP:
         sampler_name = options.get(
             "sampler_name", options.get("sampler", "slicesample")
         )
-        s_N = options.get("n_samples", 10)
+        s_N = _whole_number(
+            options.get("n_samples", 10), "The option n_samples", 0
+        )
         burn_in = options.get("burn", thin * s_N)
         lower_bounds = options.get("lower_bounds", "current")
         upper_bounds = options.get("upper_bounds", "current")

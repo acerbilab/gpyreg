@@ -2,6 +2,7 @@
 
 import logging
 import math
+import numbers
 
 import numpy as np
 
@@ -13,6 +14,25 @@ from gpyreg.rng import resolve_rng
 # ArviZ requires at least four draws per chain; here the requirement
 # applies to each half of the split chain.
 _MIN_SPLIT_SAMPLES = 4
+
+
+def _whole_number(value, what, minimum):
+    """Return ``value`` as an ``int`` where it is a whole number of at least
+    ``minimum``, of an integer or a float type (2.0 is taken as 2), and
+    refuse any other value, a bool included, with a ``ValueError`` whose
+    message starts with ``what``."""
+    if (
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, numbers.Real)
+        or not np.isfinite(value)
+        or value != np.floor(value)
+        or value < minimum
+    ):
+        raise ValueError(
+            f"{what} needs to be a whole number of at least {minimum}, of an "
+            f"integer or a float type, not {value!r}."
+        )
+    return int(value)
 
 
 class SliceSampler:
@@ -258,7 +278,8 @@ class SliceSampler:
         Parameters
         ----------
         N : int
-            The number of samples to return.
+            The number of samples to return, a whole number greater than
+            zero of an integer or a float type (2.0 is taken as 2).
         thin : int, optional
             The thinning parameter will omit ``thin-1`` out of ``thin`` values
             in the generated sequence (after burn-in).
@@ -326,6 +347,10 @@ class SliceSampler:
         Raises
         ------
         ValueError
+            Raised when `N` is not a whole number greater than zero: a
+            fraction, zero, a negative number, an infinity, NaN, a bool or
+            a value that is not a number.
+        ValueError
             Raised when `thin` is not a whole number greater than zero.
         ValueError
             Raised when `burn` is not a whole number greater than or equal
@@ -343,6 +368,9 @@ class SliceSampler:
         # use this function multiple times.
         xx = self.x0
         D = xx.size
+
+        # A count of recorded samples, as fit takes its counts.
+        N = _whole_number(N, "The number of samples N", 1)
 
         if burn is None:
             # In case we are sampling again there is no need for burn-in.
@@ -699,8 +727,7 @@ class SliceSampler:
         if np.any(R[checked] > 1.5):
             diag_msg = (
                 " * Detected lack of convergence! (max R = %.2f >> 1"
-                ", mean R = %.2f)"
-                % (np.max(R[checked]), np.mean(R[checked]))
+                ", mean R = %.2f)" % (np.max(R[checked]), np.mean(R[checked]))
             )
             exit_flag = -3
         elif np.any(R[checked] > 1.1):

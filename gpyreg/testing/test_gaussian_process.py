@@ -1144,6 +1144,55 @@ def test_fit_refuses_a_thin_that_is_not_a_positive_whole_number(
     assert gp.X is None
 
 
+def _fit_with_counts(gp, **counts):
+    X = np.reshape(np.linspace(-2, 2, 10), (-1, 1))
+    options = {"n_samples": 2, "opts_N": 2, "init_N": 16}
+    options.update(counts)
+    hyp, _, _ = gp.fit(X, np.sin(X), options=options, rng=0)
+    return hyp
+
+
+@pytest.mark.parametrize(
+    "name, whole",
+    [
+        ("n_samples", 2.0),
+        ("n_samples", np.float64(3.0)),
+        ("n_samples", 0.0),
+        ("opts_N", 2.0),
+        ("opts_N", np.float64(1.0)),
+        ("opts_N", 0.0),
+        ("init_N", 16.0),
+        ("init_N", np.float64(8.0)),
+        ("init_N", 0.0),
+        ("init_N", np.int64(16)),
+    ],
+)
+def test_fit_takes_whole_counts_of_any_type(name, whole):
+    """The options ``n_samples``, ``opts_N`` and ``init_N`` are counts,
+    which ``fit`` takes as whole numbers of an integer or a float type, as
+    it takes ``thin``; the fit is that of the integer. A whole float raised
+    ``TypeError`` from the fit's own use of it (``0.0`` passed for
+    ``n_samples`` and ``init_N``, which the fit compares with zero)."""
+    hyp = _fit_with_counts(_gp_1d(), **{name: whole})
+    hyp_int = _fit_with_counts(_gp_1d(), **{name: int(whole)})
+    assert np.array_equal(hyp, hyp_int)
+
+
+@pytest.mark.parametrize("name", ["n_samples", "opts_N", "init_N"])
+@pytest.mark.parametrize("value", [2.5, -1, -1.0, True, np.inf, np.nan, "2"])
+def test_fit_refuses_counts_that_are_not_whole_numbers(name, value):
+    """A count that is not a whole number of at least zero is refused
+    before the fit changes anything. A fraction raised ``TypeError`` or
+    another error after the optimization; a negative ``opts_N`` or
+    ``init_N``, or a NaN ``init_N``, ran as zero; a bool ran as the
+    integer it stands for."""
+    gp = _gp_1d()
+    with pytest.raises(ValueError) as execinfo:
+        _fit_with_counts(gp, **{name: value})
+    assert f"The option {name}" in execinfo.value.args[0]
+    assert gp.X is None
+
+
 def test_fitting_options():
     N = 20
     D = 1
