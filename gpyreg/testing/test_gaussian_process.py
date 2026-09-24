@@ -2626,8 +2626,9 @@ def test_low_noise_rank_one_updates_match_a_full_recomputation():
     representation give the predictive mean and the variances at the
     training inputs of a full recomputation. The extension takes
     ``inv(K + sn2 I) k*`` and the Schur complement ``v_star`` from the
-    Cholesky factor; with an inaccurate ``v_star``, formed from the explicit
-    inverse, the mean was off by 1e-3 and the variances by 2e-4."""
+    Cholesky factor; with both formed from the explicit inverse, the mean
+    was off by about 1e-3 and the variances, of order 1e-12, by an amount
+    of order 1e-4."""
     N = 30
     rng = np.random.default_rng(1)
     X = np.sort(rng.uniform(-2, 2, N))[:, None]
