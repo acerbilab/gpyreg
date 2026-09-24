@@ -3701,6 +3701,73 @@ def test_update_without_hyperparameters_raises():
         assert name in message
 
 
+_NAN_HYPERPARAMETERS = {
+    "hyp": lambda gp, x: gp.update(hyp=np.full((1, 4), np.nan)),
+    "one_sample_of_two": lambda gp, x: gp.update(
+        hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0], [0.0, np.nan, 0.0, 0.0]])
+    ),
+    "data_and_hyp": lambda gp, x: gp.update(
+        X_new=x, y_new=np.sin(x), hyp=np.full((1, 4), np.nan)
+    ),
+    "set_hyperparameters": lambda gp, x: gp.set_hyperparameters(
+        np.full(4, np.nan)
+    ),
+    "data": lambda gp, x: gp.update(X_new=x, y_new=np.sin(x)),
+    "nothing": lambda gp, x: gp.update(),
+}
+
+
+@pytest.mark.parametrize(
+    "held, call",
+    [
+        ("data", "hyp"),
+        ("data", "one_sample_of_two"),
+        ("data", "data_and_hyp"),
+        ("data", "set_hyperparameters"),
+        ("nothing", "data_and_hyp"),
+        ("nothing", "data"),
+        ("data without hyperparameters", "nothing"),
+        ("data without hyperparameters", "data"),
+    ],
+)
+def test_update_refuses_nan_hyperparameters_before_it_changes_anything(
+    held, call
+):
+    """``update`` refuses the NaN hyperparameters from which it would
+    compute a posterior before it changes anything: a GP that predicts
+    keeps its data and posteriors, the very objects it held, and predicts
+    as before, and a GP without hyperparameters keeps the data it held,
+    and holds none of the data it is given. The update stored the data
+    and replaced the posteriors with empty ones first, after which
+    ``predict`` raised ``AttributeError``."""
+    gp = _gp_1d()
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    if held == "data":
+        gp.update(
+            X_new=X,
+            y_new=np.sin(X),
+            hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]),
+        )
+    elif held == "data without hyperparameters":
+        gp.update(X_new=X, y_new=np.sin(X), compute_posterior=False)
+    x = np.reshape(np.linspace(-1.5, 1.5, 3), (-1, 1))
+    if held == "data":
+        prediction = gp.predict(x)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+
+    with pytest.raises(ValueError, match="are NaN"):
+        _NAN_HYPERPARAMETERS[call](gp, x + 0.1)
+
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
+    _assert_same_values(vars(gp), values)
+    if held == "data":
+        for value, expected in zip(gp.predict(x), prediction):
+            assert np.array_equal(value, expected)
+
+
 def test_fit_leaves_the_prior_degrees_of_freedom_alone():
     """``df_base`` fills the degrees of freedom a prior leaves unset for
     the duration of the fit; the GP keeps the priors the caller set, so a

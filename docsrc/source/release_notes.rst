@@ -33,6 +33,17 @@ to change.
   on with the data or the bounds that the failed fit stored gives them to
   the GP itself: the data through :meth:`gpyreg.GP.update` or the next
   ``fit``, the bounds through :meth:`gpyreg.GP.set_bounds`.
+* :meth:`gpyreg.GP.update`, and :meth:`gpyreg.GP.set_hyperparameters`
+  through it, refuse hyperparameters that are NaN (not set), where the
+  update would compute the posteriors from them, before it changes
+  anything. The update stored the data it was given and replaced the
+  posteriors with empty ones first, so that a GP given a NaN
+  hyperparameter kept no posterior, and :meth:`gpyreg.GP.predict` then
+  raised ``AttributeError``, and a GP without hyperparameters given data
+  held them after the refusal. **Upgrading:** a script that gives data to
+  a GP without hyperparameters through ``update`` and catches this
+  refusal passes ``compute_posterior=False``, with which the update
+  stores the data without computing a posterior.
 
 1.3.2 (2026-09-24)
 ------------------

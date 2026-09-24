@@ -1067,8 +1067,9 @@ class GP:
             Raised when ``hyp`` is not a 2D array with one column per
             hyperparameter of the GP.
         ValueError
-            Raised when ``compute_posterior`` is ``True``, the GP has
-            training data and a new posterior is computed in full, and a
+            Raised, before the update changes anything, when
+            ``compute_posterior`` is ``True``, the GP would hold training
+            inputs and targets, every posterior is computed in full, and a
             hyperparameter is NaN (not set), as it is on a GP whose
             hyperparameters were never given.
         """
@@ -1185,6 +1186,22 @@ class GP:
             ):
                 rank_one_update = True
         full_updates = []  # Keep track of unstable rank-1 updates
+
+        # The hyperparameters of an update that recomputes every
+        # posterior, those given or those the GP holds, from which no
+        # posterior can be computed where one is NaN (not set): such an
+        # update is refused here, before it changes anything.
+        if not rank_one_update:
+            if hyp is None:
+                hyp = self.get_hyperparameters(as_array=True)
+            if compute_posterior and X_all is not None and y_all is not None:
+                unset = np.any(np.isnan(hyp), axis=0)
+                if np.any(unset):
+                    raise ValueError(
+                        "Cannot compute the posterior: the hyperparameters "
+                        + ", ".join(self.__hyperparameter_names(unset))
+                        + " are NaN (not set)."
+                    )
 
         if rank_one_update:
             cov_N = self.covariance.hyperparameter_count(self.D)
@@ -1352,19 +1369,10 @@ class GP:
                 self.posteriors[s] = self.__core_computation(hyp_s, 0, 0)
 
         else:
-            if hyp is None:
-                hyp = self.get_hyperparameters(as_array=True)
             s_N, _ = hyp.shape
             self.posteriors = np.empty((s_N,), dtype=Posterior)
 
             if compute_posterior and self.X is not None and self.y is not None:
-                unset = np.any(np.isnan(hyp), axis=0)
-                if np.any(unset):
-                    raise ValueError(
-                        "Cannot compute the posterior: the hyperparameters "
-                        + ", ".join(self.__hyperparameter_names(unset))
-                        + " are NaN (not set)."
-                    )
                 for i in range(0, s_N):
                     self.posteriors[i] = self.__core_computation(
                         hyp[i, :], 0, 0
