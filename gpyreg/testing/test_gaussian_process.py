@@ -3545,6 +3545,126 @@ def test_fit_raises_what_it_documents():
         assert "Cholesky" in str(caught.value)
 
 
+def _assert_same_values(value, expected, path="gp"):
+    """Compare two values made of dictionaries, arrays, objects and
+    scalars, entry by entry, NaN equal to NaN."""
+    if isinstance(expected, dict):
+        assert isinstance(value, dict) and value.keys() == expected.keys()
+        for key in expected:
+            _assert_same_values(value[key], expected[key], f"{path}.{key}")
+    elif isinstance(expected, np.ndarray) and expected.dtype == object:
+        assert value.shape == expected.shape, path
+        for i, (entry, entry_expected) in enumerate(
+            zip(value.ravel(), expected.ravel())
+        ):
+            _assert_same_values(entry, entry_expected, f"{path}[{i}]")
+    elif isinstance(expected, np.ndarray):
+        equal_nan = expected.dtype.kind in "fc"
+        assert np.array_equal(value, expected, equal_nan=equal_nan), path
+    elif hasattr(expected, "__dict__") and not callable(expected):
+        assert type(value) is type(expected), path
+        _assert_same_values(vars(value), vars(expected), path)
+    elif isinstance(expected, float) and np.isnan(expected):
+        assert np.isnan(value), path
+    else:
+        assert value == expected, path
+
+
+def _gp_holding_other_data():
+    """A one-dimensional GP holding the data of ten points, their
+    posterior, the bounds of its noise, a prior whose degrees of freedom
+    a fit fills for its duration, and the type masks of its prior, which
+    an evaluation of its log posterior builds."""
+    gp = _gp_1d()
+    bounds = {name: None for name in _no_priors()}
+    bounds["noise_log_scale"] = (-6.0, 0.0)
+    gp.set_bounds(bounds)
+    priors = _no_priors()
+    priors["covariance_log_outputscale"] = ("student_t", (0.0, 1.0, np.nan))
+    gp.set_priors(priors)
+    X = np.reshape(np.linspace(-1, 1, 10), (-1, 1))
+    hyp = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+    gp.update(X_new=X, y_new=np.sin(3 * X), hyp=hyp)
+    gp.log_posterior(hyp[0])
+    assert gp._prior_cache is not None
+    return gp
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["no spread", "NaN start", "failed factorization", "unknown sampler"],
+)
+@pytest.mark.parametrize("held", ["nothing", "other data"])
+def test_a_fit_that_raises_leaves_the_gp_as_it_was(held, failure, monkeypatch):
+    """Whatever ``fit`` raises once it has begun to change the GP, it
+    leaves the GP as it was before the call, holding the very objects it
+    held (its data, bounds, priors, posteriors and the caches built from
+    them), and re-raises: a column of inputs without spread, refused
+    before the fit changes anything; a starting point of NaN, which a fit
+    without a design or an optimization keeps and its final ``update``
+    refuses, where the factorization of the objective does not fail on
+    it; that factorization failing, as it does on the LAPACK of the macOS
+    runners; and a sampler refused after the optimization. The fit
+    stored the data it was given first, which left a GP holding other
+    data with its new inputs beside its old posteriors, so that
+    ``predict`` raised or mixed the two, and a fresh GP with the data and
+    the bounds of a fit that did not complete."""
+    gp = _gp_1d() if held == "nothing" else _gp_holding_other_data()
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    nan_start = {
+        "hyp0": np.full((1, 4), np.nan),
+        "options": {"n_samples": 0, "init_N": 0, "opts_N": 0},
+    }
+    given, raised, message = {
+        "no spread": (
+            {"X": np.full((8, 1), 0.5), "options": _FIT_OPTIONS},
+            ValueError,
+            "have no spread in",
+        ),
+        "NaN start": (
+            nan_start,
+            (ValueError, scipy.linalg.LinAlgError),
+            None,
+        ),
+        "failed factorization": (
+            nan_start,
+            scipy.linalg.LinAlgError,
+            "Cholesky",
+        ),
+        "unknown sampler": (
+            {"options": dict(_FIT_OPTIONS, n_samples=2, sampler_name="?")},
+            ValueError,
+            "Unknown sampler",
+        ),
+    }[failure]
+    if failure == "failed factorization":
+        cholesky = scipy.linalg.cholesky
+
+        def cholesky_refusing_nan(a, *args, **kwargs):
+            if np.any(np.isnan(a)):
+                raise scipy.linalg.LinAlgError("The matrix holds NaN.")
+            return cholesky(a, *args, **kwargs)
+
+        monkeypatch.setattr(scipy.linalg, "cholesky", cholesky_refusing_nan)
+    x_star = np.reshape(np.linspace(-1.5, 1.5, 7), (-1, 1))
+    if held == "other data":
+        prediction = gp.predict(x_star)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+
+    with pytest.raises(raised, match=message):
+        gp.fit(**dict({"X": X, "y": y}, **given), rng=0)
+
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
+    _assert_same_values(vars(gp), values)
+    if held == "other data":
+        for value, expected in zip(gp.predict(x_star), prediction):
+            assert np.array_equal(value, expected)
+
+
 @pytest.mark.parametrize("given", ["neither", "X", "y"])
 def test_fit_without_training_data_raises(given):
     """A fit needs training inputs and targets, given to it or held by the
@@ -3579,6 +3699,185 @@ def test_update_without_hyperparameters_raises():
     message = execinfo.value.args[0]
     for name in _no_priors():
         assert name in message
+
+
+_NAN_HYPERPARAMETERS = {
+    "hyp": lambda gp, x: gp.update(hyp=np.full((1, 4), np.nan)),
+    "one_sample_of_two": lambda gp, x: gp.update(
+        hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0], [0.0, np.nan, 0.0, 0.0]])
+    ),
+    "data_and_hyp": lambda gp, x: gp.update(
+        X_new=x, y_new=np.sin(x), hyp=np.full((1, 4), np.nan)
+    ),
+    "set_hyperparameters": lambda gp, x: gp.set_hyperparameters(
+        np.full(4, np.nan)
+    ),
+    "data": lambda gp, x: gp.update(X_new=x, y_new=np.sin(x)),
+    "nothing": lambda gp, x: gp.update(),
+}
+
+
+@pytest.mark.parametrize(
+    "held, call",
+    [
+        ("data", "hyp"),
+        ("data", "one_sample_of_two"),
+        ("data", "data_and_hyp"),
+        ("data", "set_hyperparameters"),
+        ("nothing", "data_and_hyp"),
+        ("nothing", "data"),
+        ("data without hyperparameters", "nothing"),
+        ("data without hyperparameters", "data"),
+    ],
+)
+def test_update_refuses_nan_hyperparameters_before_it_changes_anything(
+    held, call
+):
+    """``update`` refuses the NaN hyperparameters from which it would
+    compute a posterior before it changes anything: a GP that predicts
+    keeps its data and posteriors, the very objects it held, and predicts
+    as before, and a GP without hyperparameters keeps the data it held,
+    and holds none of the data it is given. The update stored the data
+    and replaced the posteriors with empty ones first, after which
+    ``predict`` raised ``AttributeError``."""
+    gp = _gp_1d()
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    if held == "data":
+        gp.update(
+            X_new=X,
+            y_new=np.sin(X),
+            hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]),
+        )
+    elif held == "data without hyperparameters":
+        gp.update(X_new=X, y_new=np.sin(X), compute_posterior=False)
+    x = np.reshape(np.linspace(-1.5, 1.5, 3), (-1, 1))
+    if held == "data":
+        prediction = gp.predict(x)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+
+    with pytest.raises(ValueError, match="are NaN"):
+        _NAN_HYPERPARAMETERS[call](gp, x + 0.1)
+
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
+    _assert_same_values(vars(gp), values)
+    if held == "data":
+        for value, expected in zip(gp.predict(x), prediction):
+            assert np.array_equal(value, expected)
+
+
+_FAILED_UPDATES = {
+    # name: (noise standard deviation, hyperparameter samples, the
+    # posteriors without the factor of the low-noise representation, the
+    # fewest rows of a matrix whose Cholesky decomposition fails, the
+    # number of such decompositions that succeed first, call)
+    "full": (0.1, 1, [], 1, 0, lambda gp, x, h: gp.update(hyp=h)),
+    "full_low_noise": (1e-5, 1, [], 1, 0, lambda gp, x, h: gp.update(hyp=h)),
+    "full_with_data": (
+        0.1,
+        2,
+        [],
+        8,
+        0,
+        lambda gp, x, h: gp.update(X_new=x[:2], y_new=np.sin(x[:2])),
+    ),
+    "set_hyperparameters": (
+        0.1,
+        2,
+        [],
+        1,
+        0,
+        lambda gp, x, h: gp.set_hyperparameters(h[:2]),
+    ),
+    "rank_one_fallback": (
+        1e-5,
+        2,
+        [1],
+        8,
+        0,
+        lambda gp, x, h: gp.update(X_new=x[:1], y_new=np.sin(x[:1])),
+    ),
+    "rank_one_second_fallback": (
+        1e-5,
+        3,
+        [1, 2],
+        8,
+        1,
+        lambda gp, x, h: gp.update(X_new=x[:1], y_new=np.sin(x[:1])),
+    ),
+}
+
+
+@pytest.mark.parametrize("failure", list(_FAILED_UPDATES))
+def test_an_update_that_raises_leaves_the_gp_as_it_was(failure, monkeypatch):
+    """Whatever ``update`` raises once it has begun to change the GP, it
+    leaves the GP as it was before the call, holding the very objects it
+    held (its data, its array of posteriors, the posteriors in it and
+    their attributes), and re-raises. Here the Cholesky decomposition of
+    the training covariance fails, as a factorization does after all its
+    retries: in an update that recomputes every posterior, in both
+    representations and with new data; in ``set_hyperparameters``; and,
+    on the matrices of the new data alone, in the full recomputation to
+    which the single-point update falls back for a posterior without the
+    factor that it extends (as one pickled by gpyreg 1.3.1 is), after it
+    extended another posterior in place, and after it recomputed a third
+    posterior into the array of posteriors. The update stored the data
+    and replaced or extended the posteriors first, so that ``predict``
+    raised or mixed extended posteriors with those of the old data."""
+    noise, s_N, without_factor, rows, succeeding, call = _FAILED_UPDATES[
+        failure
+    ]
+    X = np.reshape(np.linspace(-2, 2, 7), (-1, 1))
+    hyp = np.array(
+        [
+            [0.0, 0.0, np.log(noise), 0.0],
+            [0.2, 0.1, np.log(noise), 0.1],
+            [-0.2, 0.2, np.log(noise), -0.1],
+        ]
+    )
+    gp = _gp_1d()
+    gp.update(X_new=X, y_new=np.sin(X), hyp=hyp[:s_N])
+    for s in without_factor:
+        assert not gp.posteriors[s].L_chol
+        del gp.posteriors[s].L_factor
+    x = np.reshape(np.linspace(-1.5, 1.5, 3), (-1, 1))
+    prediction = gp.predict(x)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+    posteriors = list(gp.posteriors)
+    posterior_attributes = [dict(vars(p)) for p in posteriors]
+
+    cholesky = scipy.linalg.cholesky
+    count = {"succeeded": 0}
+
+    def cholesky_failing(a, *args, **kwargs):
+        if np.shape(a)[0] >= rows:
+            if count["succeeded"] >= succeeding:
+                raise scipy.linalg.LinAlgError("The planted failure.")
+            count["succeeded"] += 1
+        return cholesky(a, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(scipy.linalg, "cholesky", cholesky_failing)
+        with pytest.raises(scipy.linalg.LinAlgError, match="Cholesky"):
+            call(gp, x + 0.1, hyp[::-1] + 0.05)
+    assert count["succeeded"] == succeeding
+
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
+    for posterior, posterior_expected, expected in zip(
+        gp.posteriors, posteriors, posterior_attributes
+    ):
+        assert posterior is posterior_expected
+        assert vars(posterior).keys() == expected.keys()
+        for name, value in expected.items():
+            assert vars(posterior)[name] is value, name
+    _assert_same_values(vars(gp), values)
+    for value, expected in zip(gp.predict(x), prediction):
+        assert np.array_equal(value, expected)
 
 
 def test_fit_leaves_the_prior_degrees_of_freedom_alone():
@@ -4521,6 +4820,67 @@ def test_fit_takes_the_data_that_leave_the_numbers_equal(
         assert np.array_equal(s2_kept, new["s2"])
     else:
         assert np.array_equal(s2_kept, data["s2_new"])
+
+
+_CALLS_ON_HELD_DATA = {
+    "update": lambda gp, data: gp.update(),
+    "update-hyp": lambda gp, data: gp.update(
+        hyp=np.array([[0.1, 0.0, np.log(0.1), 0.0]])
+    ),
+    "set_hyperparameters": lambda gp, data: gp.set_hyperparameters(
+        np.array([[0.1, 0.0, np.log(0.1), 0.0]])
+    ),
+    "fit-X-y": lambda gp, data: gp.fit(
+        data["X_new"],
+        data["y_new"],
+        options=_FIT_OPTIONS,
+        rng=np.random.default_rng(0),
+    ),
+    "fit": lambda gp, data: gp.fit(
+        options=_FIT_OPTIONS, rng=np.random.default_rng(0)
+    ),
+}
+
+
+@pytest.mark.parametrize("call", list(_CALLS_ON_HELD_DATA))
+@pytest.mark.parametrize(
+    "variance", [0.01, np.float64(0.01)], ids=["float", "float64"]
+)
+@pytest.mark.parametrize("reads_variances", [True, False])
+def test_a_number_held_as_the_noise_variances_is_not_counted(
+    reads_variances, variance, call
+):
+    """A caller may assign a number to the ``s2`` of a GP, which the
+    noise function adds at every input. A value without rows is not
+    counted by the checks that a GP holds as many noise variances as
+    inputs: ``update``, ``set_hyperparameters`` and ``fit`` run on such a
+    GP, keep the number and compute what they compute on a GP that holds
+    that variance at every input. They raised ``AttributeError`` or
+    ``IndexError`` from the checks."""
+    gp, data = _gp_holding("data", reads_variances)
+    gp.s2 = variance
+    reference, __ = _gp_holding("data", reads_variances)
+    reference.s2 = np.full((8, 1), variance)
+
+    _CALLS_ON_HELD_DATA[call](gp, data)
+    _CALLS_ON_HELD_DATA[call](reference, data)
+
+    assert gp.s2 is variance
+    x_star = np.reshape(np.linspace(-2.2, 2.2, 5), (-1, 1))
+    results = (gp.get_hyperparameters(as_array=True), *gp.predict(x_star))
+    results_reference = (
+        reference.get_hyperparameters(as_array=True),
+        *reference.predict(x_star),
+    )
+    for value, value_reference in zip(results, results_reference):
+        # A number added at every input takes other paths through the
+        # factorization and the gradient than an array does, which round
+        # differently; a noise function that does not read the variances
+        # takes the same.
+        if reads_variances:
+            assert np.allclose(value, value_reference, rtol=1e-6, atol=1e-9)
+        else:
+            assert np.array_equal(value, value_reference)
 
 
 def test_fit_with_targets_of_a_tiny_range(monkeypatch):

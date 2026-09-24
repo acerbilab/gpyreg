@@ -497,7 +497,14 @@ class GP:
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
+        return self.__recommended_bounds(
+            self.X, self.y, lower_bounds, upper_bounds
+        )
 
+    def __recommended_bounds(self, X, y, lower_bounds, upper_bounds):
+        """:py:meth:`get_recommended_bounds` for the training inputs ``X``
+        and targets ``y``, which :py:meth:`fit` computes for the data it
+        is given before it stores them."""
         if not isinstance(lower_bounds, (list, tuple, np.ndarray)):
             if lower_bounds == "current":
                 # Use existing bounds; fill any nan values with recommended
@@ -545,9 +552,9 @@ class GP:
         mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
 
-        cov_bounds_info = self.covariance.get_bounds_info(self.X, self.y)
-        mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
-        noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
+        cov_bounds_info = self.covariance.get_bounds_info(X, y)
+        mean_bounds_info = self.mean.get_bounds_info(X, y)
+        noise_bounds_info = self.noise.get_bounds_info(X, y)
 
         lb = lower_bounds
         ub = upper_bounds
@@ -596,7 +603,7 @@ class GP:
         empty = (recommended_ub == -np.inf) & ~np.isfinite(lb)
         if np.any(empty):
             names = ", ".join(self.__hyperparameter_names(empty))
-            width = np.max(self.X, axis=0) - np.min(self.X, axis=0)
+            width = np.max(X, axis=0) - np.min(X, axis=0)
             columns = ", ".join(
                 f"X[:, {j}]" for j in np.flatnonzero(width == 0)
             )
@@ -869,6 +876,10 @@ class GP:
         """
         Set new hyperparameters for the Gaussian Process.
 
+        The hyperparameters go to :py:meth:`update`, and a call that raises
+        leaves the GP as it was before the call, with the hyperparameters
+        and posteriors that it held.
+
         Parameters
         ==========
         hyp_new : object
@@ -886,6 +897,14 @@ class GP:
         ------
         ValueError
             Raised when `hyp_new` is an array of the wrong shape.
+        ValueError
+            Raised by :py:meth:`update`, before it changes anything, when
+            ``compute_posterior`` is ``True``, the GP holds training inputs
+            and targets, and a hyperparameter is NaN (not set).
+        LinAlgError
+            Raised by :py:meth:`update` when the Cholesky decomposition of
+            the training covariance fails even after its noise is
+            multiplied tenfold, up to ten times; the GP is left as it was.
         """
         if isinstance(hyp_new, np.ndarray):
             cov_N = self.covariance.hyperparameter_count(self.D)
@@ -1000,6 +1019,35 @@ class GP:
 
         return hyp_new_arr
 
+    def __state(self):
+        """The state of the GP that :py:meth:`fit` and :py:meth:`update`
+        put back with :py:meth:`__restore` when they raise once they have
+        begun to change it: its attributes, and the entries of its array
+        of posteriors and their attributes, which the single-point
+        extension of ``update`` changes in place. Everything else that the
+        two change is an attribute of the GP that they replace, apart from
+        the degrees of freedom of the priors, which ``fit`` puts back
+        itself."""
+        entries = None
+        if self.posteriors is not None:
+            entries = [
+                (p, None if p is None else dict(vars(p)))
+                for p in self.posteriors
+            ]
+        return dict(self.__dict__), self.posteriors, entries
+
+    def __restore(self, state):
+        """Put back the state that :py:meth:`__state` took."""
+        attributes, posteriors, entries = state
+        self.__dict__.clear()
+        self.__dict__.update(attributes)
+        if entries is not None:
+            for i, (posterior, posterior_attributes) in enumerate(entries):
+                posteriors[i] = posterior
+                if posterior is not None:
+                    vars(posterior).clear()
+                    vars(posterior).update(posterior_attributes)
+
     def update(
         self,
         X_new: np.ndarray = None,
@@ -1010,6 +1058,9 @@ class GP:
     ):
         """
         Add new data to the Gaussian Process.
+
+        An update that raises leaves the GP as it was before the call, with
+        the training data and posteriors that it held.
 
         Parameters
         ==========
@@ -1054,14 +1105,18 @@ class GP:
             Raised when ``s2_new`` is neither an array, a number nor
             ``None``, such as a list, before the update changes anything.
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even
-            by adding numerical stability values to the matrix.
+            Raised when the Cholesky decomposition of the training
+            covariance fails even after its noise is multiplied tenfold, up
+            to ten times, in a posterior computed in full or in the full
+            recomputation to which a single-point update falls back; the
+            GP is left as it was.
         ValueError
             Raised when ``hyp`` is not a 2D array with one column per
             hyperparameter of the GP.
         ValueError
-            Raised when ``compute_posterior`` is ``True``, the GP has
-            training data and a new posterior is computed in full, and a
+            Raised, before the update changes anything, when
+            ``compute_posterior`` is ``True``, the GP would hold training
+            inputs and targets, every posterior is computed in full, and a
             hyperparameter is NaN (not set), as it is on a GP whose
             hyperparameters were never given.
         """
@@ -1141,12 +1196,16 @@ class GP:
         # differ is refused here, before it changes anything; numbers that
         # differ already, as after a `fit` given inputs of another number
         # and no variances, which keeps the variances held, are not
-        # checked.
+        # checked, and neither is a value without rows, such as a number
+        # that a caller assigns to `s2`, which the noise function adds at
+        # every input.
         N_all = 0 if X_all is None else X_all.shape[0]
         for name, held, stored in (
             ("targets", self.y, y_all),
             ("noise variances", self.s2, s2_all),
         ):
+            if held is not None and np.ndim(held) == 0:
+                continue
             agreed = held is None or held.shape[0] == N_old
             if agreed and stored is not None and stored.shape[0] != N_all:
                 raise ValueError(
@@ -1173,6 +1232,59 @@ class GP:
                 and self.posteriors[0].alpha is not None
             ):
                 rank_one_update = True
+
+        # The hyperparameters of an update that recomputes every
+        # posterior, those given or those the GP holds, from which no
+        # posterior can be computed where one is NaN (not set): such an
+        # update is refused here, before it changes anything.
+        if not rank_one_update:
+            if hyp is None:
+                hyp = self.get_hyperparameters(as_array=True)
+            if compute_posterior and X_all is not None and y_all is not None:
+                unset = np.any(np.isnan(hyp), axis=0)
+                if np.any(unset):
+                    raise ValueError(
+                        "Cannot compute the posterior: the hyperparameters "
+                        + ", ".join(self.__hyperparameter_names(unset))
+                        + " are NaN (not set)."
+                    )
+
+        # Whatever the update raises from here on, it leaves the GP as it
+        # was before the call.
+        state = self.__state()
+        try:
+            self.__apply_update(
+                X_new,
+                y_new,
+                s2_new,
+                hyp,
+                compute_posterior,
+                rank_one_update,
+                X_all,
+                y_all,
+                s2_all,
+            )
+        except BaseException:
+            self.__restore(state)
+            raise
+
+    def __apply_update(
+        self,
+        X_new,
+        y_new,
+        s2_new,
+        hyp,
+        compute_posterior,
+        rank_one_update,
+        X_all,
+        y_all,
+        s2_all,
+    ):
+        """The changes that :py:meth:`update` makes once it has checked its
+        arguments: the single-point extension of the posteriors, or their
+        recomputation, and the data after the update, ``X_all``, ``y_all``
+        and ``s2_all``, stored after the extension, which reads the data
+        held before it."""
         full_updates = []  # Keep track of unstable rank-1 updates
 
         if rank_one_update:
@@ -1341,19 +1453,10 @@ class GP:
                 self.posteriors[s] = self.__core_computation(hyp_s, 0, 0)
 
         else:
-            if hyp is None:
-                hyp = self.get_hyperparameters(as_array=True)
             s_N, _ = hyp.shape
             self.posteriors = np.empty((s_N,), dtype=Posterior)
 
             if compute_posterior and self.X is not None and self.y is not None:
-                unset = np.any(np.isnan(hyp), axis=0)
-                if np.any(unset):
-                    raise ValueError(
-                        "Cannot compute the posterior: the hyperparameters "
-                        + ", ".join(self.__hyperparameter_names(unset))
-                        + " are NaN (not set)."
-                    )
                 for i in range(0, s_N):
                     self.posteriors[i] = self.__core_computation(
                         hyp[i, :], 0, 0
@@ -1401,6 +1504,9 @@ class GP:
     ):
         """
         Train the hyperparameters of the Gaussian Process.
+
+        A fit that raises leaves the GP as it was before the call, with
+        the training data, bounds, priors and posteriors that it held.
 
         Parameters
         ==========
@@ -1513,13 +1619,13 @@ class GP:
             it holds, are not one per row of ``X``.
         ValueError
             Raised by :py:meth:`get_recommended_bounds`, through which the
-            fit fills the bounds that are not set: when the option
-            ``lower_bounds`` or ``upper_bounds`` is neither
-            ``"recommended"``, ``None``, ``"current"`` nor an array, when
-            a lower bound given is above its upper bound, or when a column
-            of the training inputs has no spread and a hyperparameter
-            whose recommended bounds take their scale from it is not given
-            a finite lower bound.
+            fit fills the bounds that are not set, before the fit changes
+            anything: when the option ``lower_bounds`` or ``upper_bounds``
+            is neither ``"recommended"``, ``None``, ``"current"`` nor an
+            array, when a lower bound given is above its upper bound, or
+            when a column of the training inputs has no spread and a
+            hyperparameter whose recommended bounds take their scale from
+            it is not given a finite lower bound.
         ValueError
             Raised when the option ``opts_N``, ``init_N`` or ``n_samples``
             is not a whole number of at least zero, the option ``thin``
@@ -1614,7 +1720,9 @@ class GP:
         # variances, that the GP holds can make the numbers differ, and
         # such data are refused here, before the fit changes anything.
         # Numbers that differ already are not checked, and neither are
-        # variances that the noise function does not read.
+        # variances that the noise function does not read, nor a value
+        # without rows, such as a number that a caller assigns to `s2`,
+        # which the noise function adds at every input.
         N_old = None if self.X is None else self.X.shape[0]
         N_all = N_old if X is None else X.shape[0]
         counted = [("targets", "y", self.y, y, "")]
@@ -1630,7 +1738,7 @@ class GP:
                 )
             )
         for name, argument, held, given, note in counted:
-            if given is None and held is not None:
+            if given is None and held is not None and np.ndim(held) > 0:
                 N_held = held.shape[0]
                 if N_held == N_old and N_held != N_all:
                     raise ValueError(
@@ -1640,15 +1748,10 @@ class GP:
                         f"{argument} with X, one per input."
                     )
 
-        # Initialize GP if requested.
-        if X is not None:
-            self.X = X
-
-        if y is not None:
-            self.y = y
-
-        if s2 is not None:
-            self.s2 = s2
+        # The training data of the fit: those given, and those the GP
+        # holds for what is not given.
+        X_fit = self.X if X is None else X
+        y_fit = self.y if y is None else y
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         # mean_N = self.mean.hyperparameter_count(self.D)
@@ -1656,42 +1759,61 @@ class GP:
 
         ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
 
-        cov_bounds_info = self.covariance.get_bounds_info(self.X, self.y)
-        mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
-        noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
+        cov_bounds_info = self.covariance.get_bounds_info(X_fit, y_fit)
+        mean_bounds_info = self.mean.get_bounds_info(X_fit, y_fit)
+        noise_bounds_info = self.noise.get_bounds_info(X_fit, y_fit)
 
-        # The default degrees of freedom fill what a prior leaves
-        # unset for the duration of the fit alone: the objectives read
-        # the GP's own priors, and the GP keeps the priors the caller
-        # set, so a second fit with another `df_base` uses it
-        # (`gplite_train.m:113-117` builds its own copy the same way).
-        df_given = self.hyper_priors["df"]
-        df_filled = df_given.copy()
-        df_filled[np.isnan(df_filled)] = df_base
-        self.hyper_priors["df"] = df_filled
-        self._prior_cache = None  # the prior's type masks depend on df
-        try:
-
-            # Set any unset bounds:
-            use_current_bounds = (
-                isinstance(lower_bounds, str)
-                and lower_bounds == "current"
-                and isinstance(upper_bounds, str)
-                and upper_bounds == "current"
+        # The bounds of the fit, with the recommendations for its data
+        # where they are unset, computed, and refused where
+        # `get_recommended_bounds` refuses them (as for a column of inputs
+        # without spread), before the fit changes anything.
+        use_current_bounds = (
+            isinstance(lower_bounds, str)
+            and lower_bounds == "current"
+            and isinstance(upper_bounds, str)
+            and upper_bounds == "current"
+        )
+        if use_current_bounds and (
+            np.any(np.isnan(self.lower_bounds))
+            or np.any(np.isnan(self.upper_bounds))
+        ):  # If we're using the existing bounds, fill any nan's:
+            bounds = self.__recommended_bounds(
+                X_fit, y_fit, self.lower_bounds, self.upper_bounds
             )
-            if use_current_bounds and (
-                np.any(np.isnan(self.lower_bounds))
-                or np.any(np.isnan(self.upper_bounds))
-            ):  # If we're using the existing bounds, fill any nan's:
-                self.set_bounds(
-                    self.get_recommended_bounds(
-                        self.lower_bounds, self.upper_bounds
-                    )
-                )
-            else:  # Otherwise set the bounds according to the provided options:
-                self.set_bounds(
-                    self.get_recommended_bounds(lower_bounds, upper_bounds)
-                )
+        else:  # Otherwise take the bounds the options provide:
+            bounds = self.__recommended_bounds(
+                X_fit, y_fit, lower_bounds, upper_bounds
+            )
+
+        # Whatever the fit raises from here on, it leaves the GP as it was
+        # before the call: it puts back this state and, itself, the
+        # degrees of freedom of the priors, which it writes into
+        # `hyper_priors`.
+        state = self.__state()
+        df_given = self.hyper_priors["df"]
+        failed = False
+        try:
+            # Initialize GP if requested.
+            if X is not None:
+                self.X = X
+
+            if y is not None:
+                self.y = y
+
+            if s2 is not None:
+                self.s2 = s2
+
+            # The default degrees of freedom fill what a prior leaves
+            # unset for the duration of the fit alone: the objectives read
+            # the GP's own priors, and the GP keeps the priors the caller
+            # set, so a second fit with another `df_base` uses it
+            # (`gplite_train.m:113-117` builds its own copy the same way).
+            df_filled = df_given.copy()
+            df_filled[np.isnan(df_filled)] = df_base
+            self.hyper_priors["df"] = df_filled
+            self._prior_cache = None  # the prior's type masks depend on df
+
+            self.set_bounds(bounds)
 
             LB = self.lower_bounds
             UB = self.upper_bounds
@@ -1909,10 +2031,16 @@ class GP:
             # Recompute GP with finalized hyperparameters.
             self.update(hyp=hyp)
             return hyp, optimize_result, sampling_result
+        except BaseException:
+            failed = True
+            raise
         finally:
             self.hyper_priors["df"] = df_given
-            self._prior_cache = None
-            self.__recompute_normalization_constants()
+            if failed:
+                self.__restore(state)
+            else:
+                self._prior_cache = None
+                self.__recompute_normalization_constants()
 
     def __recompute_normalization_constants(self):
         self.normalization_constants = np.full(self.lower_bounds.shape, 1.0)
