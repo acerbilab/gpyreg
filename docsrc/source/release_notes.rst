@@ -14,13 +14,14 @@ Release notes
 A point marked **Upgrading** says what a script written for 1.3.2 may have
 to change.
 
-* :meth:`gpyreg.GP.update`, :meth:`gpyreg.GP.set_hyperparameters` and
-  :meth:`gpyreg.GP.fit` run on a GP whose ``s2`` holds a number, as a
-  caller may assign it, which the noise function adds at every input. The
-  checks that a GP holds as many noise variances as inputs read the number
-  of rows of ``s2`` and raised ``AttributeError`` or ``IndexError`` for
-  such a value; a value without rows is not counted, and the calls run as
-  they did in 1.3.1, to the last bit.
+* ``update()``, ``update(hyp=...)``, :meth:`gpyreg.GP.set_hyperparameters`,
+  ``fit(X, y)`` and ``fit()`` run on a GP whose ``s2`` holds a number, as
+  a caller may assign it, which the noise function adds at every input
+  (an ``update`` given new data needs ``s2`` as an array, as in every
+  release). The checks that a GP holds as many noise variances as inputs
+  read the number of rows of ``s2`` and raised ``AttributeError`` or
+  ``IndexError`` for such a value; a value without rows is not counted,
+  and the calls run as they did in 1.3.1, to the last bit.
 * A call of :meth:`gpyreg.GP.fit` or :meth:`gpyreg.GP.update`, and of
   :meth:`gpyreg.GP.set_hyperparameters` through ``update``, that raises
   leaves the GP as it was before the call, with the training data, bounds,
@@ -605,7 +606,12 @@ to change.
   new type of an exception where a script catches the old one; such a
   script changes as follows:
 
-  - a name the model has not, which set nothing, is left out;
+  - a name the model has not, which set nothing, is left out; PyVBMC 1.0.4
+    is such a caller: at its uncertainty level 1 (``uncertainty_handling``
+    on, and a target that does not return its own noise estimate) it sets
+    a prior on ``noise_provided_log_multiplier``, a hyperparameter its GP
+    does not have, so that every such run stops at its first GP fit; it
+    needs gpyreg 1.2.1 or earlier, or PyVBMC 1.5;
   - a prior whose ``sigma`` is infinite, zero or negative, or NaN beside
     a location, is given a positive ``sigma``, or is replaced by ``None``
     where no prior is meant (1.2.1 took the absolute value of a negative
