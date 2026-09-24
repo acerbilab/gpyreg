@@ -1,4 +1,5 @@
 import copy
+import os
 import warnings
 from fractions import Fraction
 
@@ -2619,6 +2620,63 @@ def test_low_noise_predictions_at_the_training_inputs():
     M = x_star.shape[0]
     tolerance = 10 * M * eps * np.linalg.norm(K_star, 2)
     assert np.min(np.linalg.eigvalsh(cov[:, :, 0])) > -tolerance
+
+
+@pytest.mark.parametrize("representation", ["cholesky", "low_noise"])
+def test_rank_one_fallback_warns_at_the_line_of_the_caller(
+    representation, monkeypatch
+):
+    """A single-point update whose extension of the posterior factor is
+    unstable warns and recomputes the posterior in full; the warning names
+    the line that called ``update``, as its ``stacklevel`` means it to, and
+    not a line of gpyreg. The instability is forced: in the Cholesky
+    representation by a noise scale of the factor so small that the new
+    diagonal entry has no square root, in the low-noise one by the clamped
+    predictive variance of the new point."""
+    D = 2
+    rng = np.random.default_rng(3)
+    X = rng.uniform(-3, 3, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    x_new = rng.uniform(-3, 3, size=(1, D))
+    y_new = np.sin(x_new[:, 0:1])
+    if representation == "cholesky":
+        gp = gpr.GP(
+            D=D,
+            covariance=gpr.covariance_functions.SquaredExponential(),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+        gp.update(
+            X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, 0.0, -1.0, 0.0]])
+        )
+        assert gp.posteriors[0].L_chol
+        monkeypatch.setattr(
+            gpr.gaussian_process.Posterior,
+            "_noise_scale",
+            lambda self: 1e-300,
+        )
+    else:
+        gp = _low_noise_rank_one_gp(D)
+        gp.update(X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, 0.0, 0.0]]))
+        assert not gp.posteriors[0].L_chol
+        predict = gp.predict
+
+        def predict_at_the_clamp(*args, **kwargs):
+            mu, s2 = predict(*args, **kwargs)
+            return mu, np.zeros_like(s2)
+
+        monkeypatch.setattr(gp, "predict", predict_at_the_clamp)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        gp.update(X_new=x_new, y_new=y_new)
+    fallbacks = [
+        w for w in caught if "Reverting to full update" in str(w.message)
+    ]
+    assert len(fallbacks) == 1
+    assert os.path.normcase(fallbacks[0].filename) == os.path.normcase(
+        __file__
+    )
 
 
 def test_low_noise_rank_one_updates_match_a_full_recomputation():

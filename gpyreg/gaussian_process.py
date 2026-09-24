@@ -1355,7 +1355,7 @@ class GP:
                         warnings.warn(
                             "Rank-one update of Cholesky factor unstable "
                             + f"for posterior {s}. Reverting to full update.",
-                            stacklevel=2,
+                            stacklevel=3,
                         )
                     else:  # Otherwise continue with rank-1 update:
                         alpha_update = (
@@ -1394,7 +1394,7 @@ class GP:
                                 "Rank-one update of the posterior factor "
                                 f"unstable for posterior {s}. Reverting to "
                                 "full update.",
-                                stacklevel=2,
+                                stacklevel=3,
                             )
                     else:
                         # inv(K + sn2_mult * sn2) k* from the Cholesky
