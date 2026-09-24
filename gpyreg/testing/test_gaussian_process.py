@@ -3527,14 +3527,22 @@ def test_fit_raises_what_it_documents():
             ),
         )
     # Without a space-filling design or an optimization, the fit keeps
-    # the starting point it is given, NaN included.
-    with pytest.raises(ValueError, match="are NaN"):
+    # the starting point it is given, NaN included, and `update` refuses
+    # it. The objective evaluated there factors a covariance that holds
+    # NaN first, and whether that factorization reports a failure depends
+    # on the LAPACK build (the one of macOS runners does): where it does,
+    # the fit raises the LinAlgError of the factorization instead.
+    with pytest.raises((ValueError, scipy.linalg.LinAlgError)) as caught:
         _gp_1d().fit(
             X,
             y,
             hyp0=np.full((1, 4), np.nan),
             options={"n_samples": 0, "init_N": 0, "opts_N": 0},
         )
+    if caught.type is ValueError:
+        assert "are NaN" in str(caught.value)
+    else:
+        assert "Cholesky" in str(caught.value)
 
 
 @pytest.mark.parametrize("given", ["neither", "X", "y"])

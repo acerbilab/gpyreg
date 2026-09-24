@@ -1541,9 +1541,13 @@ class GP:
             Raised by :py:meth:`update`, which computes the posterior of
             the fitted hyperparameters, when one of them is NaN.
         LinAlgError
-            Raised by :py:meth:`update` when the Cholesky decomposition of
-            the training covariance of the fitted hyperparameters fails
-            even after its noise is multiplied tenfold, up to ten times.
+            Raised when the Cholesky decomposition of the training
+            covariance fails even after its noise is multiplied tenfold, up
+            to ten times: by :py:meth:`update` at the fitted
+            hyperparameters, or by the objective at a starting point or
+            during the optimization, which lets it propagate. Whether a
+            covariance that holds NaN, as from a starting point that does,
+            fails there or gives NaN depends on the LAPACK build.
         """
         # Share one stream between the initial design and the sampler,
         # including when the caller supplies a seed rather than a generator.
