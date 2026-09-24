@@ -1141,12 +1141,16 @@ class GP:
         # differ is refused here, before it changes anything; numbers that
         # differ already, as after a `fit` given inputs of another number
         # and no variances, which keeps the variances held, are not
-        # checked.
+        # checked, and neither is a value without rows, such as a number
+        # that a caller assigns to `s2`, which the noise function adds at
+        # every input.
         N_all = 0 if X_all is None else X_all.shape[0]
         for name, held, stored in (
             ("targets", self.y, y_all),
             ("noise variances", self.s2, s2_all),
         ):
+            if held is not None and np.ndim(held) == 0:
+                continue
             agreed = held is None or held.shape[0] == N_old
             if agreed and stored is not None and stored.shape[0] != N_all:
                 raise ValueError(
@@ -1614,7 +1618,9 @@ class GP:
         # variances, that the GP holds can make the numbers differ, and
         # such data are refused here, before the fit changes anything.
         # Numbers that differ already are not checked, and neither are
-        # variances that the noise function does not read.
+        # variances that the noise function does not read, nor a value
+        # without rows, such as a number that a caller assigns to `s2`,
+        # which the noise function adds at every input.
         N_old = None if self.X is None else self.X.shape[0]
         N_all = N_old if X is None else X.shape[0]
         counted = [("targets", "y", self.y, y, "")]
@@ -1630,7 +1636,7 @@ class GP:
                 )
             )
         for name, argument, held, given, note in counted:
-            if given is None and held is not None:
+            if given is None and held is not None and np.ndim(held) > 0:
                 N_held = held.shape[0]
                 if N_held == N_old and N_held != N_all:
                     raise ValueError(

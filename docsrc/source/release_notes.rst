@@ -1,6 +1,20 @@
 Release notes
 =============
 
+1.3.3 (unreleased)
+------------------
+
+A point marked **Upgrading** says what a script written for 1.3.2 may have
+to change.
+
+* :meth:`gpyreg.GP.update`, :meth:`gpyreg.GP.set_hyperparameters` and
+  :meth:`gpyreg.GP.fit` run on a GP whose ``s2`` holds a number, as a
+  caller may assign it, which the noise function adds at every input. The
+  checks that a GP holds as many noise variances as inputs read the number
+  of rows of ``s2`` and raised ``AttributeError`` or ``IndexError`` for
+  such a value; a value without rows is not counted, and the calls run as
+  they did in 1.3.1, to the last bit.
+
 1.3.2 (2026-09-24)
 ------------------
 

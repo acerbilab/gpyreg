@@ -4523,6 +4523,67 @@ def test_fit_takes_the_data_that_leave_the_numbers_equal(
         assert np.array_equal(s2_kept, data["s2_new"])
 
 
+_CALLS_ON_HELD_DATA = {
+    "update": lambda gp, data: gp.update(),
+    "update-hyp": lambda gp, data: gp.update(
+        hyp=np.array([[0.1, 0.0, np.log(0.1), 0.0]])
+    ),
+    "set_hyperparameters": lambda gp, data: gp.set_hyperparameters(
+        np.array([[0.1, 0.0, np.log(0.1), 0.0]])
+    ),
+    "fit-X-y": lambda gp, data: gp.fit(
+        data["X_new"],
+        data["y_new"],
+        options=_FIT_OPTIONS,
+        rng=np.random.default_rng(0),
+    ),
+    "fit": lambda gp, data: gp.fit(
+        options=_FIT_OPTIONS, rng=np.random.default_rng(0)
+    ),
+}
+
+
+@pytest.mark.parametrize("call", list(_CALLS_ON_HELD_DATA))
+@pytest.mark.parametrize(
+    "variance", [0.01, np.float64(0.01)], ids=["float", "float64"]
+)
+@pytest.mark.parametrize("reads_variances", [True, False])
+def test_a_number_held_as_the_noise_variances_is_not_counted(
+    reads_variances, variance, call
+):
+    """A caller may assign a number to the ``s2`` of a GP, which the
+    noise function adds at every input. A value without rows is not
+    counted by the checks that a GP holds as many noise variances as
+    inputs: ``update``, ``set_hyperparameters`` and ``fit`` run on such a
+    GP, keep the number and compute what they compute on a GP that holds
+    that variance at every input. They raised ``AttributeError`` or
+    ``IndexError`` from the checks."""
+    gp, data = _gp_holding("data", reads_variances)
+    gp.s2 = variance
+    reference, __ = _gp_holding("data", reads_variances)
+    reference.s2 = np.full((8, 1), variance)
+
+    _CALLS_ON_HELD_DATA[call](gp, data)
+    _CALLS_ON_HELD_DATA[call](reference, data)
+
+    assert gp.s2 is variance
+    x_star = np.reshape(np.linspace(-2.2, 2.2, 5), (-1, 1))
+    results = (gp.get_hyperparameters(as_array=True), *gp.predict(x_star))
+    results_reference = (
+        reference.get_hyperparameters(as_array=True),
+        *reference.predict(x_star),
+    )
+    for value, value_reference in zip(results, results_reference):
+        # A number added at every input takes other paths through the
+        # factorization and the gradient than an array does, which round
+        # differently; a noise function that does not read the variances
+        # takes the same.
+        if reads_variances:
+            assert np.allclose(value, value_reference, rtol=1e-6, atol=1e-9)
+        else:
+            assert np.array_equal(value, value_reference)
+
+
 def test_fit_with_targets_of_a_tiny_range(monkeypatch):
     """Targets whose standard deviation is below 1e-3, the noise's
     plausible lower bound, give the noise an inverted recommended
