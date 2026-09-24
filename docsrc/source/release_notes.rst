@@ -407,7 +407,14 @@ to change.
   meets a hard bound that moved. ``fit`` does not start from the
   recommended length scales, which reach a caller that reads them from
   ``get_bounds_info``; the bounds of the length scales were per dimension
-  already.
+  already. PyVBMC 1.0.4 is such a caller: it starts the length scales of
+  its GP from the recommendations for the points of highest density of its
+  training set, and where those points share one value in a column, the
+  start of that length scale is ``-inf``, or tens below zero where
+  rounding leaves their standard deviation in it above zero, and from
+  ``-inf`` the first GP fit of the run fails, where it completed with
+  gpyreg 1.0.3 to 1.2.1; PyVBMC 1.5 takes the statistics of such a column
+  from the whole training set.
 * The recommended bounds and starting length scale of the isotropic
   kernels take the means of the logarithms of the per-dimension widths
   and standard deviations, as MATLAB's gplite does, where they took the
