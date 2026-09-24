@@ -4306,6 +4306,125 @@ def test_update_checks_the_hyperparameter_width():
     assert np.size(gp.posteriors) == 2
 
 
+def _gp_holding(held):
+    """A one-dimensional GP whose noise function takes the variances given
+    with its data, and the data of eight training points, of which the GP
+    holds ``"nothing"``, the ``"inputs"``, the inputs and the targets
+    (``"data"``), or those and the noise variances (``"data and
+    variances"``)."""
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    data = {"X_new": X, "y_new": np.sin(X), "s2_new": np.full((8, 1), 0.01)}
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(
+            constant_add=True, user_provided_add=True
+        ),
+    )
+    names = {
+        "nothing": (),
+        "inputs": ("X_new",),
+        "data": ("X_new", "y_new"),
+        "data and variances": ("X_new", "y_new", "s2_new"),
+    }[held]
+    gp.update(
+        **{name: data[name] for name in names},
+        hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]),
+    )
+    return gp, data
+
+
+def _data_and_posteriors(gp):
+    """The data a GP holds and the attributes of its posteriors."""
+    factors = [list(vars(p).values()) for p in gp.posteriors]
+    return [gp.X, gp.y, gp.s2] + sum(factors, [])
+
+
+def _assert_equal_states(state, expected):
+    assert len(state) == len(expected)
+    for value, value_expected in zip(state, expected):
+        if value_expected is None:
+            assert value is None
+        else:
+            assert np.array_equal(value, value_expected)
+
+
+_REFUSED_UPDATES = [
+    ("nothing", ("y_new",), "targets without inputs"),
+    ("nothing", ("s2_new",), "noise variances without inputs"),
+    ("nothing", ("y_new", "s2_new"), "targets without inputs"),
+    ("data", ("y_new",), "8 inputs and 16 targets"),
+    ("data and variances", ("s2_new",), "8 inputs and 16 noise variances"),
+    ("data and variances", ("y_new", "s2_new"), "8 inputs and 16 targets"),
+    ("data", ("X_new",), "10 inputs and 8 targets"),
+    ("data and variances", ("X_new", "s2_new"), "10 inputs and 8 targets"),
+    ("inputs", ("X_new", "y_new"), "10 inputs and 2 targets"),
+]
+
+
+@pytest.mark.parametrize("compute_posterior", [True, False])
+@pytest.mark.parametrize(
+    "held, given, message",
+    _REFUSED_UPDATES,
+    ids=[
+        "-".join((held.replace(" ", "_"),) + given)
+        for held, given, __ in _REFUSED_UPDATES
+    ],
+)
+def test_update_refuses_to_make_the_numbers_of_data_differ(
+    held, given, message, compute_posterior
+):
+    """``update`` refuses a call that would leave the GP holding a number
+    of targets, or of noise variances, other than its number of inputs,
+    and says what would not match, before it changes anything. On a GP
+    without inputs it raised ``AttributeError``; on the others it stored
+    the data, and the computation of the posterior then raised and left
+    the GP without posteriors, or, with ``compute_posterior=False``,
+    nothing was raised."""
+    gp, data = _gp_holding(held)
+    if "X_new" in given:
+        x = data["X_new"][:2] + 0.05
+        new = {
+            "X_new": x,
+            "y_new": np.sin(x),
+            "s2_new": np.full((2, 1), 0.02),
+        }
+    else:
+        new = data
+    before = copy.deepcopy(_data_and_posteriors(gp))
+    posteriors = gp.posteriors
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.update(
+            **{name: new[name] for name in given},
+            compute_posterior=compute_posterior,
+        )
+    assert message in execinfo.value.args[0]
+
+    assert gp.posteriors is posteriors
+    _assert_equal_states(_data_and_posteriors(gp), before)
+
+
+@pytest.mark.parametrize(
+    "held, given, reference",
+    [("inputs", "y_new", "data"), ("data", "s2_new", "data and variances")],
+)
+def test_update_gives_held_inputs_their_targets_or_variances(
+    held, given, reference
+):
+    """A GP may hold inputs without targets, and data without noise
+    variances. ``y_new`` or ``s2_new`` given alone, one per input, gives
+    them theirs, and the GP is the one given all its data at once, to the
+    last bit, as gpyreg 1.3.1 leaves it."""
+    gp, data = _gp_holding(held)
+    gp.update(**{given: data[given]})
+    gp_reference, __ = _gp_holding(reference)
+    _assert_equal_states(
+        _data_and_posteriors(gp), _data_and_posteriors(gp_reference)
+    )
+
+
 def test_fit_with_targets_of_a_tiny_range(monkeypatch):
     """Targets whose standard deviation is below 1e-3, the noise's
     plausible lower bound, give the noise an inverted recommended

@@ -1031,6 +1031,17 @@ class GP:
 
         Raises
         =======
+        ValueError
+            Raised, before the update changes anything, when the update
+            would make the number of targets, or of noise variances, that
+            the GP holds differ from its number of inputs; a GP may hold
+            inputs without targets, and data without noise variances. So
+            ``y_new`` given without ``X_new``, one value per input held, is
+            taken where the GP holds no targets, as ``s2_new`` is where it
+            holds no variances, and either is refused where the GP holds
+            what it gives or holds no inputs; ``X_new`` without ``y_new``
+            is refused where the GP holds targets, and ``X_new`` with
+            ``y_new`` where it holds inputs without targets.
         TypeError
             Raised when ``s2_new`` is neither an array, a number nor
             ``None``, such as a list, before the update changes anything.
@@ -1046,6 +1057,20 @@ class GP:
             hyperparameter is NaN (not set), as it is on a GP whose
             hyperparameters were never given.
         """
+        # Targets or variances without inputs, on a GP that holds none,
+        # which the check of the shapes below cannot size.
+        if X_new is None and self.X is None:
+            for name, given in (
+                ("targets", y_new),
+                ("noise variances", s2_new),
+            ):
+                if given is not None:
+                    raise ValueError(
+                        f"update would leave the GP holding {name} without "
+                        f"inputs: a GP holds as many {name} as inputs, or "
+                        "none."
+                    )
+
         X_new, y_new, s2_new = self._convert_shapes(X_new, y_new, s2_new)
         # Create local copies so we won't get trouble
         # with references later.
@@ -1069,6 +1094,58 @@ class GP:
                     "row per hyperparameter sample."
                 )
             hyp = hyp.copy()
+
+        # The training data after the update, stored below, after the
+        # single-point extension of the posteriors, which reads the data
+        # held before it. New data are appended; where the GP holds noise
+        # variances or is given some, points without a supplied variance
+        # get zero, the value the noise function uses when none is given.
+        N_old = 0 if self.X is None else self.X.shape[0]
+        X_all = self.X
+        if X_new is not None:
+            if self.X is None:
+                X_all = X_new
+            else:
+                X_all = np.concatenate((self.X, X_new))
+
+        y_all = self.y
+        if y_new is not None:
+            if self.y is None:
+                y_all = y_new
+            else:
+                y_all = np.concatenate((self.y, y_new))
+
+        s2_all = self.s2
+        s2_added = s2_new
+        if X_new is not None and s2_new is None and self.s2 is not None:
+            s2_added = np.zeros((X_new.shape[0], 1))
+        if s2_added is not None:
+            if self.s2 is None:
+                if X_new is not None and N_old > 0:
+                    s2_all = np.concatenate((np.zeros((N_old, 1)), s2_added))
+                else:
+                    s2_all = s2_added
+            else:
+                s2_all = np.concatenate((self.s2, s2_added))
+
+        # A GP holds as many targets, and as many noise variances, as
+        # inputs, or none of them. An update that would make the numbers
+        # differ is refused here, before it changes anything; numbers that
+        # differ already, as after a `fit` given inputs of another number
+        # and no variances, which keeps the variances held, are not
+        # checked.
+        N_all = 0 if X_all is None else X_all.shape[0]
+        for name, held, stored in (
+            ("targets", self.y, y_all),
+            ("noise variances", self.s2, s2_all),
+        ):
+            agreed = held is None or held.shape[0] == N_old
+            if agreed and stored is not None and stored.shape[0] != N_all:
+                raise ValueError(
+                    f"update would leave the GP holding {N_all} inputs and "
+                    f"{stored.shape[0]} {name}: a GP holds as many {name} "
+                    "as inputs, or none."
+                )
 
         # Check whether to do a rank-1 update. The shortcut extends the
         # existing posteriors, so it applies only while their
@@ -1248,32 +1325,7 @@ class GP:
                         (alpha_update, np.array([[-1]]))
                     )
 
-        N_old = 0 if self.X is None else self.X.shape[0]
-        if X_new is not None:
-            if self.X is None:
-                self.X = X_new
-            else:
-                self.X = np.concatenate((self.X, X_new))
-
-        if y_new is not None:
-            if self.y is None:
-                self.y = y_new
-            else:
-                self.y = np.concatenate((self.y, y_new))
-
-        # Keep the stored user-provided noise aligned with the training
-        # inputs: points without a supplied variance get zero, the value
-        # the noise function uses when no variance is given.
-        if X_new is not None and s2_new is None and self.s2 is not None:
-            s2_new = np.zeros((X_new.shape[0], 1))
-        if s2_new is not None:
-            if self.s2 is None:
-                if X_new is not None and N_old > 0:
-                    self.s2 = np.concatenate((np.zeros((N_old, 1)), s2_new))
-                else:
-                    self.s2 = s2_new
-            else:
-                self.s2 = np.concatenate((self.s2, s2_new))
+        self.X, self.y, self.s2 = X_all, y_all, s2_all
 
         if rank_one_update:
             for s in full_updates:  # Compute full update where rank-1 failed
