@@ -1031,6 +1031,9 @@ class GP:
 
         Raises
         =======
+        TypeError
+            Raised when ``s2_new`` is neither an array, a number nor
+            ``None``, such as a list, before the update changes anything.
         LinAlgError
             Raised when the Cholesky decomposition failed multiple times even
             by adding numerical stability values to the matrix.
@@ -1434,6 +1437,10 @@ class GP:
             nor a 2-D array or does not have ``D`` columns, when ``y`` does
             not hold one value per row of ``X``, or when an array ``s2``
             does not hold one variance per row of ``X``.
+        TypeError
+            Raised by the same check, before the fit changes anything,
+            when ``s2`` is neither an array, a number nor ``None``, such as
+            a list.
         ValueError
             Raised by :py:meth:`get_recommended_bounds`, through which the
             fit fills the bounds that are not set: when the option
@@ -2258,6 +2265,9 @@ class GP:
 
         Raises
         ------
+        TypeError
+            Raised when ``s2_star`` is neither an array, a number nor
+            ``None``, such as a list.
         LinAlgError
             Raised when a posterior holds the negative inverse of the
             training covariance without its Cholesky factor, as one
@@ -2422,6 +2432,12 @@ class GP:
 
         Raises
         ------
+        TypeError
+            Raised when ``s2_star`` is neither an array, a number nor
+            ``None``, such as a list.
+        ValueError
+            Raised when ``return_lpd`` is ``True`` and ``y_star`` is
+            ``None``.
         LinAlgError
             Raised when a posterior holds the negative inverse of the
             training covariance without its Cholesky factor, as one
