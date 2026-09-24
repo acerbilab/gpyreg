@@ -3768,6 +3768,118 @@ def test_update_refuses_nan_hyperparameters_before_it_changes_anything(
             assert np.array_equal(value, expected)
 
 
+_FAILED_UPDATES = {
+    # name: (noise standard deviation, hyperparameter samples, the
+    # posteriors without the factor of the low-noise representation, the
+    # fewest rows of a matrix whose Cholesky decomposition fails, the
+    # number of such decompositions that succeed first, call)
+    "full": (0.1, 1, [], 1, 0, lambda gp, x, h: gp.update(hyp=h)),
+    "full_low_noise": (1e-5, 1, [], 1, 0, lambda gp, x, h: gp.update(hyp=h)),
+    "full_with_data": (
+        0.1,
+        2,
+        [],
+        8,
+        0,
+        lambda gp, x, h: gp.update(X_new=x[:2], y_new=np.sin(x[:2])),
+    ),
+    "set_hyperparameters": (
+        0.1,
+        2,
+        [],
+        1,
+        0,
+        lambda gp, x, h: gp.set_hyperparameters(h[:2]),
+    ),
+    "rank_one_fallback": (
+        1e-5,
+        2,
+        [1],
+        8,
+        0,
+        lambda gp, x, h: gp.update(X_new=x[:1], y_new=np.sin(x[:1])),
+    ),
+    "rank_one_second_fallback": (
+        1e-5,
+        3,
+        [1, 2],
+        8,
+        1,
+        lambda gp, x, h: gp.update(X_new=x[:1], y_new=np.sin(x[:1])),
+    ),
+}
+
+
+@pytest.mark.parametrize("failure", list(_FAILED_UPDATES))
+def test_an_update_that_raises_leaves_the_gp_as_it_was(failure, monkeypatch):
+    """Whatever ``update`` raises once it has begun to change the GP, it
+    leaves the GP as it was before the call, holding the very objects it
+    held (its data, its array of posteriors, the posteriors in it and
+    their attributes), and re-raises. Here the Cholesky decomposition of
+    the training covariance fails, as a factorization does after all its
+    retries: in an update that recomputes every posterior, in both
+    representations and with new data; in ``set_hyperparameters``; and,
+    on the matrices of the new data alone, in the full recomputation to
+    which the single-point update falls back for a posterior without the
+    factor that it extends (as one pickled by gpyreg 1.3.1 is), after it
+    extended another posterior in place, and after it recomputed a third
+    posterior into the array of posteriors. The update stored the data
+    and replaced or extended the posteriors first, so that ``predict``
+    raised or mixed extended posteriors with those of the old data."""
+    noise, s_N, without_factor, rows, succeeding, call = _FAILED_UPDATES[
+        failure
+    ]
+    X = np.reshape(np.linspace(-2, 2, 7), (-1, 1))
+    hyp = np.array(
+        [
+            [0.0, 0.0, np.log(noise), 0.0],
+            [0.2, 0.1, np.log(noise), 0.1],
+            [-0.2, 0.2, np.log(noise), -0.1],
+        ]
+    )
+    gp = _gp_1d()
+    gp.update(X_new=X, y_new=np.sin(X), hyp=hyp[:s_N])
+    for s in without_factor:
+        assert not gp.posteriors[s].L_chol
+        del gp.posteriors[s].L_factor
+    x = np.reshape(np.linspace(-1.5, 1.5, 3), (-1, 1))
+    prediction = gp.predict(x)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+    posteriors = list(gp.posteriors)
+    posterior_attributes = [dict(vars(p)) for p in posteriors]
+
+    cholesky = scipy.linalg.cholesky
+    count = {"succeeded": 0}
+
+    def cholesky_failing(a, *args, **kwargs):
+        if np.shape(a)[0] >= rows:
+            if count["succeeded"] >= succeeding:
+                raise scipy.linalg.LinAlgError("The planted failure.")
+            count["succeeded"] += 1
+        return cholesky(a, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(scipy.linalg, "cholesky", cholesky_failing)
+        with pytest.raises(scipy.linalg.LinAlgError, match="Cholesky"):
+            call(gp, x + 0.1, hyp[::-1] + 0.05)
+    assert count["succeeded"] == succeeding
+
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
+    for posterior, posterior_expected, expected in zip(
+        gp.posteriors, posteriors, posterior_attributes
+    ):
+        assert posterior is posterior_expected
+        assert vars(posterior).keys() == expected.keys()
+        for name, value in expected.items():
+            assert vars(posterior)[name] is value, name
+    _assert_same_values(vars(gp), values)
+    for value, expected in zip(gp.predict(x), prediction):
+        assert np.array_equal(value, expected)
+
+
 def test_fit_leaves_the_prior_degrees_of_freedom_alone():
     """``df_base`` fills the degrees of freedom a prior leaves unset for
     the duration of the fit; the GP keeps the priors the caller set, so a

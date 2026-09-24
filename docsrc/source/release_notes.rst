@@ -14,25 +14,33 @@ to change.
   of rows of ``s2`` and raised ``AttributeError`` or ``IndexError`` for
   such a value; a value without rows is not counted, and the calls run as
   they did in 1.3.1, to the last bit.
-* A call of :meth:`gpyreg.GP.fit` that raises leaves the GP as it was
-  before the call, with the training data, bounds, priors and posteriors
-  that it held, and the fit refuses a column of inputs without spread, as
-  :meth:`gpyreg.GP.get_recommended_bounds` does, before it changes
-  anything. It stored the data it was given first, and then the bounds
-  filled from them, so that a fit that raised on such a column, on a
-  starting point that holds NaN (which a fit without a space-filling
-  design or an optimization keeps, and whose posterior
-  :meth:`gpyreg.GP.update` refuses), on a failed factorization of the
-  training covariance, or in the sampler, after the optimization, left
-  the GP holding the new data without posteriors that match them, so that
-  :meth:`gpyreg.GP.predict` raised or mixed the new inputs with the old
-  posteriors, and, where it raised after filling its bounds, with those
-  bounds, which a later fit that takes the bounds of the GP, as it does by
-  default, kept. Every fit that completes is unchanged, to the last bit.
-  **Upgrading:** a script that catches an exception of ``fit`` and goes
-  on with the data or the bounds that the failed fit stored gives them to
-  the GP itself: the data through :meth:`gpyreg.GP.update` or the next
-  ``fit``, the bounds through :meth:`gpyreg.GP.set_bounds`.
+* A call of :meth:`gpyreg.GP.fit` or :meth:`gpyreg.GP.update`, and of
+  :meth:`gpyreg.GP.set_hyperparameters` through ``update``, that raises
+  leaves the GP as it was before the call, with the training data, bounds,
+  priors and posteriors that it held; ``fit`` also refuses a column of
+  inputs without spread, as :meth:`gpyreg.GP.get_recommended_bounds`
+  does, before it changes anything. Both stored the data they were given
+  first, and ``fit`` then the bounds filled from them, so that a call that
+  raised after that left the GP holding the data of the call without
+  posteriors that match them, from which :meth:`gpyreg.GP.predict`
+  raised, or mixed the new inputs with the old posteriors: a fit that
+  raised on such a column, on a starting point that holds NaN (which a
+  fit without a space-filling design or an optimization keeps, and whose
+  posterior ``update`` refuses), on a failed factorization of the
+  training covariance, or in the sampler, after the optimization; and an
+  update whose factorization of the training covariance failed, which
+  left the posteriors replaced by empty ones or, where it failed in the
+  full recomputation of a posterior to which a single-point update falls
+  back, the other posteriors already extended. A fit that raised after
+  filling its bounds also left those bounds, which a later fit that takes
+  the bounds of the GP, as it does by default, kept. Every fit and update
+  that completes is unchanged, to the last bit. **Upgrading:** a caller
+  that reads a GP after a failed ``fit`` or ``update`` finds it as it was
+  before the call, where 1.3.2 left it holding the new data (and, after a
+  failed fit, the bounds the fit had set) with no usable posterior; a
+  script that goes on with what the failed call stored gives it to the GP
+  itself: the data through ``update`` or the next ``fit``, the bounds
+  through :meth:`gpyreg.GP.set_bounds`.
 * :meth:`gpyreg.GP.update`, and :meth:`gpyreg.GP.set_hyperparameters`
   through it, refuse hyperparameters that are NaN (not set), where the
   update would compute the posteriors from them, before it changes

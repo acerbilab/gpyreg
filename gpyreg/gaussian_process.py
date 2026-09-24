@@ -876,6 +876,10 @@ class GP:
         """
         Set new hyperparameters for the Gaussian Process.
 
+        The hyperparameters go to :py:meth:`update`, and a call that raises
+        leaves the GP as it was before the call, with the hyperparameters
+        and posteriors that it held.
+
         Parameters
         ==========
         hyp_new : object
@@ -893,6 +897,14 @@ class GP:
         ------
         ValueError
             Raised when `hyp_new` is an array of the wrong shape.
+        ValueError
+            Raised by :py:meth:`update`, before it changes anything, when
+            ``compute_posterior`` is ``True``, the GP holds training inputs
+            and targets, and a hyperparameter is NaN (not set).
+        LinAlgError
+            Raised by :py:meth:`update` when the Cholesky decomposition of
+            the training covariance fails even after its noise is
+            multiplied tenfold, up to ten times; the GP is left as it was.
         """
         if isinstance(hyp_new, np.ndarray):
             cov_N = self.covariance.hyperparameter_count(self.D)
@@ -1007,6 +1019,35 @@ class GP:
 
         return hyp_new_arr
 
+    def __state(self):
+        """The state of the GP that :py:meth:`fit` and :py:meth:`update`
+        put back with :py:meth:`__restore` when they raise once they have
+        begun to change it: its attributes, and the entries of its array
+        of posteriors and their attributes, which the single-point
+        extension of ``update`` changes in place. Everything else that the
+        two change is an attribute of the GP that they replace, apart from
+        the degrees of freedom of the priors, which ``fit`` puts back
+        itself."""
+        entries = None
+        if self.posteriors is not None:
+            entries = [
+                (p, None if p is None else dict(vars(p)))
+                for p in self.posteriors
+            ]
+        return dict(self.__dict__), self.posteriors, entries
+
+    def __restore(self, state):
+        """Put back the state that :py:meth:`__state` took."""
+        attributes, posteriors, entries = state
+        self.__dict__.clear()
+        self.__dict__.update(attributes)
+        if entries is not None:
+            for i, (posterior, posterior_attributes) in enumerate(entries):
+                posteriors[i] = posterior
+                if posterior is not None:
+                    vars(posterior).clear()
+                    vars(posterior).update(posterior_attributes)
+
     def update(
         self,
         X_new: np.ndarray = None,
@@ -1017,6 +1058,9 @@ class GP:
     ):
         """
         Add new data to the Gaussian Process.
+
+        An update that raises leaves the GP as it was before the call, with
+        the training data and posteriors that it held.
 
         Parameters
         ==========
@@ -1061,8 +1105,11 @@ class GP:
             Raised when ``s2_new`` is neither an array, a number nor
             ``None``, such as a list, before the update changes anything.
         LinAlgError
-            Raised when the Cholesky decomposition failed multiple times even
-            by adding numerical stability values to the matrix.
+            Raised when the Cholesky decomposition of the training
+            covariance fails even after its noise is multiplied tenfold, up
+            to ten times, in a posterior computed in full or in the full
+            recomputation to which a single-point update falls back; the
+            GP is left as it was.
         ValueError
             Raised when ``hyp`` is not a 2D array with one column per
             hyperparameter of the GP.
@@ -1185,7 +1232,6 @@ class GP:
                 and self.posteriors[0].alpha is not None
             ):
                 rank_one_update = True
-        full_updates = []  # Keep track of unstable rank-1 updates
 
         # The hyperparameters of an update that recomputes every
         # posterior, those given or those the GP holds, from which no
@@ -1202,6 +1248,44 @@ class GP:
                         + ", ".join(self.__hyperparameter_names(unset))
                         + " are NaN (not set)."
                     )
+
+        # Whatever the update raises from here on, it leaves the GP as it
+        # was before the call.
+        state = self.__state()
+        try:
+            self.__apply_update(
+                X_new,
+                y_new,
+                s2_new,
+                hyp,
+                compute_posterior,
+                rank_one_update,
+                X_all,
+                y_all,
+                s2_all,
+            )
+        except BaseException:
+            self.__restore(state)
+            raise
+
+    def __apply_update(
+        self,
+        X_new,
+        y_new,
+        s2_new,
+        hyp,
+        compute_posterior,
+        rank_one_update,
+        X_all,
+        y_all,
+        s2_all,
+    ):
+        """The changes that :py:meth:`update` makes once it has checked its
+        arguments: the single-point extension of the posteriors, or their
+        recomputation, and the data after the update, ``X_all``, ``y_all``
+        and ``s2_all``, stored after the extension, which reads the data
+        held before it."""
+        full_updates = []  # Keep track of unstable rank-1 updates
 
         if rank_one_update:
             cov_N = self.covariance.hyperparameter_count(self.D)
@@ -1701,13 +1785,11 @@ class GP:
                 X_fit, y_fit, lower_bounds, upper_bounds
             )
 
-        # The attributes of the GP as the call finds them, which the fit
-        # restores if it raises from here on. The fit, and what it calls,
-        # replace the attributes that they change rather than write into
-        # them, except for the degrees of freedom of the priors, which the
-        # fit writes into `hyper_priors` and restores itself, so these
-        # objects keep the state of the GP.
-        state = dict(self.__dict__)
+        # Whatever the fit raises from here on, it leaves the GP as it was
+        # before the call: it puts back this state and, itself, the
+        # degrees of freedom of the priors, which it writes into
+        # `hyper_priors`.
+        state = self.__state()
         df_given = self.hyper_priors["df"]
         failed = False
         try:
@@ -1955,8 +2037,7 @@ class GP:
         finally:
             self.hyper_priors["df"] = df_given
             if failed:
-                self.__dict__.clear()
-                self.__dict__.update(state)
+                self.__restore(state)
             else:
                 self._prior_cache = None
                 self.__recompute_normalization_constants()
