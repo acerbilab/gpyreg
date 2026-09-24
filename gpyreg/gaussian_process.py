@@ -1042,6 +1042,14 @@ class GP:
             what it gives or holds no inputs; ``X_new`` without ``y_new``
             is refused where the GP holds targets, and ``X_new`` with
             ``y_new`` where it holds inputs without targets.
+        ValueError
+            Raised by the check of the shapes of the training data given,
+            before the update changes anything: when ``X_new`` is neither
+            a 1-D nor a 2-D array or does not have ``D`` columns, when
+            ``y_new`` does not hold one value per row of ``X_new``, or when
+            an array ``s2_new`` does not hold one variance per row of
+            ``X_new``; without ``X_new``, the rows are the inputs that the
+            GP holds.
         TypeError
             Raised when ``s2_new`` is neither an array, a number nor
             ``None``, such as a list, before the update changes anything.
@@ -2317,6 +2325,12 @@ class GP:
 
         Raises
         ------
+        ValueError
+            Raised by the check of the shapes of the data given: when
+            ``x_star`` is neither a 1-D nor a 2-D array or does not have
+            ``D`` columns, when ``y_star`` does not hold one value per row
+            of ``x_star``, or when an array ``s2_star`` does not hold one
+            variance per row of ``x_star``.
         TypeError
             Raised when ``s2_star`` is neither an array, a number nor
             ``None``, such as a list.
@@ -2484,6 +2498,12 @@ class GP:
 
         Raises
         ------
+        ValueError
+            Raised by the check of the shapes of the data given: when
+            ``x_star`` is neither a 1-D nor a 2-D array or does not have
+            ``D`` columns, when ``y_star`` does not hold one value per row
+            of ``x_star``, or when an array ``s2_star`` does not hold one
+            variance per row of ``x_star``.
         TypeError
             Raised when ``s2_star`` is neither an array, a number nor
             ``None``, such as a list.

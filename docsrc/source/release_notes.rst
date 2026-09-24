@@ -221,7 +221,9 @@ to change.
   :meth:`gpyreg.GP.predict`, :meth:`gpyreg.GP.predict_full`,
   :meth:`gpyreg.GP.quad` and :meth:`gpyreg.GP.random_function` name the
   ``LinAlgError`` of the factorization that a posterior pickled by an
-  earlier version in the low-noise representation needs. Those of ``fit``,
+  earlier version in the low-noise representation needs. Those of
+  ``update``, ``predict`` and ``predict_full`` name the ``ValueError`` of
+  the check of the shapes of the data they are given. Those of ``fit``,
   ``update``, ``predict`` and ``predict_full`` name the ``TypeError`` of a
   noise variance that is neither an array, a number nor ``None``, and that
   of ``predict`` the ``ValueError`` of ``return_lpd=True`` without
