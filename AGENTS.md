@@ -1,6 +1,6 @@
 ## What this is
 
-GPyReg is a lightweight Gaussian process regression library (NumPy/SciPy, no autodiff framework). It is a Python port of the MATLAB toolbox `gplite` kept under `matlab/gplite/` for reference, and it is the GP backend of PyVBMC, so its public API and numerical behavior are downstream-visible. Code must stay Python 3.9 compatible (CI tests 3.9–3.11 on Linux, Windows, macOS).
+GPyReg is a lightweight Gaussian process regression library (NumPy/SciPy, no autodiff framework). It is a Python port of the MATLAB toolbox `gplite` kept under `matlab/gplite/` for reference, and it is the GP backend of PyVBMC and PyBADS, so its public API and numerical behavior are downstream-visible. PyVBMC requires the latest gpyreg release, and moves its minimum gpyreg version and its CI pin to each one. PyBADS requires `gpyreg >= 0.1.0`; its GPs can reach the low-noise representation (below), as the lower bound of their noise at its default options is a variance of about 1.4e-7. Code must stay Python 3.9 compatible (CI tests 3.9–3.11 on Linux, Windows, macOS).
 
 ## Commands
 
@@ -14,7 +14,7 @@ python -m pip install -e .[dev]   # adds sphinx, numpydoc, build for docs/packag
 Tests live inside the package at `gpyreg/testing/` (not a top-level `tests/`). There is no pytest config file, so run from the repo root:
 
 ```console
-python -m pytest                                   # whole suite (~130 tests)
+python -m pytest                                   # whole suite (several hundred tests)
 python -m pytest --reruns=5 -x -vv                 # exactly what CI runs
 python -m pytest gpyreg/testing/test_mean_functions.py
 python -m pytest gpyreg/testing/test_gaussian_process.py -k "test_fit and not isotropic"
@@ -56,14 +56,14 @@ Hyperparameters are a single flat float vector ordered **covariance, then noise,
 ### Lifecycle
 
 - `GP.fit(X, y, s2, hyp0, options)`: fill unset bounds from the components' recommended bounds, evaluate the objective on a Sobol space-filling design of initial candidates built by `f_min_fill` (which maps unit-cube points through the hyperparameter priors), run `scipy.optimize.minimize` with analytic gradients from the best candidates, optionally run `SliceSampler` for `n_samples` posterior draws, then call `update` to build posteriors. Returns `(hyp, optimize_result, sampling_result)`.
-- `Posterior` (bottom of `gaussian_process.py`) is a plain class holding `hyp, alpha, sW, L, sn2_mult, L_chol, sl`; `GP.posteriors` is an object array with one entry per hyperparameter sample. `predict` averages over posteriors and adds between-sample variance unless `separate_samples=True`.
-- `GP.update` appends data. Adding exactly one point with `y_new` and no replacement `hyp` performs a rank-one Cholesky update per posterior using the noise scale stored in `Posterior.sl`, falling back to a full recomputation when that is numerically unsafe; anything else recomputes every posterior. When data are appended, the stored `s2` keeps one row per training input: points without a user-provided variance get zero.
+- `Posterior` (bottom of `gaussian_process.py`) is a plain class holding `hyp, alpha, sW, L, sn2_mult, L_chol, sl, L_factor`; `GP.posteriors` is an object array with one entry per hyperparameter sample. `predict` averages over posteriors and adds between-sample variance unless `separate_samples=True`.
+- `GP.update` appends data. Adding exactly one point with `y_new` and no replacement `hyp` extends each posterior: in the high-noise branch (below) by a rank-one update of the Cholesky factor with the noise scale stored in `Posterior.sl`, in the low-noise branch by extending both the inverse `L` and the factor `L_factor`, with the predictive variance of the new point and its solve taken from the factor. A posterior falls back to a full recomputation where the extension is numerically unsafe, or, in the low-noise branch, where it has no `L_factor`; anything else recomputes every posterior. When data are appended, the stored `s2` keeps one row per training input: points without a user-provided variance get zero.
 - `GP.quad` (Bayesian quadrature) hard-codes the `SquaredExponential` hyperparameter layout and rejects other kernels.
 - `GP.temporary_data` is a free-form dict used by PyVBMC to stash per-GP scratch; `GP.clean` empties it and drops cached quantities.
 
 ### The single numerical engine and its invariants
 
-`GP.__core_computation` computes both the negative log marginal likelihood (with gradient) and `Posterior` objects; `log_likelihood` / `log_posterior` merely negate its output. It switches between two parametrizations: a high-noise branch (`L_chol=True`, `L` is the **upper** triangular Cholesky factor of `(K + sn2 I)/sl`, SciPy's default, so solves use `trans=1` then `trans=0`) and a low-noise branch (`L_chol=False`, `L = -inv(K + sn2 I)`, `sl = 1`). Jitter is multiplicative, not additive: on factorization failure `sn2_mult` is multiplied by 10 and retried up to 10 times, and `sn2_mult` must be carried into every predictive noise term (`None` means 1).
+`GP.__core_computation` computes both the negative log marginal likelihood (with gradient) and `Posterior` objects; `log_likelihood` / `log_posterior` merely negate its output. It switches between two parametrizations on the smallest noise variance at the training inputs. From 1e-6 up, the high-noise branch (`L_chol=True`): `L` is the **upper** triangular Cholesky factor of `(K + sn2 I)/sl`, SciPy's default, so solves use `trans=1` then `trans=0`, and `L_factor` is `None`. Below 1e-6, the low-noise branch (`L_chol=False`): `L = -inv(K + sn2 I)`, as `gplite_core.m` has it, and `L_factor` is the upper triangular Cholesky factor of `K + sn2 I`, unscaled, from which `predict`, `predict_full`, `quad`, `random_function` and the single-point update form the covariance, since a covariance formed from the inverse carries its rounding, which grows as the noise shrinks. A posterior pickled by gpyreg 1.3.1 or earlier has no `L_factor`, and has it computed again where it is needed. In both branches `Posterior.sl` is `min(sn2) * sn2_mult`, the scale of `L` in the high-noise branch. Jitter is multiplicative, not additive: on factorization failure `sn2_mult` is multiplied by 10 and retried up to 10 times, and `sn2_mult` must be carried into every predictive noise term (`None` means 1).
 
 Several performance shortcuts are asserted **bit-identical** by tests using `np.array_equal`, so changes near them must not reorder floating-point operations:
 
@@ -90,4 +90,4 @@ Docstrings are NumPy style (numpydoc renders them, and `undoc-members` is on so 
 
 ### Relation to the MATLAB reference
 
-`matlab/gplite/` is the original implementation and is the place to check intended semantics: `gplite_train/post/pred/clean/rnd/plot.m` and `private/gplite_core.m` map to `GP` methods, `gplite_covfun/meanfun/noisefun.m` to the three component modules, `gplite_sample.m` to `slice_sample.py`, and `gplite_fmin.m` to `f_min_fill.py`. Isotropic kernels are a Python-only addition. `gplite_quad.m`, `gplite_qpred.m`, and the `outwarp_*.m` output-warping functions are not ported. `MANIFEST.in` prunes `matlab/` and `docsrc/` from distributions.
+`matlab/gplite/` is the original implementation and is the place to check intended semantics: `gplite_train/post/pred/clean/rnd/plot/quad.m` and `private/gplite_core.m` map to `GP` methods, `gplite_covfun/meanfun/noisefun.m` to the three component modules, `gplite_sample.m` to `slice_sample.py`, and `gplite_fmin.m` to `f_min_fill.py`. Isotropic kernels are a Python-only addition. `gplite_qpred.m` and the `outwarp_*.m` output-warping functions are not ported. `MANIFEST.in` prunes `matlab/` and `docsrc/` from distributions.

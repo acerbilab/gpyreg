@@ -660,6 +660,108 @@ def test_sample_sanity_checks():
     )
 
 
+@pytest.mark.parametrize(
+    "N", [3.0, np.float64(3.0), np.int64(3), np.array(3), np.array(3.0)]
+)
+def test_sample_takes_a_whole_number_of_samples_of_any_type(N):
+    """The number of samples is a count, which ``sample`` takes as a whole
+    number of an integer or a float type, or a 0-d array that holds one,
+    as it takes ``thin`` and ``burn`` and as ``GP.fit`` takes its counts;
+    the chain is that of the integer. A whole float raised ``TypeError``,
+    and so did a 0-d array holding one."""
+
+    def chain(n):
+        sampler = SliceSampler(
+            norm.logpdf,
+            np.array([0.5]),
+            options=options,
+            rng=np.random.default_rng(0),
+        )
+        return sampler.sample(n)["samples"]
+
+    assert np.array_equal(chain(N), chain(3))
+
+
+@pytest.mark.parametrize(
+    "N",
+    [2.5, 0, 0.0, -1, True, np.inf, np.nan, "3"]
+    + [np.array(2.5), np.array(0), np.array(True), np.array(np.nan)],
+)
+def test_sample_refuses_a_number_of_samples_that_is_not_positive(N):
+    """A number of samples that is not a whole number greater than zero is
+    refused. A fraction or a bool raised ``TypeError``, a negative number
+    NumPy's error for a negative dimension, an infinity ``OverflowError``,
+    and zero returned an empty chain."""
+    sampler = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    with pytest.raises(ValueError) as execinfo:
+        sampler.sample(N)
+    assert "The number of samples N" in execinfo.value.args[0]
+
+
+@pytest.mark.parametrize(
+    "keyword, value",
+    [
+        ("thin", True),
+        ("thin", np.bool_(True)),
+        ("burn", True),
+        ("burn", False),
+        ("burn", np.bool_(False)),
+        ("thin", np.array(True)),
+        ("burn", np.array(False)),
+    ],
+)
+def test_sample_refuses_a_boolean_thin_or_burn(keyword, value):
+    """``thin`` and ``burn`` are counts, and a bool is no count, as it is
+    none for the number of samples and for the counts of ``GP.fit``. A
+    bool ran as the integer it stands for."""
+    sampler = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    with pytest.raises(ValueError):
+        sampler.sample(3, **{keyword: value})
+
+
+@pytest.mark.parametrize(
+    "thin, burn",
+    [(np.array(2), np.array(3)), (np.array(2.0), np.array(3.0))],
+)
+def test_sample_takes_a_whole_thin_and_burn_in_a_0d_array(thin, burn):
+    """``thin`` and ``burn`` are counts, which ``sample`` takes as whole
+    numbers of an integer or a float type, or 0-d arrays that hold one, as
+    it takes the number of samples; the chain is that of the integers. A
+    0-d array was refused as neither."""
+
+    def chain(thin, burn):
+        sampler = SliceSampler(
+            norm.logpdf,
+            np.array([0.5]),
+            options=options,
+            rng=np.random.default_rng(0),
+        )
+        return sampler.sample(4, thin=thin, burn=burn)["samples"]
+
+    assert np.array_equal(chain(thin, burn), chain(2, 3))
+
+
+@pytest.mark.parametrize(
+    "keyword, value",
+    [
+        ("thin", np.array(1.5)),
+        ("thin", np.array(0)),
+        ("thin", np.array(np.inf)),
+        ("burn", np.array(2.5)),
+        ("burn", np.array(-1)),
+        ("burn", np.array(np.nan)),
+    ],
+)
+def test_sample_refuses_a_0d_array_as_it_refuses_its_scalar(keyword, value):
+    """A 0-d array holding a fraction, a number below the least count, NaN
+    or an infinity is refused as ``thin`` or ``burn``, as the number it
+    holds is."""
+    sampler = SliceSampler(norm.logpdf, np.array([0.5]), options=options)
+    with pytest.raises(ValueError) as execinfo:
+        sampler.sample(3, **{keyword: value})
+    assert "option needs to be a" in execinfo.value.args[0]
+
+
 def test_generator_runs_are_reproducible_and_independent_of_global_state():
     """With ``rng`` a ``Generator``, two samplers seeded alike give the same
     chain whatever the global legacy state does, one generator shared across

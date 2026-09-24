@@ -2,6 +2,7 @@
 
 import logging
 import math
+import numbers
 
 import numpy as np
 
@@ -13,6 +14,34 @@ from gpyreg.rng import resolve_rng
 # ArviZ requires at least four draws per chain; here the requirement
 # applies to each half of the split chain.
 _MIN_SPLIT_SAMPLES = 4
+
+
+def _scalar(value):
+    """Return the scalar that a 0-d array holds, and any other value as it
+    is."""
+    if isinstance(value, np.ndarray) and value.ndim == 0:
+        return value[()]
+    return value
+
+
+def _whole_number(value, what, minimum):
+    """Return ``value`` as an ``int`` where it is a whole number of at least
+    ``minimum``, of an integer or a float type (2.0 is taken as 2), or a
+    0-d array that holds one, and refuse any other value, a bool included,
+    with a ``ValueError`` whose message starts with ``what``."""
+    number = _scalar(value)
+    if (
+        isinstance(number, (bool, np.bool_))
+        or not isinstance(number, numbers.Real)
+        or not np.isfinite(number)
+        or number != np.floor(number)
+        or number < minimum
+    ):
+        raise ValueError(
+            f"{what} needs to be a whole number of at least {minimum}, of an "
+            f"integer or a float type, not {value!r}."
+        )
+    return int(number)
 
 
 class SliceSampler:
@@ -258,13 +287,17 @@ class SliceSampler:
         Parameters
         ----------
         N : int
-            The number of samples to return.
+            The number of samples to return, a whole number greater than
+            zero of an integer or a float type (2.0 is taken as 2), or a
+            0-d array that holds one.
         thin : int, optional
             The thinning parameter will omit ``thin-1`` out of ``thin`` values
-            in the generated sequence (after burn-in).
+            in the generated sequence (after burn-in). A whole number
+            greater than zero, taken as ``N`` is.
         burn : int, optional
             The burn parameter omits the first ``burn`` points before starting
-            recording points for the generated sequence.
+            recording points for the generated sequence, a whole number of
+            at least zero, taken as ``N`` is.
             In case this is the first time sampling, the default value of burn
             is ``round(N/3)`` (that is, one third of the number of recorded
             samples), while otherwise it is 0.
@@ -326,6 +359,10 @@ class SliceSampler:
         Raises
         ------
         ValueError
+            Raised when `N` is not a whole number greater than zero: a
+            fraction, zero, a negative number, an infinity, NaN, a bool or
+            a value that is not a number.
+        ValueError
             Raised when `thin` is not a whole number greater than zero.
         ValueError
             Raised when `burn` is not a whole number greater than or equal
@@ -344,6 +381,9 @@ class SliceSampler:
         xx = self.x0
         D = xx.size
 
+        # A count of recorded samples, as fit takes its counts.
+        N = _whole_number(N, "The number of samples N", 1)
+
         if burn is None:
             # In case we are sampling again there is no need for burn-in.
             if self.func_count > 0:
@@ -351,10 +391,14 @@ class SliceSampler:
             else:
                 burn = round(N / 3)
 
-        # Sanity checks. Infinity equals its own floor, hence the test of
-        # finiteness.
+        # Sanity checks. A 0-d array is read as the scalar it holds, as it
+        # is for N. Infinity equals its own floor, hence the test of
+        # finiteness; a bool is no count, as it is none for N.
+        thin = _scalar(thin)
+        burn = _scalar(burn)
         if (
-            not np.isscalar(thin)
+            isinstance(thin, (bool, np.bool_))
+            or not np.isscalar(thin)
             or not np.isfinite(thin)
             or thin <= 0
             or thin != np.floor(thin)
@@ -364,7 +408,8 @@ class SliceSampler:
             )
 
         if (
-            not np.isscalar(burn)
+            isinstance(burn, (bool, np.bool_))
+            or not np.isscalar(burn)
             or not np.isfinite(burn)
             or burn < 0
             or burn != np.floor(burn)
@@ -699,8 +744,7 @@ class SliceSampler:
         if np.any(R[checked] > 1.5):
             diag_msg = (
                 " * Detected lack of convergence! (max R = %.2f >> 1"
-                ", mean R = %.2f)"
-                % (np.max(R[checked]), np.mean(R[checked]))
+                ", mean R = %.2f)" % (np.max(R[checked]), np.mean(R[checked]))
             )
             exit_flag = -3
         elif np.any(R[checked] > 1.1):

@@ -23,7 +23,7 @@ from gpyreg.f_min_fill import (
 )
 from gpyreg.formatting import full_repr
 from gpyreg.rng import random_integer, resolve_rng
-from gpyreg.slice_sample import SliceSampler
+from gpyreg.slice_sample import SliceSampler, _whole_number
 
 # Reuse the Cholesky factor across consecutive log-posterior evaluations of
 # one fit when only mean-function hyperparameters moved (see
@@ -107,6 +107,86 @@ def _check_hyperparameter_names(given, hyper_info, argument):
             + ", ".join(info[0] for info in hyper_info)
             + "."
         )
+
+
+def _write_prior_block(hyper_priors, name, i, prior_type, prior_params):
+    """Write the prior of the hyperparameter block ``name``, at the indices
+    ``i`` of the arrays of ``hyper_priors``, as :py:meth:`GP.set_priors`
+    takes it, and refuse one that it does not take. Return whether a
+    coordinate of the block has a prior."""
+    if prior_type == "gaussian":
+        mu, sigma = prior_params
+        hyper_priors["mu"][i] = mu
+        hyper_priors["sigma"][i] = sigma
+        # Zero degrees of freedom flag the Gaussian families; an infinite
+        # number does too.
+        hyper_priors["df"][i] = 0
+    elif prior_type == "student_t":
+        mu, sigma, df = prior_params
+        hyper_priors["mu"][i] = mu
+        hyper_priors["sigma"][i] = sigma
+        hyper_priors["df"][i] = df
+    elif prior_type == "smoothbox":
+        a, b, sigma = prior_params
+        hyper_priors["a"][i] = a
+        hyper_priors["b"][i] = b
+        hyper_priors["sigma"][i] = sigma
+        # Zero degrees of freedom flag the Gaussian families; an infinite
+        # number does too.
+        hyper_priors["df"][i] = 0
+    elif prior_type == "smoothbox_student_t":
+        a, b, sigma, df = prior_params
+        hyper_priors["a"][i] = a
+        hyper_priors["b"][i] = b
+        hyper_priors["sigma"][i] = sigma
+        hyper_priors["df"][i] = df
+    else:
+        raise ValueError("Unknown hyperprior type " + prior_type)
+
+    # The location of a coordinate is `mu` for the Gaussian and Student's t
+    # families and the box `[a, b]` for the smooth-box ones, whose `mu`
+    # stays NaN. A coordinate whose location and `sigma` are both NaN has
+    # no prior, and every other coordinate needs a finite location, with
+    # `a <= b` for a box, and a finite, positive `sigma`. A box of zero
+    # width, `a == b`, has no plateau and a normalizer of one: it is the
+    # Gaussian or the Student's t centred at `a`. `gplite_hypprior.m` reads
+    # a coordinate as having no prior where its `mu` or its `sigma` is not
+    # finite, a reading that the smooth-box families, gpyreg's own, cannot
+    # share.
+    if prior_type in ("smoothbox", "smoothbox_student_t"):
+        location = np.vstack((hyper_priors["a"][i], hyper_priors["b"][i]))
+        location_name = "end of its box (a or b)"
+    else:
+        location = hyper_priors["mu"][i][None, :]
+        location_name = "mu"
+    scale = hyper_priors["sigma"][i]
+    has_prior = ~(np.all(np.isnan(location), axis=0) & np.isnan(scale))
+    scale = scale[has_prior]
+    location = location[:, has_prior]
+    problem = None
+    if np.any(np.isnan(scale)):
+        problem = "a NaN sigma where its location is not NaN"
+    elif np.any(np.isinf(scale)):
+        problem = "an infinite sigma"
+    elif np.any(scale <= 0.0):
+        problem = "a sigma that is zero or negative"
+    elif np.any(np.isnan(location)):
+        problem = f"a NaN {location_name} where its sigma is not NaN"
+    elif np.any(np.isinf(location)):
+        problem = f"an infinite {location_name}"
+    elif prior_type in ("smoothbox", "smoothbox_student_t") and (
+        np.any(location[0] > location[1])
+    ):
+        problem = "a lower end a of its box above its upper end b"
+    if problem is not None:
+        raise ValueError(
+            f"The prior of {name} has {problem}. A prior needs a finite "
+            "location, with a <= b for a smooth box, and a finite, positive "
+            "sigma; a hyperparameter without a prior is set to `None`, and a "
+            "coordinate of a block without a prior has NaN for both its "
+            "location and its sigma."
+        )
+    return bool(np.any(has_prior))
 
 
 class GP:
@@ -255,6 +335,9 @@ class GP:
         ValueError
             Raised when `bounds` is given, but a specified hyperparameter
             is unknown.
+        ValueError
+            Raised when a lower bound is above the upper bound of the same
+            hyperparameter. Equal bounds fix a hyperparameter.
         """
 
         cov_N = self.covariance.hyperparameter_count(self.D)
@@ -291,6 +374,16 @@ class GP:
                 upper_bounds[i] = ub
 
             lower += info[1]
+
+        # An inverted pair is a mistake, as `get_recommended_bounds` and
+        # `fit` hold it to be.
+        inverted = lower_bounds > upper_bounds
+        if np.any(inverted):
+            raise ValueError(
+                "Lower bound above upper bound for the hyperparameter(s) "
+                + ", ".join(self.__hyperparameter_names(inverted))
+                + "."
+            )
 
         # Only set the bounds here due to exceptions
         # so that we don't only update say half of the bounds.
@@ -392,6 +485,15 @@ class GP:
             for the same hyperparameter. A pair that comes out inverted
             once the recommendations fill its NaN entries is collapsed
             onto its lower bound instead.
+        ValueError
+            Raised when a column of the training inputs has no spread, as
+            every column of a single training point has none, and a
+            hyperparameter whose recommended bounds take their scale from
+            the spread of that column (a length scale of the kernel, or
+            the scale of :class:`gpyreg.mean_functions.NegativeQuadratic`)
+            is not given a finite lower bound: its recommended bounds are
+            both ``-inf``, and an upper bound left unset collapses onto
+            the lower bound given.
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
@@ -472,6 +574,51 @@ class GP:
 
         lb = np.concatenate([lb_cov, lb_noise, lb_mean])
         ub = np.concatenate([ub_cov, ub_noise, ub_mean])
+
+        # The recommendations take the scale of a length scale from the
+        # width of its column of the training inputs (of every column,
+        # for an isotropic kernel), through its logarithm, and so do they
+        # for the scale of the negative quadratic mean. A column without
+        # spread has width zero, which puts both bounds at -inf: a box
+        # that holds no value, which the optimizer of `fit` cannot take,
+        # and from a lower bound of -inf the fit can reach a scale of
+        # zero, where the predictions are NaN. A single training point
+        # has no spread in any column. Such a scale is fitted from a
+        # finite lower bound that the caller gives it, onto which an
+        # upper bound left unset collapses below.
+        recommended_ub = np.concatenate(
+            [
+                cov_bounds_info["UB"],
+                noise_bounds_info["UB"],
+                mean_bounds_info["UB"],
+            ]
+        )
+        empty = (recommended_ub == -np.inf) & ~np.isfinite(lb)
+        if np.any(empty):
+            names = ", ".join(self.__hyperparameter_names(empty))
+            width = np.max(self.X, axis=0) - np.min(self.X, axis=0)
+            columns = ", ".join(
+                f"X[:, {j}]" for j in np.flatnonzero(width == 0)
+            )
+            if columns:
+                reason = (
+                    f"The training inputs have no spread in {columns}: "
+                    "each of these columns holds a single value. The "
+                    f"recommended bounds of {names}, which take their "
+                    "scale from that spread, are empty (-inf to -inf)"
+                )
+            else:
+                reason = (
+                    f"The recommended upper bound of {names} is -inf, "
+                    "which leaves no value"
+                )
+            raise ValueError(
+                reason + ", so these hyperparameters need a finite lower "
+                "bound from the caller (`set_bounds`, or the option "
+                "`lower_bounds` of `fit`), which is their upper bound as "
+                "well where that is left unset."
+            )
+
         ub = np.maximum(lb, ub)
 
         return self.bounds_to_dict(lb, ub)
@@ -484,8 +631,36 @@ class GP:
         =======
         hyper_priors : dict
             A dictionary of the current hyperparameter names and their
-            priors, in the form :py:meth:`set_priors` takes, with ``None``
-            for a hyperparameter without a prior.
+            priors, in the form :py:meth:`set_priors` takes, which
+            ``set_priors`` writes back as the GP holds them, so that
+            ``set_priors(get_priors())`` changes nothing. A hyperparameter
+            has ``None``, as ``set_priors`` takes it for no prior, where
+            all of its prior's entries are NaN. Any other prior holds the
+            arrays of its entries, NaN included. A block with a prior in
+            some coordinate comes back under the name of the family it was
+            set with, or of the matching Gaussian family where a Student's
+            t family was set with zero degrees of freedom throughout. A
+            block with no prior in any coordinate, whose location and
+            ``sigma`` are NaN throughout, comes back under the Gaussian or
+            the Student's t family that its degrees of freedom name:
+            ``"gaussian"`` where it was set with ``"gaussian"`` or
+            ``"smoothbox"``, or with ``"student_t"`` or
+            ``"smoothbox_student_t"`` and zero degrees of freedom
+            throughout; ``None`` where it was set with one of the latter
+            two and NaN degrees of freedom throughout; and ``"student_t"``
+            where it was set with one of them and other degrees of
+            freedom.
+
+        Raises
+        ------
+        ValueError
+            Raised when the priors that the GP holds are not in a form
+            ``set_priors`` takes, as priors written into ``hyper_priors``
+            directly, or by a version of gpyreg that took them, may not
+            be: a coordinate that has a location (``mu``, or the ends of a
+            smooth box) and a ``sigma`` that is not finite and positive,
+            or the reverse; an inverted smooth box; or a block that holds
+            both a ``mu`` and the ends of a smooth box.
         """
 
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -496,49 +671,57 @@ class GP:
         hyper_priors = {}
         lower = 0
 
-        mu = self.hyper_priors["mu"].copy()
-        sigma = self.hyper_priors["sigma"].copy()
-        df = self.hyper_priors["df"].copy()
-        a = self.hyper_priors["a"].copy()
-        b = self.hyper_priors["b"].copy()
-
         for info in hyper_info:
             upper = lower + info[1]
             i = range(lower, upper)
+            mu, sigma, df, a, b = (
+                self.hyper_priors[key][i]
+                for key in ("mu", "sigma", "df", "a", "b")
+            )
 
-            # The family of a block is read from its coordinates that
-            # have a prior; the others have NaN location and sigma
-            # (`set_priors`), which the returned arrays keep. NaN degrees
-            # of freedom belong to a Student's t family, as `set_priors`
-            # wrote them, and `fit` fills them with `df_base`.
-            p = np.isfinite(mu[i]) | np.isfinite(sigma[i])
-            df_p = df[i][p]
-            gaussian_df = np.all(df_p == 0) or np.all(df_p == np.inf)
-            student_t_df = np.all((df_p > 0) | np.isnan(df_p))
-
-            prior_type = prior_params = None
-            if not np.any(p) or not np.all(np.isfinite(sigma[i][p])):
-                pass  # no prior, or none of the four families
-            elif np.all(np.isfinite(a[i][p])) and np.all(np.isfinite(b[i][p])):
-                if gaussian_df:
-                    prior_type = "smoothbox"
-                    prior_params = (a[i], b[i], sigma[i])
-                elif student_t_df:
-                    prior_type = "smoothbox_student_t"
-                    prior_params = (a[i], b[i], sigma[i], df[i])
-            elif np.all(np.isfinite(mu[i][p])):
-                if gaussian_df:
-                    prior_type = "gaussian"
-                    prior_params = (mu[i], sigma[i])
-                elif student_t_df:
-                    prior_type = "student_t"
-                    prior_params = (mu[i], sigma[i], df[i])
-
-            if prior_type is not None and prior_params is not None:
-                hyper_priors[info[0]] = (prior_type, prior_params)
+            # `set_priors` writes all five entries of a block given `None`
+            # as NaN, the zero degrees of freedom of a Gaussian family
+            # across the whole block, and the given ones, NaN, zero and
+            # infinite included, for a Student's t family; it leaves `a`
+            # and `b` NaN for the Gaussian and Student's t families, and
+            # `mu` NaN for the smooth-box ones. Read in this order, the
+            # entries give back the prior that writes them.
+            gaussian = np.all(df == 0)
+            if all(np.all(np.isnan(v)) for v in (mu, sigma, df, a, b)):
+                vals = None
+            elif np.all(np.isnan(a)) and np.all(np.isnan(b)):
+                if gaussian:
+                    vals = ("gaussian", (mu, sigma))
+                else:
+                    vals = ("student_t", (mu, sigma, df))
+            elif np.all(np.isnan(mu)):
+                if gaussian:
+                    vals = ("smoothbox", (a, b, sigma))
+                else:
+                    vals = ("smoothbox_student_t", (a, b, sigma, df))
             else:
-                hyper_priors[info[0]] = None
+                raise ValueError(
+                    f"`get_priors` cannot return the prior of {info[0]}: "
+                    "the GP holds both a `mu` and the ends of a smooth box "
+                    "for it, which no prior that `set_priors` takes has."
+                )
 
+            if vals is not None:
+                # The checks of `set_priors`, on a scratch copy.
+                scratch = {
+                    key: np.full((info[1],), np.nan)
+                    for key in ("mu", "sigma", "df", "a", "b")
+                }
+                try:
+                    _write_prior_block(scratch, info[0], range(info[1]), *vals)
+                except ValueError as err:
+                    raise ValueError(
+                        f"`get_priors` cannot return the prior of {info[0]} "
+                        "that the GP holds, because `set_priors` refuses "
+                        f"it. {err}"
+                    ) from None
+
+            hyper_priors[info[0]] = vals
             lower += info[1]
 
         return hyper_priors
@@ -558,8 +741,10 @@ class GP:
             location (``mu``, or ``a`` and ``b`` for the smooth-box
             families) and ``sigma`` are both NaN has no prior; every other
             coordinate needs a finite location, with ``a <= b``, and a
-            finite, positive ``sigma``. A smooth box with ``a == b`` is the
-            Gaussian (or Student's t) centred at ``a``.
+            finite, positive ``sigma``. A block with no prior in any
+            coordinate holds none, and a GP whose blocks all hold none has
+            no priors. A smooth box with ``a == b`` is the Gaussian (or
+            Student's t) centred at ``a``.
             Degrees of freedom ``df`` that are zero, infinite or NaN make
             a ``"student_t"`` prior ``"gaussian"``, as
             ``gplite_hypprior.m`` reads them, and a
@@ -581,9 +766,10 @@ class GP:
             that is not finite and positive, or a location that is not
             finite, or a smooth box whose ``a`` is above its ``b``.
         """
-        self.no_prior = False
-        if priors is None:
-            self.no_prior = True
+        # The GP's own state changes only once every check has passed, so
+        # a refused call leaves the priors, and the flag that says whether
+        # there are any, as they were.
+        remove_all = priors is None
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         cov_hyper_info = self.covariance.hyperparameter_info(self.D)
@@ -609,7 +795,7 @@ class GP:
         lower = 0
 
         for info in hyper_info:
-            if self.no_prior:
+            if remove_all:
                 vals = None
             else:
                 try:
@@ -618,94 +804,19 @@ class GP:
                     e_str = "Missing hyperparameter " + info[0]
                     raise ValueError(e_str) from None
 
-            # None indicates no prior
+            # None indicates no prior, and so does a block none of whose
+            # coordinates has one, whatever its family.
             if vals is not None:
-                non_trivial_flag = True
                 upper = lower + info[1]
                 prior_type, prior_params = vals
-                i = range(lower, upper)
-
-                if prior_type == "gaussian":
-                    mu, sigma = prior_params
-                    hyper_priors["mu"][i] = mu
-                    hyper_priors["sigma"][i] = sigma
-                    # Zero degrees of freedom flag the Gaussian
-                    # families; an infinite number does too.
-                    hyper_priors["df"][i] = 0
-                elif prior_type == "student_t":
-                    mu, sigma, df = prior_params
-                    hyper_priors["mu"][i] = mu
-                    hyper_priors["sigma"][i] = sigma
-                    hyper_priors["df"][i] = df
-                elif prior_type == "smoothbox":
-                    a, b, sigma = prior_params
-                    hyper_priors["a"][i] = a
-                    hyper_priors["b"][i] = b
-                    hyper_priors["sigma"][i] = sigma
-                    # Zero degrees of freedom flag the Gaussian
-                    # families; an infinite number does too.
-                    hyper_priors["df"][i] = 0
-                elif prior_type == "smoothbox_student_t":
-                    a, b, sigma, df = prior_params
-                    hyper_priors["a"][i] = a
-                    hyper_priors["b"][i] = b
-                    hyper_priors["sigma"][i] = sigma
-                    hyper_priors["df"][i] = df
-                else:
-                    raise ValueError("Unknown hyperprior type " + prior_type)
-
-                # The location of a coordinate is `mu` for the Gaussian
-                # and Student's t families and the box `[a, b]` for the
-                # smooth-box ones, whose `mu` stays NaN. A coordinate
-                # whose location and `sigma` are both NaN has no prior,
-                # and every other coordinate needs a finite location, with
-                # `a <= b` for a box, and a finite, positive `sigma`. A box
-                # of zero width, `a == b`, has no plateau and a normalizer
-                # of one: it is the Gaussian or the Student's t centred at
-                # `a`. `gplite_hypprior.m` reads a coordinate as having no
-                # prior where its `mu` or its `sigma` is not finite, a
-                # reading that the smooth-box families, gpyreg's own,
-                # cannot share.
-                if prior_type in ("smoothbox", "smoothbox_student_t"):
-                    location = np.vstack(
-                        (hyper_priors["a"][i], hyper_priors["b"][i])
-                    )
-                    location_name = "end of its box (a or b)"
-                else:
-                    location = hyper_priors["mu"][i][None, :]
-                    location_name = "mu"
-                scale = hyper_priors["sigma"][i]
-                has_prior = ~(
-                    np.all(np.isnan(location), axis=0) & np.isnan(scale)
-                )
-                scale = scale[has_prior]
-                location = location[:, has_prior]
-                problem = None
-                if np.any(np.isnan(scale)):
-                    problem = "a NaN sigma where its location is not NaN"
-                elif np.any(np.isinf(scale)):
-                    problem = "an infinite sigma"
-                elif np.any(scale <= 0.0):
-                    problem = "a sigma that is zero or negative"
-                elif np.any(np.isnan(location)):
-                    problem = (
-                        f"a NaN {location_name} where its sigma is not NaN"
-                    )
-                elif np.any(np.isinf(location)):
-                    problem = f"an infinite {location_name}"
-                elif prior_type in ("smoothbox", "smoothbox_student_t") and (
-                    np.any(location[0] > location[1])
+                if _write_prior_block(
+                    hyper_priors,
+                    info[0],
+                    range(lower, upper),
+                    prior_type,
+                    prior_params,
                 ):
-                    problem = "a lower end a of its box above its upper end b"
-                if problem is not None:
-                    raise ValueError(
-                        f"The prior of {info[0]} has {problem}. A prior "
-                        "needs a finite location, with a <= b for a smooth "
-                        "box, and a finite, positive sigma; a hyperparameter "
-                        "without a prior is set to `None`, and a coordinate "
-                        "of a block without a prior has NaN for both its "
-                        "location and its sigma."
-                    )
+                    non_trivial_flag = True
 
             lower += info[1]
 
@@ -920,6 +1031,28 @@ class GP:
 
         Raises
         =======
+        ValueError
+            Raised, before the update changes anything, when the update
+            would make the number of targets, or of noise variances, that
+            the GP holds differ from its number of inputs; a GP may hold
+            inputs without targets, and data without noise variances. So
+            ``y_new`` given without ``X_new``, one value per input held, is
+            taken where the GP holds no targets, as ``s2_new`` is where it
+            holds no variances, and either is refused where the GP holds
+            what it gives or holds no inputs; ``X_new`` without ``y_new``
+            is refused where the GP holds targets, and ``X_new`` with
+            ``y_new`` where it holds inputs without targets.
+        ValueError
+            Raised by the check of the shapes of the training data given,
+            before the update changes anything: when ``X_new`` is neither
+            a 1-D nor a 2-D array or does not have ``D`` columns, when
+            ``y_new`` does not hold one value per row of ``X_new``, or when
+            an array ``s2_new`` does not hold one variance per row of
+            ``X_new``; without ``X_new``, the rows are the inputs that the
+            GP holds.
+        TypeError
+            Raised when ``s2_new`` is neither an array, a number nor
+            ``None``, such as a list, before the update changes anything.
         LinAlgError
             Raised when the Cholesky decomposition failed multiple times even
             by adding numerical stability values to the matrix.
@@ -932,6 +1065,20 @@ class GP:
             hyperparameter is NaN (not set), as it is on a GP whose
             hyperparameters were never given.
         """
+        # Targets or variances without inputs, on a GP that holds none,
+        # which the check of the shapes below cannot size.
+        if X_new is None and self.X is None:
+            for name, given in (
+                ("targets", y_new),
+                ("noise variances", s2_new),
+            ):
+                if given is not None:
+                    raise ValueError(
+                        f"update would leave the GP holding {name} without "
+                        f"inputs: a GP holds as many {name} as inputs, or "
+                        "none."
+                    )
+
         X_new, y_new, s2_new = self._convert_shapes(X_new, y_new, s2_new)
         # Create local copies so we won't get trouble
         # with references later.
@@ -955,6 +1102,58 @@ class GP:
                     "row per hyperparameter sample."
                 )
             hyp = hyp.copy()
+
+        # The training data after the update, stored below, after the
+        # single-point extension of the posteriors, which reads the data
+        # held before it. New data are appended; where the GP holds noise
+        # variances or is given some, points without a supplied variance
+        # get zero, the value the noise function uses when none is given.
+        N_old = 0 if self.X is None else self.X.shape[0]
+        X_all = self.X
+        if X_new is not None:
+            if self.X is None:
+                X_all = X_new
+            else:
+                X_all = np.concatenate((self.X, X_new))
+
+        y_all = self.y
+        if y_new is not None:
+            if self.y is None:
+                y_all = y_new
+            else:
+                y_all = np.concatenate((self.y, y_new))
+
+        s2_all = self.s2
+        s2_added = s2_new
+        if X_new is not None and s2_new is None and self.s2 is not None:
+            s2_added = np.zeros((X_new.shape[0], 1))
+        if s2_added is not None:
+            if self.s2 is None:
+                if X_new is not None and N_old > 0:
+                    s2_all = np.concatenate((np.zeros((N_old, 1)), s2_added))
+                else:
+                    s2_all = s2_added
+            else:
+                s2_all = np.concatenate((self.s2, s2_added))
+
+        # A GP holds as many targets, and as many noise variances, as
+        # inputs, or none of them. An update that would make the numbers
+        # differ is refused here, before it changes anything; numbers that
+        # differ already, as after a `fit` given inputs of another number
+        # and no variances, which keeps the variances held, are not
+        # checked.
+        N_all = 0 if X_all is None else X_all.shape[0]
+        for name, held, stored in (
+            ("targets", self.y, y_all),
+            ("noise variances", self.s2, s2_all),
+        ):
+            agreed = held is None or held.shape[0] == N_old
+            if agreed and stored is not None and stored.shape[0] != N_all:
+                raise ValueError(
+                    f"update would leave the GP holding {N_all} inputs and "
+                    f"{stored.shape[0]} {name}: a GP holds as many {name} "
+                    "as inputs, or none."
+                )
 
         # Check whether to do a rank-1 update. The shortcut extends the
         # existing posteriors, so it applies only while their
@@ -1010,11 +1209,8 @@ class GP:
                 sn2_eff = sn2 * self.posteriors[s].sn2_mult
 
                 # Noise scale of the existing factorization, kept for the
-                # extended factor. Posteriors pickled before the scale was
-                # stored lack the attribute and recover it from sW.
-                sl = getattr(self.posteriors[s], "sl", None)
-                if sl is None:
-                    sl = 1.0 / self.posteriors[s].sW[0, 0] ** 2
+                # extended factor.
+                sl = self.posteriors[s]._noise_scale()
 
                 # Compute covariance and cross-covariance.
                 hyp_cov = hyp_s[0:cov_N]
@@ -1074,23 +1270,49 @@ class GP:
                     # the new point, which `predict` clamps at the noise
                     # level: a v_star that low carries no information
                     # about the latent variance, so fall through to a full
-                    # recomputation as the branch above does.
-                    if v_star[0, s] <= sn2_eff:
+                    # recomputation as the branch above does. A posterior
+                    # pickled without the Cholesky factor that the
+                    # extension works on is recomputed as well.
+                    L_factor = getattr(self.posteriors[s], "L_factor", None)
+                    if v_star[0, s] <= sn2_eff or L_factor is None:
                         full_update_s = True
                         full_updates.append(s)
-                        warnings.warn(
-                            "Rank-one update of the posterior factor "
-                            f"unstable for posterior {s}. Reverting to "
-                            "full update.",
-                            stacklevel=2,
-                        )
+                        if L_factor is not None:
+                            warnings.warn(
+                                "Rank-one update of the posterior factor "
+                                f"unstable for posterior {s}. Reverting to "
+                                "full update.",
+                                stacklevel=2,
+                            )
                     else:
-                        alpha_update = np.dot(-L, Ks)
+                        # inv(K + sn2_mult * sn2) k* from the Cholesky
+                        # factor of the matrix: taken from the explicit
+                        # inverse L, whose rounding grows as the noise
+                        # shrinks, it would carry that rounding, divided
+                        # by v_star, into alpha and L at every update. The
+                        # factor is extended by the column L_factor^-T k*
+                        # and the square root of v_star, the Schur
+                        # complement that the inverse divides by.
+                        new_column = sp.linalg.solve_triangular(
+                            L_factor, Ks, trans=1, check_finite=False
+                        )
+                        alpha_update = sp.linalg.solve_triangular(
+                            L_factor, new_column, trans=0, check_finite=False
+                        )
                         v = -alpha_update / v_star[:, s]
                         self.posteriors[s].L = np.block(
                             [
                                 [L + np.dot(v, alpha_update.T), -v],
                                 [-v.T, -1 / v_star[:, s]],
+                            ]
+                        )
+                        self.posteriors[s].L_factor = np.block(
+                            [
+                                [L_factor, new_column],
+                                [
+                                    np.zeros((1, L_factor.shape[0])),
+                                    np.sqrt(v_star[:, s : s + 1]),
+                                ],
                             ]
                         )
 
@@ -1111,32 +1333,7 @@ class GP:
                         (alpha_update, np.array([[-1]]))
                     )
 
-        N_old = 0 if self.X is None else self.X.shape[0]
-        if X_new is not None:
-            if self.X is None:
-                self.X = X_new
-            else:
-                self.X = np.concatenate((self.X, X_new))
-
-        if y_new is not None:
-            if self.y is None:
-                self.y = y_new
-            else:
-                self.y = np.concatenate((self.y, y_new))
-
-        # Keep the stored user-provided noise aligned with the training
-        # inputs: points without a supplied variance get zero, the value
-        # the noise function uses when no variance is given.
-        if X_new is not None and s2_new is None and self.s2 is not None:
-            s2_new = np.zeros((X_new.shape[0], 1))
-        if s2_new is not None:
-            if self.s2 is None:
-                if X_new is not None and N_old > 0:
-                    self.s2 = np.concatenate((np.zeros((N_old, 1)), s2_new))
-                else:
-                    self.s2 = s2_new
-            else:
-                self.s2 = np.concatenate((self.s2, s2_new))
+        self.X, self.y, self.s2 = X_all, y_all, s2_all
 
         if rank_one_update:
             for s in full_updates:  # Compute full update where rank-1 failed
@@ -1188,6 +1385,7 @@ class GP:
                 posterior.sn2_mult = None
                 posterior.L_chol = None
                 posterior.sl = None
+                posterior.L_factor = None
         # Maybe add a call to garbage collection here? This would
         # make sure that the things set to None are actually no longer
         # using memory.
@@ -1217,7 +1415,10 @@ class GP:
             current noise variances of the GP. If not given the current
             noise variances are used.
         options : dict, optional
-            A dictionary of options for training. The possible options are:
+            A dictionary of options for training. The counts among them,
+            ``opts_N``, ``init_N``, ``n_samples``, ``thin`` and ``burn``,
+            are whole numbers of an integer or a float type (2.0 is taken
+            as 2), or 0-d arrays that hold one. The possible options are:
 
                 **opts_N** : int, defaults to 3
                     Number of hyperparameter optimization runs.
@@ -1234,9 +1435,13 @@ class GP:
                 **n_samples** : int, defaults to 10
                     Number of hyperparameters to sample.
                 **thin** : int, defaults to 5
-                    Thinning parameter for slice sampling.
-                **burn** : int, defaults to ``thin * n_samples``
-                    Burn parameter for slice sampling.
+                    Thinning parameter for slice sampling: one sample in
+                    ``thin`` is kept. A whole number greater than zero.
+                **burn** : int or None, defaults to ``thin * n_samples``
+                    Burn parameter for slice sampling: the number of
+                    samples drawn and dropped before the first one kept.
+                    A whole number of at least zero, or ``None``, which
+                    leaves it to :py:meth:`SliceSampler.sample`.
                 **lower_bounds** : str or ndarray, defaults to "current"
                     User-provided lower bounds. Any values which are `nan` will
                     be filled with the recommended bounds. "recommended" means
@@ -1283,8 +1488,66 @@ class GP:
         Raises
         ------
         ValueError
+            Raised when the GP has no training data, neither given to the
+            fit nor held from an earlier ``fit`` or ``update``, before the
+            fit changes anything.
+        ValueError
+            Raised by the check of the shapes of the training data given,
+            before the fit changes anything: when ``X`` is neither a 1-D
+            nor a 2-D array or does not have ``D`` columns, when ``y`` does
+            not hold one value per row of ``X``, or when an array ``s2``
+            does not hold one variance per row of ``X``.
+        TypeError
+            Raised by the same check, before the fit changes anything,
+            when ``s2`` is neither an array, a number nor ``None``, such as
+            a list.
+        ValueError
+            Raised, before the fit changes anything, when the data it
+            would hold, those given with those the GP holds for what is
+            not given, would make the number of targets, or of the noise
+            variances that the noise function reads (as
+            :class:`gpyreg.noise_functions.GaussianNoise` with
+            ``user_provided_add`` does), differ from the number of inputs:
+            when ``X`` is given without ``y``, or without ``s2``, and the
+            targets, or those variances, that the GP holds, one per input
+            it holds, are not one per row of ``X``.
+        ValueError
+            Raised by :py:meth:`get_recommended_bounds`, through which the
+            fit fills the bounds that are not set: when the option
+            ``lower_bounds`` or ``upper_bounds`` is neither
+            ``"recommended"``, ``None``, ``"current"`` nor an array, when
+            a lower bound given is above its upper bound, or when a column
+            of the training inputs has no spread and a hyperparameter
+            whose recommended bounds take their scale from it is not given
+            a finite lower bound.
+        ValueError
+            Raised when the option ``opts_N``, ``init_N`` or ``n_samples``
+            is not a whole number of at least zero, the option ``thin``
+            not a whole number of at least one, or the option ``burn``
+            neither ``None`` nor a whole number of at least zero: a
+            fraction, a number below that, an infinity, NaN, a bool or a
+            value that is not a number, before the fit changes anything.
+        ValueError
             Raised when ``n_samples`` is positive and ``sampler_name`` is
             not ``'slicesample'``, after the optimization.
+        ValueError
+            Raised by :py:class:`gpyreg.slice_sample.SliceSampler` when
+            ``n_samples`` is positive, after the optimization: when the
+            widths of the sampler, from the option ``widths`` or computed
+            by the fit, are not all positive and finite, or when the log
+            posterior is not finite at the optimized hyperparameters, where
+            the chain starts.
+        ValueError
+            Raised by :py:meth:`update`, which computes the posterior of
+            the fitted hyperparameters, when one of them is NaN.
+        LinAlgError
+            Raised when the Cholesky decomposition of the training
+            covariance fails even after its noise is multiplied tenfold, up
+            to ten times: by :py:meth:`update` at the fitted
+            hyperparameters, or by the objective at a starting point or
+            during the optimization, which lets it propagate. Whether a
+            covariance that holds NaN, as from a starting point that does,
+            fails there or gives NaN depends on the LAPACK build.
         """
         # Share one stream between the initial design and the sampler,
         # including when the caller supplies a seed rather than a generator.
@@ -1293,10 +1556,17 @@ class GP:
         ## Default options
         if options is None:
             options = {}
-        opts_N = options.get("opts_N", 3)
-        init_N = options.get("init_N", 2**10)
+        # Counts, which the fit slices and loops with: a whole number of
+        # either type is converted, and any other value is refused before
+        # the fit changes anything.
+        opts_N = _whole_number(
+            options.get("opts_N", 3), "The option opts_N", 0
+        )
+        init_N = _whole_number(
+            options.get("init_N", 2**10), "The option init_N", 0
+        )
         init_method = options.get("init_method", "sobol")
-        thin = options.get("thin", 5)
+        thin = _whole_number(options.get("thin", 5), "The option thin", 1)
         df_base = options.get("df_base", 7)
         widths = options.get("widths", None)
         log_p = options.get("log_P", None)  # Not used since no slicelite
@@ -1309,12 +1579,67 @@ class GP:
         sampler_name = options.get(
             "sampler_name", options.get("sampler", "slicesample")
         )
-        s_N = options.get("n_samples", 10)
+        s_N = _whole_number(
+            options.get("n_samples", 10), "The option n_samples", 0
+        )
+        # The burn-in of the sampler, checked with the counts whether or
+        # not the fit draws samples; None leaves it to the sampler.
         burn_in = options.get("burn", thin * s_N)
+        if burn_in is not None:
+            burn_in = _whole_number(burn_in, "The option burn", 0)
         lower_bounds = options.get("lower_bounds", "current")
         upper_bounds = options.get("upper_bounds", "current")
 
+        # The training data, given here or held by the GP, checked before
+        # the fit changes anything.
+        missing = [
+            name
+            for name, given, held in (("X", X, self.X), ("y", y, self.y))
+            if given is None and held is None
+        ]
+        if missing:
+            raise ValueError(
+                "The GP has no training data: `fit` needs the inputs X and "
+                "the targets y, given to it or held by the GP from an "
+                "earlier `fit` or `update`; missing "
+                + " and ".join(missing)
+                + "."
+            )
+
         X, y, s2 = self._convert_shapes(X, y, s2)
+
+        # A GP holds as many targets, and as many of the noise variances
+        # that its noise function reads, as inputs, or none of them, as in
+        # `update`. Only inputs given without the targets, or the
+        # variances, that the GP holds can make the numbers differ, and
+        # such data are refused here, before the fit changes anything.
+        # Numbers that differ already are not checked, and neither are
+        # variances that the noise function does not read.
+        N_old = None if self.X is None else self.X.shape[0]
+        N_all = N_old if X is None else X.shape[0]
+        counted = [("targets", "y", self.y, y, "")]
+        noise_parameters = getattr(self.noise, "parameters", None)
+        if noise_parameters is not None and noise_parameters[1] != 0:
+            counted.append(
+                (
+                    "noise variances",
+                    "s2",
+                    self.s2,
+                    s2,
+                    ", which its noise function reads",
+                )
+            )
+        for name, argument, held, given, note in counted:
+            if given is None and held is not None:
+                N_held = held.shape[0]
+                if N_held == N_old and N_held != N_all:
+                    raise ValueError(
+                        f"fit would leave the GP holding {N_all} inputs and "
+                        f"{N_held} {name}: X is given without {argument}, "
+                        f"and the GP holds {N_held} {name}{note}; give "
+                        f"{argument} with X, one per input."
+                    )
+
         # Initialize GP if requested.
         if X is not None:
             self.X = X
@@ -2044,6 +2369,25 @@ class GP:
             is not clamped at zero, unlike the variances
             :py:func:`predict` returns, so on a nearly singular posterior
             an entry can come out slightly negative.
+
+        Raises
+        ------
+        ValueError
+            Raised by the check of the shapes of the data given: when
+            ``x_star`` is neither a 1-D nor a 2-D array or does not have
+            ``D`` columns, when ``y_star`` does not hold one value per row
+            of ``x_star``, or when an array ``s2_star`` does not hold one
+            variance per row of ``x_star``.
+        TypeError
+            Raised when ``s2_star`` is neither an array, a number nor
+            ``None``, such as a list.
+        LinAlgError
+            Raised when a posterior holds the negative inverse of the
+            training covariance without its Cholesky factor, as one
+            pickled by gpyreg 1.3.1 or earlier does where the smallest
+            noise variance at the training inputs is below 1e-6, and the
+            factorization that computes the factor again fails even after
+            its noise is multiplied tenfold, up to ten times.
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
         s_N = self.posteriors.size
@@ -2097,8 +2441,17 @@ class GP:
                     )
                     C = K_star - np.dot(V.T, V)  # Predictive variances
                 else:
-                    LKs = np.dot(L, Ks)
-                    C = K_star + np.dot(Ks.T, LKs)
+                    # From the Cholesky factor of the matrix whose negative
+                    # inverse L is: formed from L (`gplite_pred.m:95-96`),
+                    # the covariance carries the rounding of the inverse,
+                    # which grows as the noise shrinks.
+                    V = sp.linalg.solve_triangular(
+                        self.__low_noise_factor(s),
+                        Ks,
+                        trans=1,
+                        check_finite=False,
+                    )
+                    C = K_star - np.dot(V.T, V)
 
             # Enforce symmetry if lost due to numerical errors.
             C = (C + C.T) / 2
@@ -2189,6 +2542,28 @@ class GP:
             be treated as read-only; custom covariance results may be copied
             to give each tuple entry stable values. Observation-noise inputs
             and ``add_noise`` do not affect these latent kernel matrices.
+
+        Raises
+        ------
+        ValueError
+            Raised by the check of the shapes of the data given: when
+            ``x_star`` is neither a 1-D nor a 2-D array or does not have
+            ``D`` columns, when ``y_star`` does not hold one value per row
+            of ``x_star``, or when an array ``s2_star`` does not hold one
+            variance per row of ``x_star``.
+        TypeError
+            Raised when ``s2_star`` is neither an array, a number nor
+            ``None``, such as a list.
+        ValueError
+            Raised when ``return_lpd`` is ``True`` and ``y_star`` is
+            ``None``.
+        LinAlgError
+            Raised when a posterior holds the negative inverse of the
+            training covariance without its Cholesky factor, as one
+            pickled by gpyreg 1.3.1 or earlier does where the smallest
+            noise variance at the training inputs is below 1e-6, and the
+            factorization that computes the factor again fails even after
+            its noise is multiplied tenfold, up to ten times.
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
 
@@ -2289,7 +2664,14 @@ class GP:
                     V = _solve_triangular(L, sW * Ks, trans=1)
                     s2[:, s] = kss - np.sum(V * V, 0)  # predictive variance
                 else:
-                    s2[:, s] = kss + np.sum(Ks * np.dot(L, Ks), 0)
+                    # From the Cholesky factor of the matrix whose negative
+                    # inverse L is: formed from L (`gplite_pred.m:95-96`),
+                    # the variance carries the rounding of the inverse,
+                    # which grows as the noise shrinks.
+                    V = _solve_triangular(
+                        self.__low_noise_factor(s), Ks, trans=1
+                    )
+                    s2[:, s] = kss - np.sum(V * V, 0)
             else:
                 if return_cross_covariance:
                     cross_covariance.append(None)
@@ -2405,6 +2787,14 @@ class GP:
             Raised when the GP has no training data or no posterior
             factors, or when ``mu`` does not have one column per input
             dimension, or ``sigma`` neither one nor one per dimension.
+        LinAlgError
+            Raised when ``compute_var`` is True and a posterior holds the
+            negative inverse of the training covariance without its
+            Cholesky factor, as one pickled by gpyreg 1.3.1 or earlier does
+            where the smallest noise variance at the training inputs is
+            below 1e-6, and the factorization that computes the factor
+            again fails even after its noise is multiplied tenfold, up to
+            ten times.
         """
 
         if not isinstance(
@@ -2512,11 +2902,8 @@ class GP:
                 # L = chol((K + sn2_mult * sn2) / sl). The scale is the one
                 # the factor was built with, which a rank-one update keeps
                 # and the minimum of the current training noise need not
-                # reproduce. Posteriors pickled before the scale was stored
-                # lack the attribute and recover it from sW.
-                sl = getattr(self.posteriors[s], "sl", None)
-                if sl is None:
-                    sl = 1.0 / self.posteriors[s].sW[0, 0] ** 2
+                # reproduce.
+                sl = self.posteriors[s]._noise_scale()
 
             # Compute posterior mean of the integral
             tau = np.sqrt(sigma**2 + ell**2)
@@ -2556,9 +2943,20 @@ class GP:
                         )
                         / sl
                     )
+                    J_kk = nf_kk - np.sum(z * invKzk.T, 1)
                 else:
-                    invKzk = np.dot(-L, z.T)
-                J_kk = nf_kk - np.sum(z * invKzk.T, 1)
+                    # From the Cholesky factor of the matrix whose negative
+                    # inverse L is, as `predict` forms its variance: formed
+                    # from L, the variance of the integral carries the
+                    # rounding of the inverse, which grows as the noise
+                    # shrinks.
+                    W = sp.linalg.solve_triangular(
+                        self.__low_noise_factor(s),
+                        z.T,
+                        trans=1,
+                        check_finite=False,
+                    )
+                    J_kk = nf_kk - np.sum(W * W, 0)
                 F_var[:, s] = np.maximum(
                     np.spacing(1), J_kk
                 )  # Correct for numerical error
@@ -2864,10 +3262,11 @@ class GP:
             negative eigenvalue beyond the rounding of the prior variance
             at ``X_star``.
         LinAlgError
-            Raised when the posterior holds the negative inverse of the
-            training covariance, as it does where the smallest noise
-            variance at the training inputs is below 1e-6, and the
-            Cholesky decomposition of that covariance fails even after
+            Raised when the posterior drawn from holds the negative inverse
+            of the training covariance without its Cholesky factor, as one
+            pickled by gpyreg 1.3.1 or earlier does where the smallest
+            noise variance at the training inputs is below 1e-6, and the
+            factorization that computes the factor again fails even after
             its noise is multiplied tenfold, up to ten times.
         """
         rng = resolve_rng(rng)
@@ -2920,17 +3319,13 @@ class GP:
                 # The posterior holds the explicit inverse
                 # -inv(K + sn2_mult * diag(sn2)), whose rounding grows as
                 # the noise shrinks, and a covariance formed from it would
-                # carry that rounding. Factor the matrix itself instead,
-                # with the kernel, noise and multiplier of the posterior.
-                K = self.covariance.compute(hyp[0:cov_N], self.X)
-                sn2 = self.noise.compute(
-                    hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
-                )
-                L_K, __, __ = self.__training_cholesky(
-                    K, sn2, False, self.posteriors[s].sn2_mult
-                )
+                # carry that rounding; the Cholesky factor of the matrix
+                # itself does not.
                 V = sp.linalg.solve_triangular(
-                    L_K, Ks, trans=1, check_finite=False
+                    self.__low_noise_factor(s),
+                    Ks,
+                    trans=1,
+                    check_finite=False,
                 )
             C = K_star - np.dot(V.T, V)  # Predictive variances
 
@@ -2962,6 +3357,30 @@ class GP:
             return y_star
 
         return f_star
+
+    def __low_noise_factor(self, s):
+        """The upper triangular Cholesky factor of
+        ``K + sn2_mult * diag(sn2)`` at the training inputs, for the
+        posterior ``s`` in the low-noise representation, whose ``L`` is the
+        negative inverse of that matrix. A posterior pickled without it
+        has it computed from the kernel, the noise and the multiplier of
+        the posterior, as the factorization of the posterior computed it.
+        """
+        posterior = self.posteriors[s]
+        L_factor = getattr(posterior, "L_factor", None)
+        if L_factor is not None:
+            return L_factor
+        cov_N = self.covariance.hyperparameter_count(self.D)
+        noise_N = self.noise.hyperparameter_count()
+        hyp = posterior.hyp
+        K = self.covariance.compute(hyp[0:cov_N], self.X)
+        sn2 = self.noise.compute(
+            hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
+        )
+        L_factor, __, __ = self.__training_cholesky(
+            K, sn2, False, posterior.sn2_mult
+        )
+        return L_factor
 
     @staticmethod
     def __robust_cholesky(sigma, scale=None):
@@ -3281,6 +3700,7 @@ class GP:
             sn2_mult,
             L_chol,
             sl_post,
+            L_factor=None if L_chol else L,
         )
 
     def _convert_shapes(
@@ -3366,8 +3786,8 @@ class Posterior:
     L : ndarray, shape (N, N)
         If ``L_chol`` is True, the upper triangular Cholesky factor of
         ``(K + sn2_mult * diag(sn2)) / sl``. Otherwise
-        ``-inv(K + sn2_mult * diag(sn2))``, used when the noise is too
-        small for a stable Cholesky decomposition.
+        ``-inv(K + sn2_mult * diag(sn2))``, the low-noise representation,
+        as ``gplite_core.m`` has it where the noise is small.
     sn2_mult : int
         Multiplier applied to the noise variances, increased in powers of
         ten until the Cholesky decomposition succeeds.
@@ -3380,9 +3800,24 @@ class Posterior:
         factorization with this scale, so it can differ from the minimum
         of the current training noise after observations have been
         appended.
+    L_factor : ndarray, shape (N, N) or None
+        If ``L_chol`` is False, the upper triangular Cholesky factor of
+        ``K + sn2_mult * diag(sn2)``, the matrix whose negative inverse
+        ``L`` is. :py:func:`GP.predict`, :py:func:`GP.predict_full`,
+        :py:func:`GP.quad` and :py:func:`GP.random_function` form their
+        covariances from it, and a single-point :py:func:`GP.update` takes
+        from it the predictive variance of the new point and extends it:
+        formed from ``L``, these would carry the rounding of the inverse,
+        which grows as the noise shrinks. ``None`` if ``L_chol`` is True,
+        where ``L`` is that factor, scaled. A posterior pickled by gpyreg
+        1.3.1 or earlier has no such attribute: the predictions, the
+        quadrature and the draws compute the factor again at each call,
+        and a single-point update recomputes the posterior in full.
     """
 
-    def __init__(self, hyp, alpha, sW, L, sn2_mult, Lchol, sl=None):
+    def __init__(
+        self, hyp, alpha, sW, L, sn2_mult, Lchol, sl=None, L_factor=None
+    ):
         self.hyp = hyp
         self.alpha = alpha
         self.sW = sW
@@ -3390,3 +3825,15 @@ class Posterior:
         self.sn2_mult = sn2_mult
         self.L_chol = Lchol
         self.sl = sl
+        self.L_factor = L_factor
+
+    def _noise_scale(self):
+        """Return ``sl``, the scale of the factorization.
+
+        Posteriors pickled before the scale was stored lack the attribute
+        and recover it from ``sW``, whose entries are ``1 / sqrt(sl)``.
+        """
+        sl = getattr(self, "sl", None)
+        if sl is None:
+            sl = 1.0 / self.sW[0, 0] ** 2
+        return sl
