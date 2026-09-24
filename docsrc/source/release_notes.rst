@@ -82,8 +82,16 @@ to change.
   GP as having priors, and so did a call whose blocks had no prior in any
   coordinate, such as ``("student_t", (nan, nan, nan))``, so that ``str``
   reported them as present and :meth:`gpyreg.GP.fit` added to its
-  objective a log prior of zero. **Upgrading:** a script that reads from
-  ``str`` whether a GP set with such blocks alone has priors finds none.
+  objective their log prior, which is zero except at a point off the value
+  of a hyperparameter that equal bounds fix, where it is ``-inf``. A fit
+  without a space-filling design (``init_N=0``) ranks its starting points,
+  those it is given or those of the GP, before it moves them into the
+  bounds: it ranked such a point last, and ranks it by its likelihood, and
+  where that point comes first, the fit starts from it, moved onto the
+  fixed value, and its result changes. **Upgrading:** a script
+  that reads from ``str`` whether a GP set with such blocks alone has
+  priors finds none, and one that compares the result of such a fit with
+  values stored from 1.3.1 stores them again.
 * :meth:`gpyreg.GP.get_priors` returns every prior that
   :meth:`gpyreg.GP.set_priors` takes in a form that ``set_priors`` writes
   back as it was, so ``set_priors(get_priors())`` changes nothing, the
@@ -110,13 +118,15 @@ to change.
   location). **Upgrading:** a script that compares what ``get_priors``
   returns finds a Student's t family with infinite degrees of freedom, or
   with degrees of freedom of zero where it has a prior and NaN elsewhere,
-  under its own name, not as the Gaussian family, and a block without a
-  prior in any coordinate, unless its degrees of freedom are NaN
-  throughout, under the family just given, not ``None``; a script that
-  writes priors into ``hyper_priors`` directly sets them through
-  ``set_priors`` instead; and one that calls ``get_priors`` on a GP
-  pickled by gpyreg 1.2.x or earlier whose priors ``set_priors`` refuses
-  sets the priors of that GP again with ``set_priors`` first.
+  under its own name, not as the Gaussian family, a Student's t block
+  whose degrees of freedom mix zero with NaN or a number as
+  ``"student_t"``, not ``None``, and a block without a prior in any
+  coordinate, unless its degrees of freedom are NaN throughout, under the
+  family just given, not ``None``; a script that writes priors into
+  ``hyper_priors`` directly sets them through ``set_priors`` instead; and
+  one that calls ``get_priors`` on a GP pickled by gpyreg 1.2.x or earlier
+  whose priors ``set_priors`` refuses sets the priors of that GP again
+  with ``set_priors`` first.
 * :meth:`gpyreg.GP.set_bounds` refuses with ``ValueError`` a lower bound
   above the upper bound of the same hyperparameter, naming it, as
   :meth:`gpyreg.GP.get_recommended_bounds` and :meth:`gpyreg.GP.fit`
@@ -131,13 +141,16 @@ to change.
   takes it, where a whole float such as 2.0 raised ``TypeError`` from the
   fit's own use of it. It refuses with ``ValueError``, before it changes
   anything, a ``thin`` that is not a whole number greater than zero: a
-  fraction, which raised ``TypeError``; zero or a negative number, which
-  raised another ``ValueError`` after the optimization; a bool, which ran
-  as the integer it stands for; and, in a fit without hyperparameter
-  samples, which does not use it, any such value, which it took.
-  **Upgrading:** a script that passes ``thin=True`` passes ``1``, and one
-  that gives a fit with ``n_samples=0`` a ``thin`` that is not a whole
-  number greater than zero leaves it out.
+  fraction, which raised ``TypeError``, or the sampler's ``ValueError`` on
+  the burn-in where the default ``burn``, ``thin`` times ``n_samples``,
+  is a fraction; zero or a negative number, which raised another
+  ``ValueError`` after the optimization; a bool, which ran as the integer
+  it stands for; and, in a fit without hyperparameter samples, which does
+  not use it, any such value, which it took. **Upgrading:** a script that
+  passes ``thin=True`` passes ``1``; one that catches the ``TypeError`` of
+  a fractional ``thin`` catches ``ValueError``; and one that gives a fit
+  with ``n_samples=0`` a ``thin`` that is not a whole number greater than
+  zero leaves it out.
 * :meth:`gpyreg.GP.fit` takes its other counts, ``n_samples``, ``opts_N``
   and ``init_N``, as whole numbers of an integer or a float type, where a
   whole float such as 2.0 raised ``TypeError``, and refuses with
@@ -146,7 +159,8 @@ to change.
   another ``ValueError`` after the optimization; a negative number, with
   which ``opts_N`` and ``init_N`` ran as zero and ``n_samples`` raised
   after the optimization; a NaN ``init_N``, which ran as zero; and a bool,
-  which ran as the integer it stands for.
+  which ran as the integer it stands for, except ``init_N=True``, which
+  raised ``TypeError``.
   :meth:`gpyreg.slice_sample.SliceSampler.sample` takes its number of
   samples ``N`` the same way, and refuses with ``ValueError`` one that is
   not a whole number greater than zero, where a whole float, a fraction or
@@ -161,8 +175,11 @@ to change.
   that refusal.
   **Upgrading:** a script that passes a negative ``opts_N`` or ``init_N``,
   or a NaN ``init_N``, passes ``0``; one that passes a bool as a count
-  passes the integer; and
-  one that asks ``sample`` for zero samples does not call it.
+  passes the integer; one that catches the ``TypeError`` of a count that
+  is not a whole number, such as ``opts_N=1.5`` or ``init_N=32.5`` in
+  ``fit`` or ``N=5.5`` or ``N=True`` in ``sample``, catches
+  ``ValueError``; and one that asks ``sample`` for zero samples does not
+  call it.
 * :meth:`gpyreg.GP.fit` checks its option ``burn`` with its other counts,
   before it changes anything and whether or not it draws hyperparameter
   samples, by the rule of :meth:`gpyreg.slice_sample.SliceSampler.sample`:
@@ -172,9 +189,11 @@ to change.
   unchecked: with samples, the sampler refused such a value with
   ``ValueError`` after the optimization, raised ``TypeError`` for a
   string, and ran a bool as the integer it stands for; without samples,
-  the fit took any value. **Upgrading:** a script that gives a fit with
-  ``n_samples=0`` a ``burn`` that is neither ``None`` nor a whole number
-  of at least zero leaves it out.
+  the fit took any value. **Upgrading:** a script that catches the
+  ``TypeError`` of a string ``burn`` in a fit that draws samples catches
+  ``ValueError``, and one that gives a fit with ``n_samples=0`` a
+  ``burn`` that is neither ``None`` nor a whole number of at least zero
+  leaves it out.
 * Where the smallest noise variance at the training inputs is below 1e-6,
   as it can be after a fit on noiseless targets, the posterior holds the
   negative inverse of the training covariance (the low-noise
@@ -256,17 +275,21 @@ to change.
   :meth:`gpyreg.GP.predict` raised. They raised nothing, and left the
   numbers different, where no posterior was computed
   (``compute_posterior=False``, or a GP without targets), where only
-  noise variances that the noise function does not take differed, and on
-  a GP of a single training point, where NumPy broadcast its single
-  values against the others. Targets given alone, one per input, to a GP
+  noise variances that the noise function does not take differed, as
+  after ``s2_new`` given alone to data that hold their variances, and
+  where NumPy broadcast a single value against the others: on a GP of a
+  single training point, and where one input and its target were given
+  to a GP that holds inputs without targets, whose posterior took that
+  target at every input. Targets given alone, one per input, to a GP
   that holds inputs without targets, and noise variances given alone to
   one that holds data without variances, are taken as before: no call
   that ran to its end and left the GP with as many targets, and as many
   noise variances, as inputs, or none of them, is refused.
   **Upgrading:** a script that catches the ``AttributeError`` catches
-  ``ValueError``, and one that relied on such a broadcast on a GP of a
-  single training point gives the targets and the variances with their
-  inputs.
+  ``ValueError``, and one that relied on a call that left the numbers
+  different (without a posterior, in variances that the noise function
+  does not take, or through such a broadcast) gives the targets and the
+  variances with their inputs, one per input.
 * Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
   the ``ValueError`` it passes on from
   :meth:`gpyreg.GP.get_recommended_bounds`, from the check of the shapes
