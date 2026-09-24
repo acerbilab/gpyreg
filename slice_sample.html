@@ -580,13 +580,17 @@ Boca Raton, FL, USA: Chapman &amp; Hall/CRC.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
-<dt><strong>N</strong><span class="classifier">int</span></dt><dd><p>The number of samples to return.</p>
+<dt><strong>N</strong><span class="classifier">int</span></dt><dd><p>The number of samples to return, a whole number greater than
+zero of an integer or a float type (2.0 is taken as 2), or a
+0-d array that holds one.</p>
 </dd>
 <dt><strong>thin</strong><span class="classifier">int, optional</span></dt><dd><p>The thinning parameter will omit <code class="docutils literal notranslate"><span class="pre">thin-1</span></code> out of <code class="docutils literal notranslate"><span class="pre">thin</span></code> values
-in the generated sequence (after burn-in).</p>
+in the generated sequence (after burn-in). A whole number
+greater than zero, taken as <code class="docutils literal notranslate"><span class="pre">N</span></code> is.</p>
 </dd>
 <dt><strong>burn</strong><span class="classifier">int, optional</span></dt><dd><p>The burn parameter omits the first <code class="docutils literal notranslate"><span class="pre">burn</span></code> points before starting
-recording points for the generated sequence.
+recording points for the generated sequence, a whole number of
+at least zero, taken as <code class="docutils literal notranslate"><span class="pre">N</span></code> is.
 In case this is the first time sampling, the default value of burn
 is <code class="docutils literal notranslate"><span class="pre">round(N/3)</span></code> (that is, one third of the number of recorded
 samples), while otherwise it is 0.</p>
@@ -652,6 +656,10 @@ means the recorded samples are anticorrelated.</p>
 </dd>
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when <cite>N</cite> is not a whole number greater than zero: a
+fraction, zero, a negative number, an infinity, NaN, a bool or
+a value that is not a number.</p>
+</dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>thin</cite> is not a whole number greater than zero.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>burn</cite> is not a whole number greater than or equal

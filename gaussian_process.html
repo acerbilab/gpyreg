@@ -583,7 +583,10 @@ of the GP. If not given the current training targets are used.</p>
 current noise variances of the GP. If not given the current
 noise variances are used.</p>
 </dd>
-<dt><strong>options</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of options for training. The possible options are:</p>
+<dt><strong>options</strong><span class="classifier">dict, optional</span></dt><dd><p>A dictionary of options for training. The counts among them,
+<code class="docutils literal notranslate"><span class="pre">opts_N</span></code>, <code class="docutils literal notranslate"><span class="pre">init_N</span></code>, <code class="docutils literal notranslate"><span class="pre">n_samples</span></code>, <code class="docutils literal notranslate"><span class="pre">thin</span></code> and <code class="docutils literal notranslate"><span class="pre">burn</span></code>,
+are whole numbers of an integer or a float type (2.0 is taken
+as 2), or 0-d arrays that hold one. The possible options are:</p>
 <blockquote>
 <div><dl>
 <dt><strong>opts_N</strong><span class="classifier">int, defaults to 3</span></dt><dd><p>Number of hyperparameter optimization runs.</p>
@@ -600,9 +603,13 @@ the fit a NaN <code class="docutils literal notranslate"><span class="pre">df</s
 </dd>
 <dt><strong>n_samples</strong><span class="classifier">int, defaults to 10</span></dt><dd><p>Number of hyperparameters to sample.</p>
 </dd>
-<dt><strong>thin</strong><span class="classifier">int, defaults to 5</span></dt><dd><p>Thinning parameter for slice sampling.</p>
+<dt><strong>thin</strong><span class="classifier">int, defaults to 5</span></dt><dd><p>Thinning parameter for slice sampling: one sample in
+<code class="docutils literal notranslate"><span class="pre">thin</span></code> is kept. A whole number greater than zero.</p>
 </dd>
-<dt><strong>burn</strong><span class="classifier">int, defaults to <code class="docutils literal notranslate"><span class="pre">thin</span> <span class="pre">*</span> <span class="pre">n_samples</span></code></span></dt><dd><p>Burn parameter for slice sampling.</p>
+<dt><strong>burn</strong><span class="classifier">int or None, defaults to <code class="docutils literal notranslate"><span class="pre">thin</span> <span class="pre">*</span> <span class="pre">n_samples</span></code></span></dt><dd><p>Burn parameter for slice sampling: the number of
+samples drawn and dropped before the first one kept.
+A whole number of at least zero, or <code class="docutils literal notranslate"><span class="pre">None</span></code>, which
+leaves it to <code class="xref py py-meth docutils literal notranslate"><span class="pre">SliceSampler.sample()</span></code>.</p>
 </dd>
 <dt><strong>lower_bounds</strong><span class="classifier">str or ndarray, defaults to “current”</span></dt><dd><p>User-provided lower bounds. Any values which are <cite>nan</cite> will
 be filled with the recommended bounds. “recommended” means
@@ -654,8 +661,66 @@ sampling run, and None otherwise.</p>
 </dd>
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the GP has no training data, neither given to the
+fit nor held from an earlier <code class="docutils literal notranslate"><span class="pre">fit</span></code> or <code class="docutils literal notranslate"><span class="pre">update</span></code>, before the
+fit changes anything.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised by the check of the shapes of the training data given,
+before the fit changes anything: when <code class="docutils literal notranslate"><span class="pre">X</span></code> is neither a 1-D
+nor a 2-D array or does not have <code class="docutils literal notranslate"><span class="pre">D</span></code> columns, when <code class="docutils literal notranslate"><span class="pre">y</span></code> does
+not hold one value per row of <code class="docutils literal notranslate"><span class="pre">X</span></code>, or when an array <code class="docutils literal notranslate"><span class="pre">s2</span></code>
+does not hold one variance per row of <code class="docutils literal notranslate"><span class="pre">X</span></code>.</p>
+</dd>
+<dt>TypeError</dt><dd><p>Raised by the same check, before the fit changes anything,
+when <code class="docutils literal notranslate"><span class="pre">s2</span></code> is neither an array, a number nor <code class="docutils literal notranslate"><span class="pre">None</span></code>, such as
+a list.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised, before the fit changes anything, when the data it
+would hold, those given with those the GP holds for what is
+not given, would make the number of targets, or of the noise
+variances that the noise function reads (as
+<a class="reference internal" href="noise_functions.html#gpyreg.noise_functions.GaussianNoise" title="gpyreg.noise_functions.GaussianNoise"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.noise_functions.GaussianNoise</span></code></a> with
+<code class="docutils literal notranslate"><span class="pre">user_provided_add</span></code> does), differ from the number of inputs:
+when <code class="docutils literal notranslate"><span class="pre">X</span></code> is given without <code class="docutils literal notranslate"><span class="pre">y</span></code>, or without <code class="docutils literal notranslate"><span class="pre">s2</span></code>, and the
+targets, or those variances, that the GP holds, one per input
+it holds, are not one per row of <code class="docutils literal notranslate"><span class="pre">X</span></code>.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised by <a class="reference internal" href="#gpyreg.GP.get_recommended_bounds" title="gpyreg.GP.get_recommended_bounds"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_recommended_bounds()</span></code></a>, through which the
+fit fills the bounds that are not set: when the option
+<code class="docutils literal notranslate"><span class="pre">lower_bounds</span></code> or <code class="docutils literal notranslate"><span class="pre">upper_bounds</span></code> is neither
+<code class="docutils literal notranslate"><span class="pre">&quot;recommended&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">None</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;current&quot;</span></code> nor an array, when
+a lower bound given is above its upper bound, or when a column
+of the training inputs has no spread and a hyperparameter
+whose recommended bounds take their scale from it is not given
+a finite lower bound.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the option <code class="docutils literal notranslate"><span class="pre">opts_N</span></code>, <code class="docutils literal notranslate"><span class="pre">init_N</span></code> or <code class="docutils literal notranslate"><span class="pre">n_samples</span></code>
+is not a whole number of at least zero, the option <code class="docutils literal notranslate"><span class="pre">thin</span></code>
+not a whole number of at least one, or the option <code class="docutils literal notranslate"><span class="pre">burn</span></code>
+neither <code class="docutils literal notranslate"><span class="pre">None</span></code> nor a whole number of at least zero: a
+fraction, a number below that, an infinity, NaN, a bool or a
+value that is not a number, before the fit changes anything.</p>
+</dd>
 <dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">n_samples</span></code> is positive and <code class="docutils literal notranslate"><span class="pre">sampler_name</span></code> is
 not <code class="docutils literal notranslate"><span class="pre">'slicesample'</span></code>, after the optimization.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised by <a class="reference internal" href="slice_sample.html#gpyreg.slice_sample.SliceSampler" title="gpyreg.slice_sample.SliceSampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.slice_sample.SliceSampler</span></code></a> when
+<code class="docutils literal notranslate"><span class="pre">n_samples</span></code> is positive, after the optimization: when the
+widths of the sampler, from the option <code class="docutils literal notranslate"><span class="pre">widths</span></code> or computed
+by the fit, are not all positive and finite, or when the log
+posterior is not finite at the optimized hyperparameters, where
+the chain starts.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised by <a class="reference internal" href="#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update()</span></code></a>, which computes the posterior of
+the fitted hyperparameters, when one of them is NaN.</p>
+</dd>
+<dt>LinAlgError</dt><dd><p>Raised when the Cholesky decomposition of the training
+covariance fails even after its noise is multiplied tenfold, up
+to ten times: by <a class="reference internal" href="#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update()</span></code></a> at the fitted
+hyperparameters, or by the objective at a starting point or
+during the optimization, which lets it propagate. Whether a
+covariance that holds NaN, as from a starting point that does,
+fails there or gives NaN depends on the LAPACK build.</p>
 </dd>
 </dl>
 </dd>
@@ -709,8 +774,37 @@ sample.</p>
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
 <dt><strong>hyper_priors</strong><span class="classifier">dict</span></dt><dd><p>A dictionary of the current hyperparameter names and their
-priors, in the form <a class="reference internal" href="#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_priors()</span></code></a> takes, with <code class="docutils literal notranslate"><span class="pre">None</span></code>
-for a hyperparameter without a prior.</p>
+priors, in the form <a class="reference internal" href="#gpyreg.GP.set_priors" title="gpyreg.GP.set_priors"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_priors()</span></code></a> takes, which
+<code class="docutils literal notranslate"><span class="pre">set_priors</span></code> writes back as the GP holds them, so that
+<code class="docutils literal notranslate"><span class="pre">set_priors(get_priors())</span></code> changes nothing. A hyperparameter
+has <code class="docutils literal notranslate"><span class="pre">None</span></code>, as <code class="docutils literal notranslate"><span class="pre">set_priors</span></code> takes it for no prior, where
+all of its prior’s entries are NaN. Any other prior holds the
+arrays of its entries, NaN included. A block with a prior in
+some coordinate comes back under the name of the family it was
+set with, or of the matching Gaussian family where a Student’s
+t family was set with zero degrees of freedom throughout. A
+block with no prior in any coordinate, whose location and
+<code class="docutils literal notranslate"><span class="pre">sigma</span></code> are NaN throughout, comes back under the Gaussian or
+the Student’s t family that its degrees of freedom name:
+<code class="docutils literal notranslate"><span class="pre">&quot;gaussian&quot;</span></code> where it was set with <code class="docutils literal notranslate"><span class="pre">&quot;gaussian&quot;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&quot;smoothbox&quot;</span></code>, or with <code class="docutils literal notranslate"><span class="pre">&quot;student_t&quot;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&quot;smoothbox_student_t&quot;</span></code> and zero degrees of freedom
+throughout; <code class="docutils literal notranslate"><span class="pre">None</span></code> where it was set with one of the latter
+two and NaN degrees of freedom throughout; and <code class="docutils literal notranslate"><span class="pre">&quot;student_t&quot;</span></code>
+where it was set with one of them and other degrees of
+freedom.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the priors that the GP holds are not in a form
+<code class="docutils literal notranslate"><span class="pre">set_priors</span></code> takes, as priors written into <code class="docutils literal notranslate"><span class="pre">hyper_priors</span></code>
+directly, or by a version of gpyreg that took them, may not
+be: a coordinate that has a location (<code class="docutils literal notranslate"><span class="pre">mu</span></code>, or the ends of a
+smooth box) and a <code class="docutils literal notranslate"><span class="pre">sigma</span></code> that is not finite and positive,
+or the reverse; an inverted smooth box; or a block that holds
+both a <code class="docutils literal notranslate"><span class="pre">mu</span></code> and the ends of a smooth box.</p>
 </dd>
 </dl>
 </dd>
@@ -751,6 +845,15 @@ array_like.</p>
 for the same hyperparameter. A pair that comes out inverted
 once the recommendations fill its NaN entries is collapsed
 onto its lower bound instead.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when a column of the training inputs has no spread, as
+every column of a single training point has none, and a
+hyperparameter whose recommended bounds take their scale from
+the spread of that column (a length scale of the kernel, or
+the scale of <a class="reference internal" href="mean_functions.html#gpyreg.mean_functions.NegativeQuadratic" title="gpyreg.mean_functions.NegativeQuadratic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.mean_functions.NegativeQuadratic</span></code></a>)
+is not given a finite lower bound: its recommended bounds are
+both <code class="docutils literal notranslate"><span class="pre">-inf</span></code>, and an upper bound left unset collapses onto
+the lower bound given.</p>
 </dd>
 </dl>
 </dd>
@@ -970,6 +1073,29 @@ and <code class="docutils literal notranslate"><span class="pre">add_noise</span
 </dd>
 </dl>
 </dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised by the check of the shapes of the data given: when
+<code class="docutils literal notranslate"><span class="pre">x_star</span></code> is neither a 1-D nor a 2-D array or does not have
+<code class="docutils literal notranslate"><span class="pre">D</span></code> columns, when <code class="docutils literal notranslate"><span class="pre">y_star</span></code> does not hold one value per row
+of <code class="docutils literal notranslate"><span class="pre">x_star</span></code>, or when an array <code class="docutils literal notranslate"><span class="pre">s2_star</span></code> does not hold one
+variance per row of <code class="docutils literal notranslate"><span class="pre">x_star</span></code>.</p>
+</dd>
+<dt>TypeError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">s2_star</span></code> is neither an array, a number nor
+<code class="docutils literal notranslate"><span class="pre">None</span></code>, such as a list.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">return_lpd</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code> and <code class="docutils literal notranslate"><span class="pre">y_star</span></code> is
+<code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+<dt>LinAlgError</dt><dd><p>Raised when a posterior holds the negative inverse of the
+training covariance without its Cholesky factor, as one
+pickled by gpyreg 1.3.1 or earlier does where the smallest
+noise variance at the training inputs is below 1e-6, and the
+factorization that computes the factor again fails even after
+its noise is multiplied tenfold, up to ten times.</p>
+</dd>
+</dl>
+</dd>
 </dl>
 </dd></dl>
 
@@ -1001,6 +1127,26 @@ sample.</p>
 is not clamped at zero, unlike the variances
 <a class="reference internal" href="#gpyreg.GP.predict" title="gpyreg.GP.predict"><code class="xref py py-func docutils literal notranslate"><span class="pre">predict()</span></code></a> returns, so on a nearly singular posterior
 an entry can come out slightly negative.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised by the check of the shapes of the data given: when
+<code class="docutils literal notranslate"><span class="pre">x_star</span></code> is neither a 1-D nor a 2-D array or does not have
+<code class="docutils literal notranslate"><span class="pre">D</span></code> columns, when <code class="docutils literal notranslate"><span class="pre">y_star</span></code> does not hold one value per row
+of <code class="docutils literal notranslate"><span class="pre">x_star</span></code>, or when an array <code class="docutils literal notranslate"><span class="pre">s2_star</span></code> does not hold one
+variance per row of <code class="docutils literal notranslate"><span class="pre">x_star</span></code>.</p>
+</dd>
+<dt>TypeError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">s2_star</span></code> is neither an array, a number nor
+<code class="docutils literal notranslate"><span class="pre">None</span></code>, such as a list.</p>
+</dd>
+<dt>LinAlgError</dt><dd><p>Raised when a posterior holds the negative inverse of the
+training covariance without its Cholesky factor, as one
+pickled by gpyreg 1.3.1 or earlier does where the smallest
+noise variance at the training inputs is below 1e-6, and the
+factorization that computes the factor again fails even after
+its noise is multiplied tenfold, up to ten times.</p>
 </dd>
 </dl>
 </dd>
@@ -1060,6 +1206,14 @@ zero, constant and negative quadratic means.</p>
 factors, or when <code class="docutils literal notranslate"><span class="pre">mu</span></code> does not have one column per input
 dimension, or <code class="docutils literal notranslate"><span class="pre">sigma</span></code> neither one nor one per dimension.</p>
 </dd>
+<dt>LinAlgError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">compute_var</span></code> is True and a posterior holds the
+negative inverse of the training covariance without its
+Cholesky factor, as one pickled by gpyreg 1.3.1 or earlier does
+where the smallest noise variance at the training inputs is
+below 1e-6, and the factorization that computes the factor
+again fails even after its noise is multiplied tenfold, up to
+ten times.</p>
+</dd>
 </dl>
 </dd>
 </dl>
@@ -1095,10 +1249,11 @@ stream, as before generators were supported. See
 negative eigenvalue beyond the rounding of the prior variance
 at <code class="docutils literal notranslate"><span class="pre">X_star</span></code>.</p>
 </dd>
-<dt>LinAlgError</dt><dd><p>Raised when the posterior holds the negative inverse of the
-training covariance, as it does where the smallest noise
-variance at the training inputs is below 1e-6, and the
-Cholesky decomposition of that covariance fails even after
+<dt>LinAlgError</dt><dd><p>Raised when the posterior drawn from holds the negative inverse
+of the training covariance without its Cholesky factor, as one
+pickled by gpyreg 1.3.1 or earlier does where the smallest
+noise variance at the training inputs is below 1e-6, and the
+factorization that computes the factor again fails even after
 its noise is multiplied tenfold, up to ten times.</p>
 </dd>
 </dl>
@@ -1129,6 +1284,9 @@ hyperparameter.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>bounds</cite> is given, but a specified hyperparameter
 is unknown.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when a lower bound is above the upper bound of the same
+hyperparameter. Equal bounds fix a hyperparameter.</p>
 </dd>
 </dl>
 </dd>
@@ -1178,8 +1336,10 @@ Within a block of several hyperparameters, a coordinate whose
 location (<code class="docutils literal notranslate"><span class="pre">mu</span></code>, or <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> for the smooth-box
 families) and <code class="docutils literal notranslate"><span class="pre">sigma</span></code> are both NaN has no prior; every other
 coordinate needs a finite location, with <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">&lt;=</span> <span class="pre">b</span></code>, and a
-finite, positive <code class="docutils literal notranslate"><span class="pre">sigma</span></code>. A smooth box with <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">b</span></code> is the
-Gaussian (or Student’s t) centred at <code class="docutils literal notranslate"><span class="pre">a</span></code>.
+finite, positive <code class="docutils literal notranslate"><span class="pre">sigma</span></code>. A block with no prior in any
+coordinate holds none, and a GP whose blocks all hold none has
+no priors. A smooth box with <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">b</span></code> is the Gaussian (or
+Student’s t) centred at <code class="docutils literal notranslate"><span class="pre">a</span></code>.
 Degrees of freedom <code class="docutils literal notranslate"><span class="pre">df</span></code> that are zero, infinite or NaN make
 a <code class="docutils literal notranslate"><span class="pre">&quot;student_t&quot;</span></code> prior <code class="docutils literal notranslate"><span class="pre">&quot;gaussian&quot;</span></code>, as
 <code class="docutils literal notranslate"><span class="pre">gplite_hypprior.m</span></code> reads them, and a
@@ -1233,6 +1393,28 @@ hyperparameter sample.</p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised, before the update changes anything, when the update
+would make the number of targets, or of noise variances, that
+the GP holds differ from its number of inputs; a GP may hold
+inputs without targets, and data without noise variances. So
+<code class="docutils literal notranslate"><span class="pre">y_new</span></code> given without <code class="docutils literal notranslate"><span class="pre">X_new</span></code>, one value per input held, is
+taken where the GP holds no targets, as <code class="docutils literal notranslate"><span class="pre">s2_new</span></code> is where it
+holds no variances, and either is refused where the GP holds
+what it gives or holds no inputs; <code class="docutils literal notranslate"><span class="pre">X_new</span></code> without <code class="docutils literal notranslate"><span class="pre">y_new</span></code>
+is refused where the GP holds targets, and <code class="docutils literal notranslate"><span class="pre">X_new</span></code> with
+<code class="docutils literal notranslate"><span class="pre">y_new</span></code> where it holds inputs without targets.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised by the check of the shapes of the training data given,
+before the update changes anything: when <code class="docutils literal notranslate"><span class="pre">X_new</span></code> is neither
+a 1-D nor a 2-D array or does not have <code class="docutils literal notranslate"><span class="pre">D</span></code> columns, when
+<code class="docutils literal notranslate"><span class="pre">y_new</span></code> does not hold one value per row of <code class="docutils literal notranslate"><span class="pre">X_new</span></code>, or when
+an array <code class="docutils literal notranslate"><span class="pre">s2_new</span></code> does not hold one variance per row of
+<code class="docutils literal notranslate"><span class="pre">X_new</span></code>; without <code class="docutils literal notranslate"><span class="pre">X_new</span></code>, the rows are the inputs that the
+GP holds.</p>
+</dd>
+<dt>TypeError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">s2_new</span></code> is neither an array, a number nor
+<code class="docutils literal notranslate"><span class="pre">None</span></code>, such as a list, before the update changes anything.</p>
+</dd>
 <dt>LinAlgError</dt><dd><p>Raised when the Cholesky decomposition failed multiple times even
 by adding numerical stability values to the matrix.</p>
 </dd>
@@ -1256,7 +1438,7 @@ hyperparameters were never given.</p>
 <h3><code class="docutils literal notranslate"><span class="pre">Posterior</span></code><a class="headerlink" href="#posterior" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.gaussian_process.Posterior">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">Posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.Posterior" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.gaussian_process.</span></span><span class="sig-name descname"><span class="pre">Posterior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sW</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sn2_mult</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Lchol</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">L_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.gaussian_process.Posterior" title="Link to this definition">#</a></dt>
 <dd><p>GP posterior for one hyperparameter vector.</p>
 <p>Stores the coefficients and matrix factor that prediction, sampling and
 quadrature need for a fixed set of hyperparameters, so that repeated
@@ -1282,8 +1464,8 @@ precision used to scale the factorization.</p>
 </dd>
 <dt><strong>L</strong><span class="classifier">ndarray, shape (N, N)</span></dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">L_chol</span></code> is True, the upper triangular Cholesky factor of
 <code class="docutils literal notranslate"><span class="pre">(K</span> <span class="pre">+</span> <span class="pre">sn2_mult</span> <span class="pre">*</span> <span class="pre">diag(sn2))</span> <span class="pre">/</span> <span class="pre">sl</span></code>. Otherwise
-<code class="docutils literal notranslate"><span class="pre">-inv(K</span> <span class="pre">+</span> <span class="pre">sn2_mult</span> <span class="pre">*</span> <span class="pre">diag(sn2))</span></code>, used when the noise is too
-small for a stable Cholesky decomposition.</p>
+<code class="docutils literal notranslate"><span class="pre">-inv(K</span> <span class="pre">+</span> <span class="pre">sn2_mult</span> <span class="pre">*</span> <span class="pre">diag(sn2))</span></code>, the low-noise representation,
+as <code class="docutils literal notranslate"><span class="pre">gplite_core.m</span></code> has it where the noise is small.</p>
 </dd>
 <dt><strong>sn2_mult</strong><span class="classifier">int</span></dt><dd><p>Multiplier applied to the noise variances, increased in powers of
 ten until the Cholesky decomposition succeeds.</p>
@@ -1296,6 +1478,19 @@ of <code class="docutils literal notranslate"><span class="pre">L</span></code> 
 factorization with this scale, so it can differ from the minimum
 of the current training noise after observations have been
 appended.</p>
+</dd>
+<dt><strong>L_factor</strong><span class="classifier">ndarray, shape (N, N) or None</span></dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">L_chol</span></code> is False, the upper triangular Cholesky factor of
+<code class="docutils literal notranslate"><span class="pre">K</span> <span class="pre">+</span> <span class="pre">sn2_mult</span> <span class="pre">*</span> <span class="pre">diag(sn2)</span></code>, the matrix whose negative inverse
+<code class="docutils literal notranslate"><span class="pre">L</span></code> is. <code class="xref py py-func docutils literal notranslate"><span class="pre">GP.predict()</span></code>, <code class="xref py py-func docutils literal notranslate"><span class="pre">GP.predict_full()</span></code>,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">GP.quad()</span></code> and <code class="xref py py-func docutils literal notranslate"><span class="pre">GP.random_function()</span></code> form their
+covariances from it, and a single-point <code class="xref py py-func docutils literal notranslate"><span class="pre">GP.update()</span></code> takes
+from it the predictive variance of the new point and extends it:
+formed from <code class="docutils literal notranslate"><span class="pre">L</span></code>, these would carry the rounding of the inverse,
+which grows as the noise shrinks. <code class="docutils literal notranslate"><span class="pre">None</span></code> if <code class="docutils literal notranslate"><span class="pre">L_chol</span></code> is True,
+where <code class="docutils literal notranslate"><span class="pre">L</span></code> is that factor, scaled. A posterior pickled by gpyreg
+1.3.1 or earlier has no such attribute: the predictions, the
+quadrature and the draws compute the factor again at each call,
+and a single-point update recomputes the posterior in full.</p>
 </dd>
 </dl>
 </dd>
