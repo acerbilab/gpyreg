@@ -570,6 +570,8 @@ thus reducing memory usage. These can be reconstructed with a call to
 <dt class="sig sig-object py" id="gpyreg.GP.fit">
 <span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.fit" title="Link to this definition">#</a></dt>
 <dd><p>Train the hyperparameters of the Gaussian Process.</p>
+<p>A fit that raises leaves the GP as it was before the call, with
+the training data, bounds, priors and posteriors that it held.</p>
 <dl class="field-list">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl>
@@ -686,13 +688,13 @@ targets, or those variances, that the GP holds, one per input
 it holds, are not one per row of <code class="docutils literal notranslate"><span class="pre">X</span></code>.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised by <a class="reference internal" href="#gpyreg.GP.get_recommended_bounds" title="gpyreg.GP.get_recommended_bounds"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_recommended_bounds()</span></code></a>, through which the
-fit fills the bounds that are not set: when the option
-<code class="docutils literal notranslate"><span class="pre">lower_bounds</span></code> or <code class="docutils literal notranslate"><span class="pre">upper_bounds</span></code> is neither
-<code class="docutils literal notranslate"><span class="pre">&quot;recommended&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">None</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;current&quot;</span></code> nor an array, when
-a lower bound given is above its upper bound, or when a column
-of the training inputs has no spread and a hyperparameter
-whose recommended bounds take their scale from it is not given
-a finite lower bound.</p>
+fit fills the bounds that are not set, before the fit changes
+anything: when the option <code class="docutils literal notranslate"><span class="pre">lower_bounds</span></code> or <code class="docutils literal notranslate"><span class="pre">upper_bounds</span></code>
+is neither <code class="docutils literal notranslate"><span class="pre">&quot;recommended&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">None</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;current&quot;</span></code> nor an
+array, when a lower bound given is above its upper bound, or
+when a column of the training inputs has no spread and a
+hyperparameter whose recommended bounds take their scale from
+it is not given a finite lower bound.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when the option <code class="docutils literal notranslate"><span class="pre">opts_N</span></code>, <code class="docutils literal notranslate"><span class="pre">init_N</span></code> or <code class="docutils literal notranslate"><span class="pre">n_samples</span></code>
 is not a whole number of at least zero, the option <code class="docutils literal notranslate"><span class="pre">thin</span></code>
@@ -1297,6 +1299,9 @@ hyperparameter. Equal bounds fix a hyperparameter.</p>
 <dt class="sig sig-object py" id="gpyreg.GP.set_hyperparameters">
 <span class="sig-name descname"><span class="pre">set_hyperparameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.set_hyperparameters" title="Link to this definition">#</a></dt>
 <dd><p>Set new hyperparameters for the Gaussian Process.</p>
+<p>The hyperparameters go to <a class="reference internal" href="#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update()</span></code></a>, and a call that raises
+leaves the GP as it was before the call, with the hyperparameters
+and posteriors that it held.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
@@ -1315,6 +1320,14 @@ is equivalent.</p>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><dl class="simple">
 <dt>ValueError</dt><dd><p>Raised when <cite>hyp_new</cite> is an array of the wrong shape.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised by <a class="reference internal" href="#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update()</span></code></a>, before it changes anything, when
+<code class="docutils literal notranslate"><span class="pre">compute_posterior</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, the GP holds training inputs
+and targets, and a hyperparameter is NaN (not set).</p>
+</dd>
+<dt>LinAlgError</dt><dd><p>Raised by <a class="reference internal" href="#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update()</span></code></a> when the Cholesky decomposition of
+the training covariance fails even after its noise is
+multiplied tenfold, up to ten times; the GP is left as it was.</p>
 </dd>
 </dl>
 </dd>
@@ -1371,6 +1384,8 @@ finite, or a smooth box whose <code class="docutils literal notranslate"><span c
 <dt class="sig sig-object py" id="gpyreg.GP.update">
 <span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2_new</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_posterior</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/gaussian_process.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.GP.update" title="Link to this definition">#</a></dt>
 <dd><p>Add new data to the Gaussian Process.</p>
+<p>An update that raises leaves the GP as it was before the call, with
+the training data and posteriors that it held.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
@@ -1415,14 +1430,18 @@ GP holds.</p>
 <dt>TypeError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">s2_new</span></code> is neither an array, a number nor
 <code class="docutils literal notranslate"><span class="pre">None</span></code>, such as a list, before the update changes anything.</p>
 </dd>
-<dt>LinAlgError</dt><dd><p>Raised when the Cholesky decomposition failed multiple times even
-by adding numerical stability values to the matrix.</p>
+<dt>LinAlgError</dt><dd><p>Raised when the Cholesky decomposition of the training
+covariance fails even after its noise is multiplied tenfold, up
+to ten times, in a posterior computed in full or in the full
+recomputation to which a single-point update falls back; the
+GP is left as it was.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">hyp</span></code> is not a 2D array with one column per
 hyperparameter of the GP.</p>
 </dd>
-<dt>ValueError</dt><dd><p>Raised when <code class="docutils literal notranslate"><span class="pre">compute_posterior</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, the GP has
-training data and a new posterior is computed in full, and a
+<dt>ValueError</dt><dd><p>Raised, before the update changes anything, when
+<code class="docutils literal notranslate"><span class="pre">compute_posterior</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, the GP would hold training
+inputs and targets, every posterior is computed in full, and a
 hyperparameter is NaN (not set), as it is on a GP whose
 hyperparameters were never given.</p>
 </dd>
