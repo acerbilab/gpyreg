@@ -1,6 +1,13 @@
 Release notes
 =============
 
+1.3.4 (unreleased)
+------------------
+
+* The warning with which a single-point :meth:`gpyreg.GP.update` falls
+  back to a full recomputation of a posterior names the line that called
+  ``update``, as it did up to 1.3.2; in 1.3.3 it named a line of gpyreg.
+
 1.3.3 (2026-09-24)
 ------------------
 
