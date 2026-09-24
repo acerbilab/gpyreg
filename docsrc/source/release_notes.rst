@@ -14,6 +14,25 @@ to change.
   of rows of ``s2`` and raised ``AttributeError`` or ``IndexError`` for
   such a value; a value without rows is not counted, and the calls run as
   they did in 1.3.1, to the last bit.
+* A call of :meth:`gpyreg.GP.fit` that raises leaves the GP as it was
+  before the call, with the training data, bounds, priors and posteriors
+  that it held, and the fit refuses a column of inputs without spread, as
+  :meth:`gpyreg.GP.get_recommended_bounds` does, before it changes
+  anything. It stored the data it was given first, and then the bounds
+  filled from them, so that a fit that raised on such a column, on a
+  starting point that holds NaN (which a fit without a space-filling
+  design or an optimization keeps, and whose posterior
+  :meth:`gpyreg.GP.update` refuses), on a failed factorization of the
+  training covariance, or in the sampler, after the optimization, left
+  the GP holding the new data without posteriors that match them, so that
+  :meth:`gpyreg.GP.predict` raised or mixed the new inputs with the old
+  posteriors, and, where it raised after filling its bounds, with those
+  bounds, which a later fit that takes the bounds of the GP, as it does by
+  default, kept. Every fit that completes is unchanged, to the last bit.
+  **Upgrading:** a script that catches an exception of ``fit`` and goes
+  on with the data or the bounds that the failed fit stored gives them to
+  the GP itself: the data through :meth:`gpyreg.GP.update` or the next
+  ``fit``, the bounds through :meth:`gpyreg.GP.set_bounds`.
 
 1.3.2 (2026-09-24)
 ------------------

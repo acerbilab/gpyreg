@@ -497,7 +497,14 @@ class GP:
         """
         if self.X is None or self.y is None:
             raise ValueError("GP does not have X or y set!")
+        return self.__recommended_bounds(
+            self.X, self.y, lower_bounds, upper_bounds
+        )
 
+    def __recommended_bounds(self, X, y, lower_bounds, upper_bounds):
+        """:py:meth:`get_recommended_bounds` for the training inputs ``X``
+        and targets ``y``, which :py:meth:`fit` computes for the data it
+        is given before it stores them."""
         if not isinstance(lower_bounds, (list, tuple, np.ndarray)):
             if lower_bounds == "current":
                 # Use existing bounds; fill any nan values with recommended
@@ -545,9 +552,9 @@ class GP:
         mean_N = self.mean.hyperparameter_count(self.D)
         noise_N = self.noise.hyperparameter_count()
 
-        cov_bounds_info = self.covariance.get_bounds_info(self.X, self.y)
-        mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
-        noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
+        cov_bounds_info = self.covariance.get_bounds_info(X, y)
+        mean_bounds_info = self.mean.get_bounds_info(X, y)
+        noise_bounds_info = self.noise.get_bounds_info(X, y)
 
         lb = lower_bounds
         ub = upper_bounds
@@ -596,7 +603,7 @@ class GP:
         empty = (recommended_ub == -np.inf) & ~np.isfinite(lb)
         if np.any(empty):
             names = ", ".join(self.__hyperparameter_names(empty))
-            width = np.max(self.X, axis=0) - np.min(self.X, axis=0)
+            width = np.max(X, axis=0) - np.min(X, axis=0)
             columns = ", ".join(
                 f"X[:, {j}]" for j in np.flatnonzero(width == 0)
             )
@@ -1406,6 +1413,9 @@ class GP:
         """
         Train the hyperparameters of the Gaussian Process.
 
+        A fit that raises leaves the GP as it was before the call, with
+        the training data, bounds, priors and posteriors that it held.
+
         Parameters
         ==========
         X : ndarray, shape (N, D), optional
@@ -1517,13 +1527,13 @@ class GP:
             it holds, are not one per row of ``X``.
         ValueError
             Raised by :py:meth:`get_recommended_bounds`, through which the
-            fit fills the bounds that are not set: when the option
-            ``lower_bounds`` or ``upper_bounds`` is neither
-            ``"recommended"``, ``None``, ``"current"`` nor an array, when
-            a lower bound given is above its upper bound, or when a column
-            of the training inputs has no spread and a hyperparameter
-            whose recommended bounds take their scale from it is not given
-            a finite lower bound.
+            fit fills the bounds that are not set, before the fit changes
+            anything: when the option ``lower_bounds`` or ``upper_bounds``
+            is neither ``"recommended"``, ``None``, ``"current"`` nor an
+            array, when a lower bound given is above its upper bound, or
+            when a column of the training inputs has no spread and a
+            hyperparameter whose recommended bounds take their scale from
+            it is not given a finite lower bound.
         ValueError
             Raised when the option ``opts_N``, ``init_N`` or ``n_samples``
             is not a whole number of at least zero, the option ``thin``
@@ -1646,15 +1656,10 @@ class GP:
                         f"{argument} with X, one per input."
                     )
 
-        # Initialize GP if requested.
-        if X is not None:
-            self.X = X
-
-        if y is not None:
-            self.y = y
-
-        if s2 is not None:
-            self.s2 = s2
+        # The training data of the fit: those given, and those the GP
+        # holds for what is not given.
+        X_fit = self.X if X is None else X
+        y_fit = self.y if y is None else y
 
         cov_N = self.covariance.hyperparameter_count(self.D)
         # mean_N = self.mean.hyperparameter_count(self.D)
@@ -1662,42 +1667,63 @@ class GP:
 
         ## Initialize inference of GP hyperparameters (bounds, priors, etc.)
 
-        cov_bounds_info = self.covariance.get_bounds_info(self.X, self.y)
-        mean_bounds_info = self.mean.get_bounds_info(self.X, self.y)
-        noise_bounds_info = self.noise.get_bounds_info(self.X, self.y)
+        cov_bounds_info = self.covariance.get_bounds_info(X_fit, y_fit)
+        mean_bounds_info = self.mean.get_bounds_info(X_fit, y_fit)
+        noise_bounds_info = self.noise.get_bounds_info(X_fit, y_fit)
 
-        # The default degrees of freedom fill what a prior leaves
-        # unset for the duration of the fit alone: the objectives read
-        # the GP's own priors, and the GP keeps the priors the caller
-        # set, so a second fit with another `df_base` uses it
-        # (`gplite_train.m:113-117` builds its own copy the same way).
-        df_given = self.hyper_priors["df"]
-        df_filled = df_given.copy()
-        df_filled[np.isnan(df_filled)] = df_base
-        self.hyper_priors["df"] = df_filled
-        self._prior_cache = None  # the prior's type masks depend on df
-        try:
-
-            # Set any unset bounds:
-            use_current_bounds = (
-                isinstance(lower_bounds, str)
-                and lower_bounds == "current"
-                and isinstance(upper_bounds, str)
-                and upper_bounds == "current"
+        # The bounds of the fit, with the recommendations for its data
+        # where they are unset, computed, and refused where
+        # `get_recommended_bounds` refuses them (as for a column of inputs
+        # without spread), before the fit changes anything.
+        use_current_bounds = (
+            isinstance(lower_bounds, str)
+            and lower_bounds == "current"
+            and isinstance(upper_bounds, str)
+            and upper_bounds == "current"
+        )
+        if use_current_bounds and (
+            np.any(np.isnan(self.lower_bounds))
+            or np.any(np.isnan(self.upper_bounds))
+        ):  # If we're using the existing bounds, fill any nan's:
+            bounds = self.__recommended_bounds(
+                X_fit, y_fit, self.lower_bounds, self.upper_bounds
             )
-            if use_current_bounds and (
-                np.any(np.isnan(self.lower_bounds))
-                or np.any(np.isnan(self.upper_bounds))
-            ):  # If we're using the existing bounds, fill any nan's:
-                self.set_bounds(
-                    self.get_recommended_bounds(
-                        self.lower_bounds, self.upper_bounds
-                    )
-                )
-            else:  # Otherwise set the bounds according to the provided options:
-                self.set_bounds(
-                    self.get_recommended_bounds(lower_bounds, upper_bounds)
-                )
+        else:  # Otherwise take the bounds the options provide:
+            bounds = self.__recommended_bounds(
+                X_fit, y_fit, lower_bounds, upper_bounds
+            )
+
+        # The attributes of the GP as the call finds them, which the fit
+        # restores if it raises from here on. The fit, and what it calls,
+        # replace the attributes that they change rather than write into
+        # them, except for the degrees of freedom of the priors, which the
+        # fit writes into `hyper_priors` and restores itself, so these
+        # objects keep the state of the GP.
+        state = dict(self.__dict__)
+        df_given = self.hyper_priors["df"]
+        failed = False
+        try:
+            # Initialize GP if requested.
+            if X is not None:
+                self.X = X
+
+            if y is not None:
+                self.y = y
+
+            if s2 is not None:
+                self.s2 = s2
+
+            # The default degrees of freedom fill what a prior leaves
+            # unset for the duration of the fit alone: the objectives read
+            # the GP's own priors, and the GP keeps the priors the caller
+            # set, so a second fit with another `df_base` uses it
+            # (`gplite_train.m:113-117` builds its own copy the same way).
+            df_filled = df_given.copy()
+            df_filled[np.isnan(df_filled)] = df_base
+            self.hyper_priors["df"] = df_filled
+            self._prior_cache = None  # the prior's type masks depend on df
+
+            self.set_bounds(bounds)
 
             LB = self.lower_bounds
             UB = self.upper_bounds
@@ -1915,10 +1941,17 @@ class GP:
             # Recompute GP with finalized hyperparameters.
             self.update(hyp=hyp)
             return hyp, optimize_result, sampling_result
+        except BaseException:
+            failed = True
+            raise
         finally:
             self.hyper_priors["df"] = df_given
-            self._prior_cache = None
-            self.__recompute_normalization_constants()
+            if failed:
+                self.__dict__.clear()
+                self.__dict__.update(state)
+            else:
+                self._prior_cache = None
+                self.__recompute_normalization_constants()
 
     def __recompute_normalization_constants(self):
         self.normalization_constants = np.full(self.lower_bounds.shape, 1.0)

@@ -222,6 +222,10 @@ def test_inputs_without_spread_are_refused(kernel, mean, data):
         f"X[:, {j}]" for j in columns
     ) + ":" in (message)
     assert "bounds of " + ", ".join(expected) + "," in message
+    # The refused fit leaves the GP without the data; the recommendation
+    # for a GP that holds them refuses them as well.
+    assert gp.X is None
+    gp.update(X_new=X, y_new=y, compute_posterior=False)
     with pytest.raises(ValueError, match="no spread"):
         gp.get_recommended_bounds()
 

@@ -3545,6 +3545,126 @@ def test_fit_raises_what_it_documents():
         assert "Cholesky" in str(caught.value)
 
 
+def _assert_same_values(value, expected, path="gp"):
+    """Compare two values made of dictionaries, arrays, objects and
+    scalars, entry by entry, NaN equal to NaN."""
+    if isinstance(expected, dict):
+        assert isinstance(value, dict) and value.keys() == expected.keys()
+        for key in expected:
+            _assert_same_values(value[key], expected[key], f"{path}.{key}")
+    elif isinstance(expected, np.ndarray) and expected.dtype == object:
+        assert value.shape == expected.shape, path
+        for i, (entry, entry_expected) in enumerate(
+            zip(value.ravel(), expected.ravel())
+        ):
+            _assert_same_values(entry, entry_expected, f"{path}[{i}]")
+    elif isinstance(expected, np.ndarray):
+        equal_nan = expected.dtype.kind in "fc"
+        assert np.array_equal(value, expected, equal_nan=equal_nan), path
+    elif hasattr(expected, "__dict__") and not callable(expected):
+        assert type(value) is type(expected), path
+        _assert_same_values(vars(value), vars(expected), path)
+    elif isinstance(expected, float) and np.isnan(expected):
+        assert np.isnan(value), path
+    else:
+        assert value == expected, path
+
+
+def _gp_holding_other_data():
+    """A one-dimensional GP holding the data of ten points, their
+    posterior, the bounds of its noise, a prior whose degrees of freedom
+    a fit fills for its duration, and the type masks of its prior, which
+    an evaluation of its log posterior builds."""
+    gp = _gp_1d()
+    bounds = {name: None for name in _no_priors()}
+    bounds["noise_log_scale"] = (-6.0, 0.0)
+    gp.set_bounds(bounds)
+    priors = _no_priors()
+    priors["covariance_log_outputscale"] = ("student_t", (0.0, 1.0, np.nan))
+    gp.set_priors(priors)
+    X = np.reshape(np.linspace(-1, 1, 10), (-1, 1))
+    hyp = np.array([[0.0, 0.0, np.log(0.1), 0.0]])
+    gp.update(X_new=X, y_new=np.sin(3 * X), hyp=hyp)
+    gp.log_posterior(hyp[0])
+    assert gp._prior_cache is not None
+    return gp
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["no spread", "NaN start", "failed factorization", "unknown sampler"],
+)
+@pytest.mark.parametrize("held", ["nothing", "other data"])
+def test_a_fit_that_raises_leaves_the_gp_as_it_was(held, failure, monkeypatch):
+    """Whatever ``fit`` raises once it has begun to change the GP, it
+    leaves the GP as it was before the call, holding the very objects it
+    held (its data, bounds, priors, posteriors and the caches built from
+    them), and re-raises: a column of inputs without spread, refused
+    before the fit changes anything; a starting point of NaN, which a fit
+    without a design or an optimization keeps and its final ``update``
+    refuses, where the factorization of the objective does not fail on
+    it; that factorization failing, as it does on the LAPACK of the macOS
+    runners; and a sampler refused after the optimization. The fit
+    stored the data it was given first, which left a GP holding other
+    data with its new inputs beside its old posteriors, so that
+    ``predict`` raised or mixed the two, and a fresh GP with the data and
+    the bounds of a fit that did not complete."""
+    gp = _gp_1d() if held == "nothing" else _gp_holding_other_data()
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    y = np.sin(X)
+    nan_start = {
+        "hyp0": np.full((1, 4), np.nan),
+        "options": {"n_samples": 0, "init_N": 0, "opts_N": 0},
+    }
+    given, raised, message = {
+        "no spread": (
+            {"X": np.full((8, 1), 0.5), "options": _FIT_OPTIONS},
+            ValueError,
+            "have no spread in",
+        ),
+        "NaN start": (
+            nan_start,
+            (ValueError, scipy.linalg.LinAlgError),
+            None,
+        ),
+        "failed factorization": (
+            nan_start,
+            scipy.linalg.LinAlgError,
+            "Cholesky",
+        ),
+        "unknown sampler": (
+            {"options": dict(_FIT_OPTIONS, n_samples=2, sampler_name="?")},
+            ValueError,
+            "Unknown sampler",
+        ),
+    }[failure]
+    if failure == "failed factorization":
+        cholesky = scipy.linalg.cholesky
+
+        def cholesky_refusing_nan(a, *args, **kwargs):
+            if np.any(np.isnan(a)):
+                raise scipy.linalg.LinAlgError("The matrix holds NaN.")
+            return cholesky(a, *args, **kwargs)
+
+        monkeypatch.setattr(scipy.linalg, "cholesky", cholesky_refusing_nan)
+    x_star = np.reshape(np.linspace(-1.5, 1.5, 7), (-1, 1))
+    if held == "other data":
+        prediction = gp.predict(x_star)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+
+    with pytest.raises(raised, match=message):
+        gp.fit(**dict({"X": X, "y": y}, **given), rng=0)
+
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
+    _assert_same_values(vars(gp), values)
+    if held == "other data":
+        for value, expected in zip(gp.predict(x_star), prediction):
+            assert np.array_equal(value, expected)
+
+
 @pytest.mark.parametrize("given", ["neither", "X", "y"])
 def test_fit_without_training_data_raises(given):
     """A fit needs training inputs and targets, given to it or held by the
