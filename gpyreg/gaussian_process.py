@@ -1502,6 +1502,16 @@ class GP:
             when ``s2`` is neither an array, a number nor ``None``, such as
             a list.
         ValueError
+            Raised, before the fit changes anything, when the data it
+            would hold, those given with those the GP holds for what is
+            not given, would make the number of targets, or of the noise
+            variances that the noise function reads (as
+            :class:`gpyreg.noise_functions.GaussianNoise` with
+            ``user_provided_add`` does), differ from the number of inputs:
+            when ``X`` is given without ``y``, or without ``s2``, and the
+            targets, or those variances, that the GP holds, one per input
+            it holds, are not one per row of ``X``.
+        ValueError
             Raised by :py:meth:`get_recommended_bounds`, through which the
             fit fills the bounds that are not set: when the option
             ``lower_bounds`` or ``upper_bounds`` is neither
@@ -1593,6 +1603,39 @@ class GP:
             )
 
         X, y, s2 = self._convert_shapes(X, y, s2)
+
+        # A GP holds as many targets, and as many of the noise variances
+        # that its noise function reads, as inputs, or none of them, as in
+        # `update`. Only inputs given without the targets, or the
+        # variances, that the GP holds can make the numbers differ, and
+        # such data are refused here, before the fit changes anything.
+        # Numbers that differ already are not checked, and neither are
+        # variances that the noise function does not read.
+        N_old = None if self.X is None else self.X.shape[0]
+        N_all = N_old if X is None else X.shape[0]
+        counted = [("targets", "y", self.y, y, "")]
+        noise_parameters = getattr(self.noise, "parameters", None)
+        if noise_parameters is not None and noise_parameters[1] != 0:
+            counted.append(
+                (
+                    "noise variances",
+                    "s2",
+                    self.s2,
+                    s2,
+                    ", which its noise function reads",
+                )
+            )
+        for name, argument, held, given, note in counted:
+            if given is None and held is not None:
+                N_held = held.shape[0]
+                if N_held == N_old and N_held != N_all:
+                    raise ValueError(
+                        f"fit would leave the GP holding {N_all} inputs and "
+                        f"{N_held} {name}: X is given without {argument}, "
+                        f"and the GP holds {N_held} {name}{note}; give "
+                        f"{argument} with X, one per input."
+                    )
+
         # Initialize GP if requested.
         if X is not None:
             self.X = X

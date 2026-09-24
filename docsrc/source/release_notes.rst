@@ -191,27 +191,38 @@ to change.
   :meth:`gpyreg.GP.get_recommended_bounds` after storing ``X``.
   **Upgrading:** a script that catches the ``AttributeError`` catches
   ``ValueError``.
-* :meth:`gpyreg.GP.update` refuses with ``ValueError``, before it changes
-  anything and with a message that gives the numbers, a call that would
-  make the number of targets, or of noise variances, that the GP holds
-  differ from its number of inputs: targets ``y_new`` or noise variances
-  ``s2_new`` given without the inputs ``X_new`` to a GP that holds no
-  inputs, or whose inputs have their targets, or their variances;
-  ``X_new`` without ``y_new`` to a GP that holds targets; and ``X_new``
-  with ``y_new`` to a GP that holds inputs without targets. On a GP
-  without inputs it raised ``AttributeError``. Elsewhere it stored the
-  data, and where it then computed the posterior, as it does on a GP that
-  holds targets, that raised ``ValueError``, unless only the noise
-  variances differed and the noise function does not take them, and left
-  the GP without posteriors, so that the next :meth:`gpyreg.GP.predict`
-  raised ``AttributeError``; otherwise, and with
-  ``compute_posterior=False``, it raised nothing and left the numbers
-  different. Targets given alone, one per input, to a GP that holds
-  inputs without targets, and noise variances given alone to one that
-  holds data without variances, are taken as before: no call that ran to
-  its end and left the GP with as many targets, and as many noise
-  variances, as inputs, or none of them, is refused. **Upgrading:** a
-  script that catches the ``AttributeError`` catches ``ValueError``.
+* :meth:`gpyreg.GP.update` and :meth:`gpyreg.GP.fit` refuse with
+  ``ValueError``, before they change anything and with a message that
+  gives the numbers, a call that would make the number of targets, or of
+  noise variances, that the GP holds differ from its number of inputs.
+  ``update`` refuses targets ``y_new`` or noise variances ``s2_new`` given
+  without the inputs ``X_new`` to a GP that holds no inputs, or whose
+  inputs have their targets, or their variances; ``X_new`` without
+  ``y_new`` to a GP that holds targets; and ``X_new`` with ``y_new`` to a
+  GP that holds inputs without targets. ``fit`` refuses ``X`` given
+  without ``y``, or without ``s2``, where the targets, or the variances,
+  that the GP holds are one per input it holds and not one per row of
+  ``X``; it counts only the variances that the noise function reads (as
+  :class:`gpyreg.noise_functions.GaussianNoise` with
+  ``user_provided_add`` does), and keeps the others as before. On a GP
+  without inputs, ``update`` raised ``AttributeError``. Elsewhere both
+  stored the data, and the computation of the posterior, or the
+  objective of the fit, then raised ``ValueError`` and left the GP
+  without posteriors that match its data, so that the next
+  :meth:`gpyreg.GP.predict` raised. They raised nothing, and left the
+  numbers different, where no posterior was computed
+  (``compute_posterior=False``, or a GP without targets), where only
+  noise variances that the noise function does not take differed, and on
+  a GP of a single training point, where NumPy broadcast its single
+  values against the others. Targets given alone, one per input, to a GP
+  that holds inputs without targets, and noise variances given alone to
+  one that holds data without variances, are taken as before: no call
+  that ran to its end and left the GP with as many targets, and as many
+  noise variances, as inputs, or none of them, is refused.
+  **Upgrading:** a script that catches the ``AttributeError`` catches
+  ``ValueError``, and one that relied on such a broadcast on a GP of a
+  single training point gives the targets and the variances with their
+  inputs.
 * Documentation: the ``Raises`` section of :meth:`gpyreg.GP.fit` names
   the ``ValueError`` it passes on from
   :meth:`gpyreg.GP.get_recommended_bounds`, from the check of the shapes

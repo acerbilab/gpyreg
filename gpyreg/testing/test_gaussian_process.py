@@ -4306,12 +4306,13 @@ def test_update_checks_the_hyperparameter_width():
     assert np.size(gp.posteriors) == 2
 
 
-def _gp_holding(held):
+def _gp_holding(held, reads_variances=True):
     """A one-dimensional GP whose noise function takes the variances given
-    with its data, and the data of eight training points, of which the GP
-    holds ``"nothing"``, the ``"inputs"``, the inputs and the targets
-    (``"data"``), or those and the noise variances (``"data and
-    variances"``)."""
+    with its data, unless ``reads_variances`` is False, and the data of
+    eight training points, of which the GP holds ``"nothing"``, the
+    ``"inputs"``, the first input and its target (``"one point"``), the
+    inputs and the targets (``"data"``), or those and the noise variances
+    (``"data and variances"``)."""
     X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
     data = {"X_new": X, "y_new": np.sin(X), "s2_new": np.full((8, 1), 0.01)}
     gp = gpr.GP(
@@ -4319,9 +4320,16 @@ def _gp_holding(held):
         covariance=gpr.covariance_functions.SquaredExponential(),
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(
-            constant_add=True, user_provided_add=True
+            constant_add=True, user_provided_add=reads_variances
         ),
     )
+    if held == "one point":
+        gp.update(
+            X_new=X[:1],
+            y_new=np.sin(X[:1]),
+            hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]),
+        )
+        return gp, data
     names = {
         "nothing": (),
         "inputs": ("X_new",),
@@ -4423,6 +4431,88 @@ def test_update_gives_held_inputs_their_targets_or_variances(
     _assert_equal_states(
         _data_and_posteriors(gp), _data_and_posteriors(gp_reference)
     )
+
+
+def _data_of_twelve_points():
+    """Training data for ``fit``, of another number than those of
+    :func:`_gp_holding`."""
+    X = np.reshape(np.linspace(-2.5, 2.5, 12), (-1, 1))
+    return {"X": X, "y": np.cos(X), "s2": np.full((12, 1), 0.02)}
+
+
+_FIT_OPTIONS = {"init_N": 16, "opts_N": 1, "n_samples": 0}
+
+
+@pytest.mark.parametrize(
+    "held, given, message",
+    [
+        ("data", ("X",), "12 inputs and 8 targets"),
+        ("data and variances", ("X",), "12 inputs and 8 targets"),
+        ("data and variances", ("X", "y"), "12 inputs and 8 noise variances"),
+        ("one point", ("X",), "12 inputs and 1 targets"),
+    ],
+    ids=["data-X", "data_and_variances-X", "data_and_variances-X-y", "one"],
+)
+def test_fit_refuses_to_make_the_numbers_of_data_differ(held, given, message):
+    """``fit`` refuses data that would leave the GP holding a number of
+    targets, or of the noise variances that its noise function reads,
+    other than its number of inputs, the data being those given with
+    those the GP holds for what is not given, and says what would not
+    match, before it changes anything. It stored the data and then raised
+    from its objective, which left the GP with its new inputs beside its
+    old posteriors, or, where the GP held a single target, fitted that
+    target at every input."""
+    gp, __ = _gp_holding(held)
+    new = _data_of_twelve_points()
+    before = copy.deepcopy(_data_and_posteriors(gp))
+    posteriors = gp.posteriors
+    bounds = (gp.lower_bounds.copy(), gp.upper_bounds.copy())
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.fit(**{name: new[name] for name in given}, options=_FIT_OPTIONS)
+    assert message in execinfo.value.args[0]
+
+    assert gp.posteriors is posteriors
+    _assert_equal_states(_data_and_posteriors(gp), before)
+    assert np.array_equal(gp.lower_bounds, bounds[0], equal_nan=True)
+    assert np.array_equal(gp.upper_bounds, bounds[1], equal_nan=True)
+
+
+@pytest.mark.parametrize(
+    "reads_variances, given",
+    [(False, ("X", "y")), (False, ("X", "y", "s2")), (True, ("X", "y", "s2"))],
+)
+def test_fit_takes_the_data_that_leave_the_numbers_equal(
+    reads_variances, given
+):
+    """A fit given all its data at once on a GP holding other data, or
+    given inputs and targets on a GP holding variances that its noise
+    function does not read, runs: it fits as a GP holding no data does,
+    to the last bit, and keeps the variances that it is not given."""
+    gp, data = _gp_holding("data and variances", reads_variances)
+    new = _data_of_twelve_points()
+    hyp, __, __ = gp.fit(
+        **{name: new[name] for name in given},
+        options=_FIT_OPTIONS,
+        rng=np.random.default_rng(0),
+    )
+    reference, __ = _gp_holding("nothing", reads_variances)
+    hyp_reference, __, __ = reference.fit(
+        **{name: new[name] for name in given},
+        options=_FIT_OPTIONS,
+        rng=np.random.default_rng(0),
+    )
+
+    assert np.array_equal(hyp, hyp_reference)
+    state = _data_and_posteriors(gp)
+    state_reference = _data_and_posteriors(reference)
+    s2_kept = state.pop(2)
+    state_reference.pop(2)
+    _assert_equal_states(state, state_reference)
+    if "s2" in given:
+        assert np.array_equal(s2_kept, new["s2"])
+    else:
+        assert np.array_equal(s2_kept, data["s2_new"])
 
 
 def test_fit_with_targets_of_a_tiny_range(monkeypatch):
