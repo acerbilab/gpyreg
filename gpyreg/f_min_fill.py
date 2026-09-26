@@ -225,6 +225,25 @@ def f_min_fill(
                     tcdf_ub = sp.stats.t.cdf((UB[i] - mu) / sigma, df)
                     S_scaled = tcdf_lb + (tcdf_ub - tcdf_lb) * S[:, i]
                     sX[:, i] = sp.stats.t.ppf(S_scaled, df) * sigma + mu
+                if df == 0 and LB[i] != UB[i]:
+                    # With both bounds some 38 scales or more into one tail
+                    # of the Gaussian, both values of the distribution
+                    # function underflow to zero, and a draw mapped through
+                    # them is infinite. Such a draw is taken again from the
+                    # Gaussian truncated to the bounds, whose quantile
+                    # function scipy computes without that underflow, and
+                    # kept inside the bounds; every other draw is kept as
+                    # computed.
+                    far = ~np.isfinite(sX[:, i])
+                    if np.any(far):
+                        z = sp.stats.truncnorm.ppf(
+                            S[far, i],
+                            (LB[i] - mu) / sigma,
+                            (UB[i] - mu) / sigma,
+                        )
+                        sX[far, i] = np.minimum(
+                            np.maximum(z * sigma + mu, LB[i]), UB[i]
+                        )
 
     if sX is None:
         X = x0

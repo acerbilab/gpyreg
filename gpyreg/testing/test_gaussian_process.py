@@ -4393,6 +4393,196 @@ def test_fit_with_samples_in_the_upper_tail_of_a_prior(monkeypatch):
     assert np.allclose(designs[0], -designs[1][::-1], rtol=1e-10, atol=0.0)
 
 
+def _far_bounds(z, side):
+    """Bounds ten wide whose near end lies ``z`` above zero (``side``
+    ``"above"``) or below it (``"below"``)."""
+    if side == "above":
+        return z, z + 10.0
+    return -z - 10.0, -z
+
+
+def _log_gaussian_tail(z):
+    """The log of the probability above ``z`` of a standard Gaussian, far
+    in its tail, from the asymptotic expansion of the Mills ratio: the
+    first term left out is below 1e-12 of the rest from z = 37."""
+    series = 1 - z**-2 + 3 * z**-4 - 15 * z**-6 + 105 * z**-8
+    return -0.5 * z**2 - np.log(z) - 0.5 * np.log(2 * np.pi) + np.log(series)
+
+
+@pytest.mark.parametrize("side", ["above", "below"])
+@pytest.mark.parametrize("z", [37.0, 38.0, 60.0])
+def test_prior_mass_far_outside_the_bounds(z, side, monkeypatch):
+    """The mass inside the bounds of a Gaussian prior whose centre lies
+    ``z`` of its scales outside them (those of the constant mean, above or
+    below the prior), by which the log prior is renormalized. At z = 37 it
+    is the difference of the survival function (or of the cumulative
+    distribution function) at the two bounds, bit for bit, and the log
+    prior is computed from it, without the computation in log space. From
+    about 38 scales both values underflow to zero, and so did the mass,
+    which made the log prior infinite at every hyperparameter: its log is
+    taken in log space, and the log prior is that of the truncated
+    density, finite, with a finite gradient."""
+    from gpyreg import gaussian_process as gp_module
+
+    lower, upper = _far_bounds(z, side)
+    m0 = lower + 0.5 if side == "above" else upper - 0.5
+    X = np.reshape(np.linspace(-2, 2, 8), (-1, 1))
+    hyp = np.array([0.0, 0.0, np.log(0.1), m0])
+    gp = _gp_1d()
+    gp.update(X_new=X, y_new=np.sin(X) + m0, hyp=hyp[None, :])
+    priors = _no_priors()
+    priors["mean_const"] = ("gaussian", (0.0, 1.0))
+    gp_bounds = {name: (-np.inf, np.inf) for name in priors}
+    gp_bounds["mean_const"] = (lower, upper)
+    if z < 37.5:
+
+        def refused(*args):
+            raise AssertionError("The mass was taken in log space.")
+
+        monkeypatch.setattr(
+            gp_module, "_log_gaussian_mass", refused, raising=False
+        )
+    gp.set_bounds(gp_bounds)
+    gp.set_priors(priors)
+
+    if side == "above":
+        norm_sf = lambda x: scipy.stats.norm.sf(x, loc=0.0, scale=1.0)
+        mass = norm_sf(lower) - norm_sf(upper)
+    else:
+        norm_cdf = lambda x: scipy.stats.norm.cdf(x, loc=0.0, scale=1.0)
+        mass = norm_cdf(upper) - norm_cdf(lower)
+    assert gp.normalization_constants[3] == mass
+    assert (mass > 0.0) == (z < 37.5)
+
+    log_prior = gp.log_posterior(hyp) - gp.log_likelihood(hyp)
+    expected = scipy.stats.norm.logpdf(m0) - _log_gaussian_tail(z)
+    assert np.isfinite(log_prior)
+    assert np.isclose(log_prior, expected, rtol=1e-12)
+    value, gradient = gp.log_posterior(hyp, compute_grad=True)
+    assert np.isfinite(value)
+    assert np.all(np.isfinite(gradient))
+
+
+@pytest.mark.parametrize("side", ["above", "below"])
+@pytest.mark.parametrize("z", [37.0, 38.0, 60.0])
+def test_space_filling_design_far_outside_the_bounds(z, side):
+    """The space-filling design maps its unit-cube draws through a
+    Gaussian prior truncated to the bounds, here ``z`` of its scales above
+    or below the prior. At z = 37 the draws are those of the survival
+    function (or of the cumulative distribution function) at the two
+    bounds and its inverse, bit for bit. From about 38 scales both values
+    underflow to zero and the draws were infinite. They are finite, inside
+    the bounds, and follow the truncated prior, which so far in its tail
+    is close to an exponential distribution of rate z from the near
+    bound: its quantile at the draw ``s`` of the unit interval lies
+    ``-log(1 - s) / z`` inside the bound (above the prior) or
+    ``-log(s) / z`` (below it)."""
+    from gpyreg.f_min_fill import f_min_fill
+
+    lower, upper = _far_bounds(z, side)
+    hprior = {
+        "mu": np.array([0.0]),
+        "sigma": np.array([1.0]),
+        "df": np.array([0.0]),
+        "a": np.array([np.nan]),
+        "b": np.array([np.nan]),
+    }
+    LB, UB = np.array([lower]), np.array([upper])
+    N = 64
+    x0 = 0.5 * (lower + upper)
+    X, __ = f_min_fill(
+        lambda x: x[0],
+        np.array([[x0]]),
+        LB,
+        UB,
+        LB,
+        UB,
+        hprior,
+        N,
+        rng=np.random.default_rng(0),
+    )
+    assert np.all(np.isfinite(X))
+    assert np.all((lower <= X) & (X <= upper))
+
+    # The draws of `f_min_fill`: the unscrambled Sobol sequence without its
+    # first point (a single column, which the shuffle leaves alone), mapped
+    # as before; `f_min_fill` returns its points in the order of the
+    # objective, which is the value itself here.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        S = scipy.stats.qmc.Sobol(d=1, scramble=False).random(n=N)[1:, 0]
+    if side == "above":
+        sf_lb = scipy.stats.norm.sf(lower)
+        sf_ub = scipy.stats.norm.sf(upper)
+        linear = scipy.stats.norm.isf(sf_lb - (sf_lb - sf_ub) * S)
+    else:
+        cdf_lb = scipy.stats.norm.cdf(lower)
+        cdf_ub = scipy.stats.norm.cdf(upper)
+        linear = scipy.stats.norm.ppf(cdf_lb + (cdf_ub - cdf_lb) * S)
+    if z < 37.5:
+        expected = np.sort(np.concatenate(([x0], linear)))
+        assert np.array_equal(X[:, 0], expected)
+        return
+
+    assert not np.any(np.isfinite(linear))
+    draws = np.sort(X[X[:, 0] != x0, 0])
+    if side == "above":
+        excess = draws - lower
+        expected = -np.log1p(-np.sort(S)) / z
+    else:
+        excess = upper - draws
+        expected = -np.log(np.sort(S)) / z
+    assert np.allclose(excess, expected, rtol=1e-2, atol=0.0)
+
+
+@pytest.mark.parametrize("side", ["above", "below"])
+def test_fit_with_a_prior_far_outside_its_bounds(monkeypatch, side):
+    """A fit where the Gaussian prior of the constant mean lies 40 of its
+    scales outside the bounds of the mean (below them, or above) has a
+    finite objective at every point of its space-filling design, whose
+    values of the mean are finite and inside the bounds, and at the
+    fitted hyperparameters, which lie inside the bounds. The mass of the
+    prior inside the bounds underflowed to zero, so that the objective was
+    minus infinity at every hyperparameter, and the design's values of the
+    mean were infinite."""
+    from gpyreg import gaussian_process as gp_module
+
+    designs = []
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        designs.append((X0, y0))
+        return X0, y0
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
+    lower, upper = _far_bounds(40.0, side)
+    X = np.reshape(np.linspace(-1, 1, 12), (-1, 1))
+    y = 0.5 * (lower + upper) + np.sin(2 * X)
+    gp = _gp_1d()
+    gp.X, gp.y, gp.s2 = gp._convert_shapes(X, y, None)
+    gp_bounds = gp.get_recommended_bounds()
+    gp_bounds["mean_const"] = (np.array([lower]), np.array([upper]))
+    gp.set_bounds(gp_bounds)
+    priors = _no_priors()
+    priors["mean_const"] = ("gaussian", (0.0, 1.0))
+    gp.set_priors(priors)
+    assert gp.normalization_constants[3] == 0.0
+
+    hyp, __, __ = gp.fit(
+        options={"n_samples": 0, "init_N": 64, "opts_N": 2},
+        rng=np.random.default_rng(0),
+    )
+    X0, y0 = designs[0]
+    assert np.all(np.isfinite(X0[:, 3]))
+    assert np.all((lower <= X0[:, 3]) & (X0[:, 3] <= upper))
+    assert np.all(np.isfinite(y0))
+    assert np.all(np.isfinite(hyp))
+    assert np.all((lower <= hyp[:, 3]) & (hyp[:, 3] <= upper))
+    assert np.isfinite(gp.log_posterior(hyp[0]))
+
+
 @pytest.mark.parametrize("below_centre", [0.0, 1.8])
 @pytest.mark.parametrize(
     "family", ["gaussian", "student_t", "smoothbox", "smoothbox_student_t"]
