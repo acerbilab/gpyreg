@@ -442,6 +442,22 @@
 <li><p>The warning with which a single-point <a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> falls
 back to a full recomputation of a posterior names the line that called
 <code class="docutils literal notranslate"><span class="pre">update</span></code>, as it did up to 1.3.2; in 1.3.3 it named a line of gpyreg.</p></li>
+<li><p><a class="reference internal" href="gaussian_process.html#gpyreg.GP" title="gpyreg.GP"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.GP</span></code></a> takes the keyword <code class="docutils literal notranslate"><span class="pre">raise_on_cholesky_failure</span></code>,
+<code class="docutils literal notranslate"><span class="pre">False</span></code> by default. With <code class="docutils literal notranslate"><span class="pre">True</span></code>, a Cholesky factorization of the
+training covariance that fails raises <code class="docutils literal notranslate"><span class="pre">numpy.linalg.LinAlgError</span></code> at
+its first attempt, in the posteriors and in the objective of
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> (<a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_likelihood" title="gpyreg.GP.log_likelihood"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_likelihood()</span></code></a> and
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.log_posterior" title="gpyreg.GP.log_posterior"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.log_posterior()</span></code></a>), as in MATLAB BADS
+(<code class="docutils literal notranslate"><span class="pre">CholAttempts</span> <span class="pre">=</span> <span class="pre">0</span></code>). By default such a factorization is tried again
+with the noise multiplied tenfold, up to ten times, and the posterior
+keeps the multiplier, which its predictions apply to the noise while
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.get_hyperparameters" title="gpyreg.GP.get_hyperparameters"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.get_hyperparameters()</span></code></a> returns the noise as fitted. With
+the switch on, the space-filling design of <code class="docutils literal notranslate"><span class="pre">fit</span></code> ranks a starting
+point whose factorization fails last, as one of infinite value, and a
+failure in the optimization, in the sampling or at the fitted
+hyperparameters raises from <code class="docutils literal notranslate"><span class="pre">fit</span></code>, which leaves the GP as it was. A
+copy or a pickle of the GP keeps the switch. Without it nothing changes,
+to the last bit.</p></li>
 </ul>
 </section>
 <section id="id1">

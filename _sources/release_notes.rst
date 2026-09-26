@@ -7,6 +7,22 @@ Release notes
 * The warning with which a single-point :meth:`gpyreg.GP.update` falls
   back to a full recomputation of a posterior names the line that called
   ``update``, as it did up to 1.3.2; in 1.3.3 it named a line of gpyreg.
+* :class:`gpyreg.GP` takes the keyword ``raise_on_cholesky_failure``,
+  ``False`` by default. With ``True``, a Cholesky factorization of the
+  training covariance that fails raises ``numpy.linalg.LinAlgError`` at
+  its first attempt, in the posteriors and in the objective of
+  :meth:`gpyreg.GP.fit` (:meth:`gpyreg.GP.log_likelihood` and
+  :meth:`gpyreg.GP.log_posterior`), as in MATLAB BADS
+  (``CholAttempts = 0``). By default such a factorization is tried again
+  with the noise multiplied tenfold, up to ten times, and the posterior
+  keeps the multiplier, which its predictions apply to the noise while
+  :meth:`gpyreg.GP.get_hyperparameters` returns the noise as fitted. With
+  the switch on, the space-filling design of ``fit`` ranks a starting
+  point whose factorization fails last, as one of infinite value, and a
+  failure in the optimization, in the sampling or at the fitted
+  hyperparameters raises from ``fit``, which leaves the GP as it was. A
+  copy or a pickle of the GP keeps the switch. Without it nothing changes,
+  to the last bit.
 
 1.3.3 (2026-09-24)
 ------------------
