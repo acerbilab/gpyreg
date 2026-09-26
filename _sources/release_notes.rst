@@ -23,6 +23,20 @@ Release notes
   hyperparameters raises from ``fit``, which leaves the GP as it was. A
   copy or a pickle of the GP keeps the switch. Without it nothing changes,
   to the last bit.
+* A Gaussian prior whose centre lies some 38 of its scales or more outside
+  the bounds of its hyperparameter has a finite log prior, and the
+  space-filling design of :meth:`gpyreg.GP.fit` draws finite values of
+  that hyperparameter inside its bounds. The prior is renormalized by its
+  mass inside the bounds, the difference of its cumulative distribution
+  function (or of its survival function) at the two bounds, and so far in
+  one tail both values underflowed to zero, and the mass with them: the
+  log prior was infinite at every hyperparameter, so that
+  :meth:`gpyreg.GP.log_posterior` was infinite and the objective of the
+  fit minus infinity, and the design mapped its draws through the same
+  zero values, to infinity. Where the mass underflows to zero its log is
+  taken in log space, and a draw that would be infinite comes from the
+  prior truncated to the bounds; every other computation is unchanged, to
+  the last bit.
 
 1.3.3 (2026-09-24)
 ------------------
