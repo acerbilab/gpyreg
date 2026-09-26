@@ -7,6 +7,20 @@ Release notes
 * The warning with which a single-point :meth:`gpyreg.GP.update` falls
   back to a full recomputation of a posterior names the line that called
   ``update``, as it did up to 1.3.2; in 1.3.3 it named a line of gpyreg.
+* A Gaussian prior whose centre lies some 38 of its scales or more outside
+  the bounds of its hyperparameter has a finite log prior, and the
+  space-filling design of :meth:`gpyreg.GP.fit` draws finite values of
+  that hyperparameter inside its bounds. The prior is renormalized by its
+  mass inside the bounds, the difference of its cumulative distribution
+  function (or of its survival function) at the two bounds, and so far in
+  one tail both values underflowed to zero, and the mass with them: the
+  log prior was infinite at every hyperparameter, so that
+  :meth:`gpyreg.GP.log_posterior` was infinite and the objective of the
+  fit minus infinity, and the design mapped its draws through the same
+  zero values, to infinity. Where the mass underflows to zero its log is
+  taken in log space, and a draw that would be infinite comes from the
+  prior truncated to the bounds; every other computation is unchanged, to
+  the last bit.
 
 1.3.3 (2026-09-24)
 ------------------

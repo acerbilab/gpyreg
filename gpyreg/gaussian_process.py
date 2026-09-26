@@ -93,6 +93,32 @@ def _solve_triangular(a, b, trans=0, lower=False):
     raise ValueError(f"illegal value in {-info}-th argument of internal trtrs")
 
 
+def _log_gaussian_mass(lower, upper, mu, sigma):
+    """The log of the mass of the Gaussian of centre ``mu`` and scale
+    ``sigma`` between ``lower`` and ``upper``, taken in log space, for a
+    mass that underflows to zero, far in one tail of the Gaussian. As in
+    ``GP.__recompute_normalization_constants``, the mass is the difference
+    of the survival function at the two bounds where the lower bound lies
+    above the centre, and of the cumulative distribution function
+    otherwise: its log is the log of the larger of the two values plus
+    ``log(1 - exp(d))``, where ``d <= 0`` is the difference of their logs,
+    which stays finite where both values are zero."""
+    if lower > mu:
+        log_near = sp.stats.norm.logsf(lower, loc=mu, scale=sigma)
+        log_far = sp.stats.norm.logsf(upper, loc=mu, scale=sigma)
+    else:
+        log_near = sp.stats.norm.logcdf(upper, loc=mu, scale=sigma)
+        log_far = sp.stats.norm.logcdf(lower, loc=mu, scale=sigma)
+    if not np.isfinite(log_near):
+        return log_near
+    d = log_far - log_near
+    # log(1 - exp(d)) in the form that keeps its precision: through expm1
+    # where exp(d) is near one, through log1p where it is small.
+    if d > -np.log(2):
+        return log_near + np.log(-np.expm1(d))
+    return log_near + np.log1p(-np.exp(d))
+
+
 def _check_hyperparameter_names(given, hyper_info, argument):
     """Refuse a dictionary that names a hyperparameter the model has not."""
     if given is None:
@@ -245,7 +271,7 @@ class GP:
                 "upper_bounds",
                 "posteriors",
             ],
-            exclude=["_prior_cache"],
+            exclude=["_prior_cache", "_underflowed_log_masses"],
         )
 
     def __str__(self):
@@ -2044,6 +2070,10 @@ class GP:
 
     def __recompute_normalization_constants(self):
         self.normalization_constants = np.full(self.lower_bounds.shape, 1.0)
+        # The log of the mass of a Gaussian prior whose mass, as computed
+        # below, underflows to zero, taken in log space; NaN where the mass
+        # is used as computed (see `__prior_masks`).
+        self._underflowed_log_masses = np.full(self.lower_bounds.shape, np.nan)
 
         for i in range(0, np.size(self.lower_bounds)):
             mu = self.hyper_priors["mu"][i]
@@ -2076,6 +2106,7 @@ class GP:
             # function, below one half there, keeps it. Everywhere else the
             # mass is the difference of the two values of the cumulative
             # distribution function.
+            gaussian = False
             if np.isfinite(a) and np.isfinite(b):
                 upper_half = lb > 0.5 * (a + b)
                 if df == 0 or not np.isfinite(df):
@@ -2093,6 +2124,7 @@ class GP:
             else:
                 upper_half = lb > mu
                 if df == 0 or not np.isfinite(df):
+                    gaussian = True
                     p = sp.stats.norm.sf if upper_half else sp.stats.norm.cdf
                     p_lb = p(lb, loc=mu, scale=sigma)
                     p_ub = p(ub, loc=mu, scale=sigma)
@@ -2102,9 +2134,18 @@ class GP:
                     p_ub = p(ub, df, loc=mu, scale=sigma)
 
             if upper_half:
-                self.normalization_constants[i] = p_lb - p_ub
+                mass = p_lb - p_ub
             else:
-                self.normalization_constants[i] = p_ub - p_lb
+                mass = p_ub - p_lb
+            self.normalization_constants[i] = mass
+            # With both bounds some 38 scales or more into one tail of a
+            # Gaussian prior, both values underflow to zero, and so does the
+            # mass, whose log would make the log prior infinite at every
+            # hyperparameter: its log is taken in log space instead.
+            if gaussian and mass == 0:
+                self._underflowed_log_masses[i] = _log_gaussian_mass(
+                    lb, ub, mu, sigma
+                )
 
     def __prior_masks(self):
         """The hyperprior's type masks and normalization constants, which
@@ -2154,6 +2195,24 @@ class GP:
         )
         t_idx = ~u_idx & ~sb_t_idx & (df > 0) & np.isfinite(df)
 
+        # The log of the product of the masses that normalize the priors
+        # over the bounds. A mass that underflowed to zero, whose log is
+        # minus infinity, has the log taken in log space by
+        # `__recompute_normalization_constants` instead (a GP pickled by
+        # gpyreg 1.3.3 or earlier has none); every other mass is taken as
+        # computed.
+        constants = self.normalization_constants
+        log_masses = getattr(self, "_underflowed_log_masses", None)
+        in_log_space = False
+        if log_masses is not None:
+            in_log_space = (constants == 0) & ~np.isnan(log_masses)
+        if np.any(in_log_space):
+            log_norm = np.sum(np.log(constants[~in_log_space])) + np.sum(
+                log_masses[in_log_space]
+            )
+        else:
+            log_norm = np.sum(np.log(constants))
+
         cache = {
             "sigma": sigma,
             "f_idx": f_idx,
@@ -2167,7 +2226,7 @@ class GP:
             "any_sb_t": bool(np.any(sb_t_idx)),
             "any_g": bool(np.any(g_idx)),
             "any_t": bool(np.any(t_idx)),
-            "log_norm": np.sum(np.log(self.normalization_constants)),
+            "log_norm": log_norm,
         }
         # Normalization constants so that the integrals over the pdfs are 1.
         if cache["any_sb"]:
