@@ -1,5 +1,6 @@
 import copy
 import os
+import pickle
 import warnings
 from fractions import Fraction
 
@@ -2194,6 +2195,231 @@ def test_failed_factorization_raises_linalgerror():
     assert "Singular matrix" in execinfo.value.args[0]
 
 
+def _gp_needing_inflation(noise, **kwargs):
+    """A one-dimensional GP, its twenty training points and hyperparameters
+    at which the Cholesky factorization of the training covariance fails at
+    its first attempt and succeeds once the noise is inflated: an output
+    scale far above the noise, in the Cholesky parametrization of the
+    posterior (``noise="high"``, a noise variance of 4e-6) or in the
+    low-noise one (``"low"``, 1e-16). ``kwargs`` go to the constructor."""
+    rng = np.random.default_rng(1)
+    X = rng.uniform(-1, 1, size=(20, 1))
+    y = np.sin(3 * X)
+    gp = gpr.GP(
+        D=1,
+        covariance=gpr.covariance_functions.SquaredExponential(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        **kwargs,
+    )
+    # [log ell, log sf, log sn, m0]
+    if noise == "high":
+        hyp = np.array([[0.0, 12.0, np.log(2e-3), 0.0]])
+    else:
+        hyp = np.array([[0.0, 4.0, np.log(1e-8), 0.0]])
+    return gp, X, y, hyp
+
+
+@pytest.mark.parametrize("noise", ["high", "low"])
+def test_failed_factorization_inflates_the_noise_by_default(noise):
+    """By default a factorization of the training covariance that fails is
+    tried again with the noise multiplied tenfold, and the posterior keeps
+    the multiplier, which the predictions apply. The keyword
+    ``raise_on_cholesky_failure=False`` is that default: the posterior,
+    the predictions and the objective are the same, bit for bit."""
+    x_star = np.reshape(np.linspace(-1.5, 1.5, 7), (-1, 1))
+    results = []
+    for kwargs in ({}, {"raise_on_cholesky_failure": False}):
+        gp, X, y, hyp = _gp_needing_inflation(noise, **kwargs)
+        assert gp.raise_on_cholesky_failure is False
+        gp.update(X_new=X, y_new=y, hyp=hyp)
+        posterior = gp.posteriors[0]
+        assert posterior.sn2_mult > 1
+        assert posterior.L_chol == (noise == "high")
+        results.append(
+            (
+                vars(posterior),
+                gp.predict(x_star, add_noise=True),
+                gp.log_likelihood(hyp[0], compute_grad=True),
+            )
+        )
+
+    (posterior, prediction, objective), expected = results
+    _assert_same_values(posterior, expected[0])
+    for value, value_expected in zip(
+        prediction + objective, expected[1] + expected[2]
+    ):
+        assert np.array_equal(value, value_expected)
+
+
+@pytest.mark.parametrize("noise", ["high", "low"])
+def test_failed_factorization_raises_where_the_gp_raises(noise):
+    """With ``raise_on_cholesky_failure=True`` the first failed
+    factorization of the training covariance raises ``LinAlgError``, as in
+    MATLAB BADS (``CholAttempts = 0``), instead of inflating the noise: in
+    the posterior that ``update`` and ``set_hyperparameters`` compute,
+    which leave the GP as it was, with the posterior it held, and in the
+    objective of the fit, with and without its gradient."""
+    gp, X, y, hyp = _gp_needing_inflation(
+        noise, raise_on_cholesky_failure=True
+    )
+    assert gp.raise_on_cholesky_failure is True
+    # A posterior at hyperparameters whose factorization succeeds at once.
+    gp.update(X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]))
+    assert gp.posteriors[0].sn2_mult == 1
+    x_star = np.reshape(np.linspace(-1.5, 1.5, 7), (-1, 1))
+    prediction = gp.predict(x_star)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+
+    for call in (
+        lambda: gp.update(hyp=hyp),
+        lambda: gp.set_hyperparameters(hyp),
+    ):
+        with pytest.raises(scipy.linalg.LinAlgError, match="Singular matrix"):
+            call()
+        assert vars(gp).keys() == attributes.keys()
+        for name, value in attributes.items():
+            assert vars(gp)[name] is value, name
+        _assert_same_values(vars(gp), values)
+        for value, expected in zip(gp.predict(x_star), prediction):
+            assert np.array_equal(value, expected)
+
+    for objective in (gp.log_likelihood, gp.log_posterior):
+        for compute_grad in (False, True):
+            with pytest.raises(
+                scipy.linalg.LinAlgError, match="Singular matrix"
+            ):
+                objective(hyp[0], compute_grad=compute_grad)
+
+
+def _fit_with_failing_starting_points(gp, init_N, opts_N):
+    """Fit ``gp`` to twenty noisy points of ``sin(3 x)`` from three
+    starting points, two of which (the first and the last) have an output
+    scale at which the factorization of the training covariance fails at
+    its first attempt."""
+    rng = np.random.default_rng(1)
+    X = rng.uniform(-1, 1, size=(20, 1))
+    y = np.sin(3 * X) + 0.1 * rng.standard_normal((20, 1))
+    # [log ell, log sf, log sn, m0]
+    bounds = {
+        "lower_bounds": np.array([-2.0, -2.0, np.log(2e-3), -5.0]),
+        "upper_bounds": np.array([2.0, 14.0, 0.0, 5.0]),
+    }
+    hyp0 = np.array(
+        [
+            [0.0, 12.0, np.log(2e-3), 0.0],
+            [0.0, 0.0, np.log(0.1), 0.0],
+            [0.5, 14.0, np.log(2e-3), 0.5],
+        ]
+    )
+    return gp.fit(
+        X,
+        y,
+        hyp0=hyp0,
+        options=dict(bounds, n_samples=0, init_N=init_N, opts_N=opts_N),
+        rng=np.random.default_rng(0),
+    )
+
+
+def test_fit_ranks_starting_points_whose_factorization_fails_last(
+    monkeypatch,
+):
+    """Where the GP raises on a failed factorization, a point of the
+    space-filling design whose objective raises ``LinAlgError`` is ranked
+    last, as one of infinite value, and the fit goes on from the others,
+    as MATLAB BADS evaluates its starting points; the posterior of the
+    fitted hyperparameters carries no noise multiplier. Without the switch
+    the same points have the finite values of the inflated noise."""
+    from gpyreg import gaussian_process as gp_module
+
+    designs = []
+    real_f_min_fill = gp_module.f_min_fill
+
+    def recording_f_min_fill(*args, **kwargs):
+        X0, y0 = real_f_min_fill(*args, **kwargs)
+        designs.append((X0, y0))
+        return X0, y0
+
+    monkeypatch.setattr(gp_module, "f_min_fill", recording_f_min_fill)
+
+    failing = np.array([[0.0, 12.0, np.log(2e-3)], [0.5, 14.0, np.log(2e-3)]])
+    for switch in (True, False):
+        gp = _gp_1d(raise_on_cholesky_failure=switch)
+        hyp, __, __ = _fit_with_failing_starting_points(gp, 16, 2)
+        X0, y0 = designs.pop()
+        at_failing = np.any(
+            np.all(X0[:, None, :3] == failing[None, :, :], axis=2), axis=1
+        )
+        assert np.sum(at_failing) == 2
+        if switch:
+            assert np.all(np.isinf(y0[at_failing]))
+            assert np.all(np.isfinite(y0[~at_failing]))
+        else:
+            assert np.all(np.isfinite(y0))
+        assert np.all(np.isfinite(hyp))
+        assert np.all(gp.lower_bounds <= hyp) and np.all(
+            hyp <= gp.upper_bounds
+        )
+        assert np.isfinite(gp.log_posterior(hyp[0]))
+        if switch:
+            assert gp.posteriors[0].sn2_mult == 1
+
+
+def test_a_fit_whose_optimization_fails_raises_where_the_gp_raises():
+    """Where the GP raises on a failed factorization, an optimization that
+    meets one lets the ``LinAlgError`` out of ``fit``, which the caller
+    may retry, and the fit leaves the GP as it was. Without a
+    space-filling design the fit ranks its starting points by their
+    objective, the two that fail last, and the second optimization starts
+    from one of them. Without the switch the same fit completes."""
+    gp = _gp_1d(raise_on_cholesky_failure=True)
+    X = np.reshape(np.linspace(-1, 1, 10), (-1, 1))
+    gp.update(
+        X_new=X,
+        y_new=np.sin(3 * X),
+        hyp=np.array([[0.0, 0.0, np.log(0.1), 0.0]]),
+    )
+    x_star = np.reshape(np.linspace(-1.5, 1.5, 7), (-1, 1))
+    prediction = gp.predict(x_star)
+    attributes = dict(vars(gp))
+    values = copy.deepcopy(attributes)
+
+    with pytest.raises(scipy.linalg.LinAlgError, match="Singular matrix"):
+        _fit_with_failing_starting_points(gp, 0, 2)
+
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
+    _assert_same_values(vars(gp), values)
+    for value, expected in zip(gp.predict(x_star), prediction):
+        assert np.array_equal(value, expected)
+
+    hyp, __, __ = _fit_with_failing_starting_points(
+        _gp_1d(raise_on_cholesky_failure=False), 0, 2
+    )
+    assert np.all(np.isfinite(hyp))
+
+
+def test_a_copy_and_a_pickle_keep_raise_on_cholesky_failure():
+    """A copy and a pickle of a GP keep ``raise_on_cholesky_failure``. A GP
+    unpickled from gpyreg 1.3.3 or earlier has no such attribute, and
+    inflates the noise, as it did."""
+    gp, X, y, hyp = _gp_needing_inflation(
+        "high", raise_on_cholesky_failure=True
+    )
+    gp.update(X_new=X, y_new=y, compute_posterior=False)
+    for copied in (copy.deepcopy(gp), pickle.loads(pickle.dumps(gp))):
+        assert copied.raise_on_cholesky_failure is True
+        with pytest.raises(scipy.linalg.LinAlgError, match="Singular matrix"):
+            copied.update(hyp=hyp)
+
+    old = copy.deepcopy(gp)
+    del old.raise_on_cholesky_failure
+    old.update(hyp=hyp)
+    assert old.posteriors[0].sn2_mult > 1
+
+
 def test_robust_cholesky_factors_matrices_cholesky_refuses():
     """The eigenvalue fallback returns a factor of the matrix it was given:
     ``T.T @ T == sigma`` for the semidefinite matrices a direct Cholesky
@@ -2646,9 +2872,7 @@ def test_rank_one_fallback_warns_at_the_line_of_the_caller(
             mean=gpr.mean_functions.ConstantMean(),
             noise=gpr.noise_functions.GaussianNoise(constant_add=True),
         )
-        gp.update(
-            X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, 0.0, -1.0, 0.0]])
-        )
+        gp.update(X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, 0.0, -1.0, 0.0]]))
         assert gp.posteriors[0].L_chol
         monkeypatch.setattr(
             gpr.gaussian_process.Posterior,
@@ -3029,14 +3253,16 @@ def test_smooth_box_prior_over_a_block(family, D):
         assert np.all(value == expected_value)
 
 
-def _gp_1d():
+def _gp_1d(**kwargs):
     """A one-dimensional GP with four hyperparameters: two of the kernel,
-    one of the noise and one of the mean."""
+    one of the noise and one of the mean. ``kwargs`` go to the
+    constructor."""
     return gpr.GP(
         D=1,
         covariance=gpr.covariance_functions.SquaredExponential(),
         mean=gpr.mean_functions.ConstantMean(),
         noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        **kwargs,
     )
 
 

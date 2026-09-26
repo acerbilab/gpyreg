@@ -206,15 +206,41 @@ class GP:
     noise : object
         The noise function to use. This can be one of the objects from the
         following module: :py:mod:`gpyreg.noise_functions`.
+    raise_on_cholesky_failure : bool, defaults to False
+        What a failed Cholesky factorization of the training covariance
+        does, in the posteriors and in the objective of :py:meth:`fit`
+        (:py:meth:`log_likelihood` and :py:meth:`log_posterior`). By
+        default the factorization is tried again with the noise variance
+        multiplied tenfold, up to ten attempts, and a posterior keeps the
+        multiplier of the attempt that succeeded (``sn2_mult`` of
+        :py:class:`Posterior`), which the predictions apply to the noise,
+        while :py:meth:`get_hyperparameters` returns the noise as fitted.
+        With ``True`` the first failure raises
+        ``numpy.linalg.LinAlgError``, as in MATLAB BADS
+        (``CholAttempts = 0``), and no posterior carries a multiplier
+        other than one. In :py:meth:`fit`, the space-filling design ranks
+        a starting point whose objective raises it last, as one of
+        infinite value, while a failure in the optimization, in the
+        sampling or in the posteriors of the fitted hyperparameters raises
+        from ``fit``, which leaves the GP as it was. The GP keeps the
+        choice as its attribute ``raise_on_cholesky_failure``, which a copy
+        or a pickle of the GP keeps; a GP unpickled from gpyreg 1.3.3 or
+        earlier has no such attribute and inflates the noise.
     """
 
     def __init__(
-        self, D: int, covariance: object, mean: object, noise: object
+        self,
+        D: int,
+        covariance: object,
+        mean: object,
+        noise: object,
+        raise_on_cholesky_failure: bool = False,
     ):
         self.D = D
         self.covariance = covariance
         self.mean = mean
         self.noise = noise
+        self.raise_on_cholesky_failure = raise_on_cholesky_failure
         self.s2 = None
         self.X = None
         self.y = None
@@ -904,7 +930,9 @@ class GP:
         LinAlgError
             Raised by :py:meth:`update` when the Cholesky decomposition of
             the training covariance fails even after its noise is
-            multiplied tenfold, up to ten times; the GP is left as it was.
+            multiplied tenfold, up to ten times, or fails at all where the
+            GP raises on a failed factorization
+            (``raise_on_cholesky_failure``); the GP is left as it was.
         """
         if isinstance(hyp_new, np.ndarray):
             cov_N = self.covariance.hyperparameter_count(self.D)
@@ -1107,9 +1135,10 @@ class GP:
         LinAlgError
             Raised when the Cholesky decomposition of the training
             covariance fails even after its noise is multiplied tenfold, up
-            to ten times, in a posterior computed in full or in the full
-            recomputation to which a single-point update falls back; the
-            GP is left as it was.
+            to ten times, or fails at all where the GP raises on a failed
+            factorization (``raise_on_cholesky_failure``), in a posterior
+            computed in full or in the full recomputation to which a
+            single-point update falls back; the GP is left as it was.
         ValueError
             Raised when ``hyp`` is not a 2D array with one column per
             hyperparameter of the GP.
@@ -1651,9 +1680,14 @@ class GP:
             covariance fails even after its noise is multiplied tenfold, up
             to ten times: by :py:meth:`update` at the fitted
             hyperparameters, or by the objective at a starting point or
-            during the optimization, which lets it propagate. Whether a
-            covariance that holds NaN, as from a starting point that does,
-            fails there or gives NaN depends on the LAPACK build.
+            during the optimization, which lets it propagate. Where the GP
+            raises on a failed factorization (``raise_on_cholesky_failure``)
+            the first failure raises, by :py:meth:`update`, during the
+            optimization or during the sampling, and a starting point of
+            the space-filling design whose factorization fails is ranked
+            last instead. Whether a covariance that holds NaN, as from a
+            starting point that does, fails there or gives NaN depends on
+            the LAPACK build.
         """
         # Share one stream between the initial design and the sampler,
         # including when the caller supplies a seed rather than a generator.
@@ -1871,9 +1905,23 @@ class GP:
             # __core_computation); the gradient objective of the optimizer gets
             # none, it needs the kernel derivatives.
             design_cache = {}
-            objective_f_1 = lambda hyp_: self.__gp_obj_fun(
-                hyp_, False, False, cache=design_cache
-            )
+            skip_failures = self.__cholesky_attempts() == 1
+
+            def objective_f_1(hyp_):
+                try:
+                    return self.__gp_obj_fun(
+                        hyp_, False, False, cache=design_cache
+                    )
+                except sp.linalg.LinAlgError:
+                    # Where a failed factorization is an error, a starting
+                    # point whose factorization fails is ranked last, as
+                    # one of infinite value, rather than ending the fit, as
+                    # MATLAB BADS evaluates its starting points
+                    # (`gpHyperOptimize.m:55-59`).
+                    if not skip_failures:
+                        raise
+                    return np.inf
+
             if s_N > 0:
                 tol = tol_opt_mcmc
             else:
@@ -2375,6 +2423,14 @@ class GP:
             The positive log marginal likelihood.
         dlZ : ndarray, shape (hyp_N,), optional
             The gradient with respect to hyperparameters.
+
+        Raises
+        =======
+        LinAlgError
+            Raised when the Cholesky decomposition failed multiple times even
+            by adding numerical stability values to the matrix, or once
+            where the GP raises on a failed factorization
+            (``raise_on_cholesky_failure``).
         """
         if isinstance(hyp, dict):
             # One dictionary is one row of the array form.
@@ -2413,7 +2469,9 @@ class GP:
         =======
         LinAlgError
             Raised when the Cholesky decomposition failed multiple times even
-            by adding numerical stability values to the matrix.
+            by adding numerical stability values to the matrix, or once
+            where the GP raises on a failed factorization
+            (``raise_on_cholesky_failure``).
         """
         if isinstance(hyp, dict):
             # One dictionary is one row of the array form.
@@ -2515,7 +2573,9 @@ class GP:
             pickled by gpyreg 1.3.1 or earlier does where the smallest
             noise variance at the training inputs is below 1e-6, and the
             factorization that computes the factor again fails even after
-            its noise is multiplied tenfold, up to ten times.
+            its noise is multiplied tenfold, up to ten times, or fails at
+            all where the GP raises on a failed factorization
+            (``raise_on_cholesky_failure``).
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
         s_N = self.posteriors.size
@@ -2691,7 +2751,9 @@ class GP:
             pickled by gpyreg 1.3.1 or earlier does where the smallest
             noise variance at the training inputs is below 1e-6, and the
             factorization that computes the factor again fails even after
-            its noise is multiplied tenfold, up to ten times.
+            its noise is multiplied tenfold, up to ten times, or fails at
+            all where the GP raises on a failed factorization
+            (``raise_on_cholesky_failure``).
         """
         x_star, y_star, s2_star = self._convert_shapes(x_star, y_star, s2_star)
 
@@ -2922,7 +2984,8 @@ class GP:
             where the smallest noise variance at the training inputs is
             below 1e-6, and the factorization that computes the factor
             again fails even after its noise is multiplied tenfold, up to
-            ten times.
+            ten times, or fails at all where the GP raises on a failed
+            factorization (``raise_on_cholesky_failure``).
         """
 
         if not isinstance(
@@ -3395,7 +3458,9 @@ class GP:
             pickled by gpyreg 1.3.1 or earlier does where the smallest
             noise variance at the training inputs is below 1e-6, and the
             factorization that computes the factor again fails even after
-            its noise is multiplied tenfold, up to ten times.
+            its noise is multiplied tenfold, up to ten times, or fails at
+            all where the GP raises on a failed factorization
+            (``raise_on_cholesky_failure``).
         """
         rng = resolve_rng(rng)
         N_star = X_star.shape[0]
@@ -3506,9 +3571,19 @@ class GP:
             hyp[cov_N : cov_N + noise_N], self.X, self.y, self.s2
         )
         L_factor, __, __ = self.__training_cholesky(
-            K, sn2, False, posterior.sn2_mult
+            K, sn2, False, posterior.sn2_mult, self.__cholesky_attempts()
         )
         return L_factor
+
+    def __cholesky_attempts(self):
+        """The attempts at factoring the training covariance that
+        :py:meth:`__training_cholesky` makes: one where a failed
+        factorization is an error (``raise_on_cholesky_failure``), ten
+        otherwise, as on a GP unpickled from gpyreg 1.3.3 or earlier,
+        which has no such attribute."""
+        if getattr(self, "raise_on_cholesky_failure", False):
+            return 1
+        return 10
 
     @staticmethod
     def __robust_cholesky(sigma, scale=None):
@@ -3581,11 +3656,12 @@ class GP:
         return T
 
     @staticmethod
-    def __training_cholesky(K, sn2, L_chol, sn2_mult=1):
+    def __training_cholesky(K, sn2, L_chol, sn2_mult=1, attempts=10):
         """Cholesky factor of the training covariance with its noise.
 
         Factors ``(K + sn2_mult * diag(sn2)) / sl``, multiplying
-        ``sn2_mult`` by ten after each failed attempt, up to ten attempts.
+        ``sn2_mult`` by ten after each failed attempt, up to ``attempts``
+        attempts.
 
         Parameters
         ==========
@@ -3600,6 +3676,9 @@ class GP:
             inverse the low-noise representation holds).
         sn2_mult : int, defaults to 1
             The noise multiplier of the first attempt.
+        attempts : int, defaults to 10
+            The number of attempts: one where a failed factorization is an
+            error (see :py:meth:`__cholesky_attempts`).
 
         Returns
         =======
@@ -3633,7 +3712,7 @@ class GP:
             else:
                 sn2_div = np.min(sn2)
                 sn2_diag = sn2.ravel() / sn2_div
-            for i in range(0, 10):
+            for i in range(0, attempts):
                 try:  # Cholesky decomposition until it works
                     A = np.ascontiguousarray(
                         K / (sn2_div * sn2_mult), dtype=np.float64
@@ -3648,7 +3727,7 @@ class GP:
         else:
             sn2_diag = sn2 if np.isscalar(sn2) else sn2.ravel()
 
-            for i in range(0, 10):
+            for i in range(0, attempts):
                 try:
                     A = np.array(K, dtype=np.float64, order="C")
                     A.flat[:: N + 1] += sn2_mult * sn2_diag
@@ -3686,7 +3765,9 @@ class GP:
             ------
         LinAlgError
             Raised when the Cholesky decomposition failed multiple times even
-            by adding numerical stability values to the matrix.
+            by adding numerical stability values to the matrix, or once
+            where the GP raises on a failed factorization
+            (``raise_on_cholesky_failure``).
         """
         N, d = self.X.shape
         cov_N = self.covariance.hyperparameter_count(d)
@@ -3741,7 +3822,9 @@ class GP:
             L, sl, logdet = cache["L"], cache["sl"], cache["logdet"]
         else:
             L_chol = np.min(sn2) >= 1e-6
-            L, sl, sn2_mult = self.__training_cholesky(K, sn2, L_chol)
+            L, sl, sn2_mult = self.__training_cholesky(
+                K, sn2, L_chol, attempts=self.__cholesky_attempts()
+            )
 
             if L_chol:
                 pL = L
