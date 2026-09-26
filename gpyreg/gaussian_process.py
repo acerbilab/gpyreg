@@ -246,9 +246,10 @@ class GP:
         (``CholAttempts = 0``), and no posterior carries a multiplier
         other than one. In :py:meth:`fit`, the space-filling design ranks
         a starting point whose objective raises it last, as one of
-        infinite value, while a failure in the optimization, in the
-        sampling or in the posteriors of the fitted hyperparameters raises
-        from ``fit``, which leaves the GP as it was. The GP keeps the
+        infinite value, and starts no optimization from it unless every
+        point of the design raised, while a failure in the optimization,
+        in the sampling or in the posteriors of the fitted hyperparameters
+        raises from ``fit``, which leaves the GP as it was. The GP keeps the
         choice as its attribute ``raise_on_cholesky_failure``, which a copy
         or a pickle of the GP keeps; a GP unpickled from gpyreg 1.3.3 or
         earlier has no such attribute and inflates the noise.
@@ -1711,7 +1712,8 @@ class GP:
             the first failure raises, by :py:meth:`update`, during the
             optimization or during the sampling, and a starting point of
             the space-filling design whose factorization fails is ranked
-            last instead. Whether a covariance that holds NaN, as from a
+            last instead, and starts no optimization unless every point
+            failed. Whether a covariance that holds NaN, as from a
             starting point that does, fails there or gives NaN depends on
             the LAPACK build.
         """
@@ -1975,6 +1977,7 @@ class GP:
                 # standard deviation of the design as it was returned
                 # (`gplite_train.m:206-207`).
                 hyp = X0[0 : np.maximum(opts_N, 1), :].copy()
+                hyp_y = y0[0 : np.maximum(opts_N, 1)].copy()
 
                 # Extract a good low-noise starting point for the 2nd optimization.
                 if noise_N > 0 and 1 < opts_N < init_N:
@@ -1990,7 +1993,23 @@ class GP:
                     idx_best = np.argmin(
                         noise_y[0 : math.ceil(0.2 * np.size(noise_y))]
                     )
-                    hyp[1, :] = xx[idx_best, :]
+                    # Where a failed factorization is an error, a draw of
+                    # value inf failed it, and when every low-noise draw
+                    # did, the second start stays the second best point.
+                    if not (skip_failures and noise_y[idx_best] == np.inf):
+                        hyp[1, :] = xx[idx_best, :]
+                        hyp_y[1] = noise_y[idx_best]
+
+                # Where a failed factorization is an error, the
+                # optimizations start only from points of the design whose
+                # factorization succeeded, so that a draw known to fail
+                # does not end a fit that another start completes; when
+                # every point failed, the fit starts from the best one,
+                # and raises.
+                if skip_failures:
+                    succeeded = hyp_y != np.inf
+                    succeeded[0] = succeeded[0] or not np.any(succeeded)
+                    hyp = hyp[succeeded, :]
 
                 if init_N > 1:
                     widths_default = np.std(X0, axis=0, ddof=1)
