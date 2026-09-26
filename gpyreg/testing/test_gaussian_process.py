@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import scipy.linalg
+import scipy.optimize
 import scipy.special
 import scipy.stats
 from scipy.integrate import quad
@@ -2399,6 +2400,110 @@ def test_a_fit_whose_optimization_fails_raises_where_the_gp_raises():
         _gp_1d(raise_on_cholesky_failure=False), 0, 2
     )
     assert np.all(np.isfinite(hyp))
+
+
+_FAILING_ROWS = np.array(
+    [
+        [0.0, 12.0, np.log(2e-3), 0.0],
+        [0.5, 14.0, np.log(2e-3), 0.5],
+        [-0.5, 13.0, np.log(2e-3), -0.5],
+    ]
+)
+
+
+def _fit_from_design(gp, rows, opts_N, monkeypatch):
+    """Fit ``gp`` as ``_fit_with_failing_starting_points`` does, with a
+    space-filling design made of ``rows``, which the fit's own objective
+    evaluates and sorts. Returns the fitted hyperparameters, the design as
+    the fit received it and the starting point of each optimization."""
+    from gpyreg import gaussian_process as gp_module
+
+    designs, starts = [], []
+
+    def fixed_design(f, x0, LB, UB, PLB, PUB, hprior, N, design, rng=None):
+        y = np.array([f(row) for row in rows])
+        order = np.argsort(y)
+        designs.append((rows[order, :], y[order]))
+        return designs[-1]
+
+    real_minimize = scipy.optimize.minimize
+
+    def recording_minimize(*args, **kwargs):
+        starts.append(np.copy(kwargs["x0"]))
+        return real_minimize(*args, **kwargs)
+
+    monkeypatch.setattr(gp_module, "f_min_fill", fixed_design)
+    monkeypatch.setattr(scipy.optimize, "minimize", recording_minimize)
+    hyp, __, __ = _fit_with_failing_starting_points(gp, len(rows), opts_N)
+    return hyp, designs[-1], starts
+
+
+def test_the_low_noise_start_of_a_fit_is_a_point_that_did_not_fail(
+    monkeypatch,
+):
+    """Where the GP raises on a failed factorization and every low-noise
+    point of the space-filling design failed, the second optimization
+    starts from the second best point of the design, rather than from a
+    point known to fail, which would end the fit. Without the switch the
+    low-noise start is chosen as it always was."""
+    good_rows = np.array(
+        [
+            [0.0, 0.0, np.log(0.1), 0.0],
+            [-0.3, 0.2, np.log(0.15), 0.1],
+            [0.3, -0.2, np.log(0.2), -0.1],
+            [-0.6, 0.5, np.log(0.3), 0.2],
+            [0.6, -0.5, np.log(0.5), -0.2],
+            [0.9, 1.0, np.log(0.8), 0.3],
+        ]
+    )
+    rows = np.vstack((good_rows, _FAILING_ROWS[0:2]))
+
+    gp = _gp_1d(raise_on_cholesky_failure=True)
+    hyp, (X0, y0), starts = _fit_from_design(gp, rows, 2, monkeypatch)
+    # The two points of lowest noise, the bottom 20% of the six that are
+    # not among the two best, are the two that fail.
+    assert np.all(np.isinf(y0[-2:])) and np.all(np.isfinite(y0[:-2]))
+    assert len(starts) == 2
+    assert np.array_equal(starts[0], X0[0])
+    assert np.array_equal(starts[1], X0[1])
+    assert np.all(np.isfinite(hyp))
+    assert gp.posteriors[0].sn2_mult == 1
+
+    gp = _gp_1d(raise_on_cholesky_failure=False)
+    hyp, (X0, y0), starts = _fit_from_design(gp, rows, 2, monkeypatch)
+    xx, noise_y = X0[2:], y0[2:]
+    order = np.argsort(xx[:, 2])
+    expected = xx[order][np.argmin(noise_y[order][0:2])]
+    assert len(starts) == 2
+    assert np.allclose(starts[1], expected, rtol=0, atol=1e-12)
+    assert np.all(np.isfinite(hyp))
+
+
+def test_a_fit_starts_no_optimization_from_a_point_that_failed(
+    monkeypatch,
+):
+    """Where the GP raises on a failed factorization, a fit whose design
+    has one point that did not fail runs one optimization, from that
+    point, where its second start would have been a point known to fail;
+    a fit whose every point failed starts from the best one, and raises,
+    leaving the GP as it was."""
+    rows = np.vstack(([[0.0, 0.0, np.log(0.1), 0.0]], _FAILING_ROWS))
+
+    gp = _gp_1d(raise_on_cholesky_failure=True)
+    hyp, (X0, y0), starts = _fit_from_design(gp, rows, 2, monkeypatch)
+    assert np.isfinite(y0[0]) and np.all(np.isinf(y0[1:]))
+    assert len(starts) == 1
+    assert np.array_equal(starts[0], X0[0])
+    assert np.all(np.isfinite(hyp))
+    assert gp.posteriors[0].sn2_mult == 1
+
+    gp = _gp_1d(raise_on_cholesky_failure=True)
+    attributes = dict(vars(gp))
+    with pytest.raises(scipy.linalg.LinAlgError, match="Singular matrix"):
+        _fit_from_design(gp, _FAILING_ROWS, 2, monkeypatch)
+    assert vars(gp).keys() == attributes.keys()
+    for name, value in attributes.items():
+        assert vars(gp)[name] is value, name
 
 
 def test_a_copy_and_a_pickle_keep_raise_on_cholesky_failure():

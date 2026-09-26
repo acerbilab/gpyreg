@@ -18,8 +18,9 @@ Release notes
   keeps the multiplier, which its predictions apply to the noise while
   :meth:`gpyreg.GP.get_hyperparameters` returns the noise as fitted. With
   the switch on, the space-filling design of ``fit`` ranks a starting
-  point whose factorization fails last, as one of infinite value, and a
-  failure in the optimization, in the sampling or at the fitted
+  point whose factorization fails last, as one of infinite value, and
+  starts no optimization from it unless every point failed; a failure
+  in the optimization, in the sampling or at the fitted
   hyperparameters raises from ``fit``, which leaves the GP as it was. A
   copy or a pickle of the GP keeps the switch. Without it nothing changes,
   to the last bit.
