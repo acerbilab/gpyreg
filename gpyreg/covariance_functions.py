@@ -332,8 +332,9 @@ class Matern(AbstractKernel):
                     "X_star should be None when compute_grad is True."
                 )
             dK = np.zeros((cov_N, N, N))
-            # The factor of the length scales' gradients that does not
-            # depend on the dimension.
+            # The factor of the length scales' gradients that is the same
+            # for every dimension. At d=1 it is infinite where two inputs
+            # coincide, the diagonal among them, since df(0) = 1 / 0.
             with np.errstate(all="ignore"):
                 dK_factor = sf2 * (self.df(tmp) * np.exp(-tmp))
             for i in range(0, D):
@@ -347,8 +348,8 @@ class Matern(AbstractKernel):
                 )
                 # Where two inputs share the i-th coordinate the kernel
                 # does not depend on that length scale, so the derivative
-                # is zero. The d=1 kernel divides by zero there and gives
-                # inf * 0 = NaN, which would poison the gradient of the
+                # is zero. Where they coincide, the d=1 factor is infinite
+                # and inf * 0 = NaN, which would poison the gradient of the
                 # marginal likelihood through the whole diagonal, so the
                 # product is taken as the zero it is.
                 with np.errstate(all="ignore"):
@@ -426,8 +427,8 @@ class RationalQuadraticARD(AbstractKernel):
                 )
             dK = np.zeros((cov_N, N, N))
 
-            # Gradient respect of lenght scale, whose factor
-            # sf2 * M ** (-alpha - 1) does not depend on the dimension.
+            # Gradient with respect to the length scales, whose factor
+            # sf2 * M ** (-alpha - 1) is the same for every dimension.
             with np.errstate(all="ignore"):
                 dK_factor = sf2 * M ** (-alpha - 1)
             for i in range(0, D):

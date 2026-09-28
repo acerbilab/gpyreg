@@ -254,10 +254,12 @@ def test_rational_quad_ard_plausible_upper_bounds():
 )
 @pytest.mark.parametrize("D", [1, 4])
 def test_length_scale_gradients_equal_their_per_dimension_formula(kernel, D):
-    """The factor of the length scales' gradients that does not depend on
-    the dimension is computed once, and each gradient equals, to the last
-    bit, the product computed dimension by dimension. Two inputs share a
-    coordinate, where Matern's gradient takes the value 0."""
+    """Each length scale's gradient equals, to the last bit, the direct
+    formula for its dimension: ``sf2 * M ** (-alpha - 1) * Ki`` for the
+    rational-quadratic kernel, ``sf2 * (df(t) * exp(-t)) * Ki`` for Matern,
+    zero where ``Ki`` is. Two inputs share their first coordinate, which
+    puts a zero of that gradient off the diagonal; at D = 1 they coincide,
+    where Matern's d=1 factor is infinite."""
     rng = np.random.default_rng(D)
     N = 30
     X = rng.normal(size=(N, D))

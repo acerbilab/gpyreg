@@ -45,8 +45,9 @@ to change.
   and :class:`gpyreg.covariance_functions.Matern` with respect to the
   length scales compute the factor that does not depend on the dimension
   once, where they computed it again for each dimension. With its
-  gradient, the rational-quadratic kernel takes about 40% less time at 10
-  dimensions and 250 inputs, and the Matern kernels 23 to 33% less, which
+  gradient, the rational-quadratic kernel takes about a third less time at
+  10 dimensions and 150 inputs and a quarter less at 6 dimensions and 110
+  inputs, and the Matern kernels 15 to 40% less at those sizes, which
   speeds up :meth:`gpyreg.GP.fit` with them. Every value is unchanged, to
   the last bit.
 * Installing gpyreg no longer installs pytest, pytest-rerunfailures and
