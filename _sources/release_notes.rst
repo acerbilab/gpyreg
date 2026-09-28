@@ -4,6 +4,9 @@ Release notes
 1.3.4 (unreleased)
 ------------------
 
+A point marked **Upgrading** says what a script written for 1.3.3, or the
+environment it runs in, may have to change.
+
 * The warning with which a single-point :meth:`gpyreg.GP.update` falls
   back to a full recomputation of a posterior names the line that called
   ``update``, as it did up to 1.3.2; in 1.3.3 it named a line of gpyreg.
@@ -38,6 +41,21 @@ Release notes
   taken in log space, and a draw that would be infinite comes from the
   prior truncated to the bounds; every other computation is unchanged, to
   the last bit.
+* The gradients of :class:`gpyreg.covariance_functions.RationalQuadraticARD`
+  and :class:`gpyreg.covariance_functions.Matern` with respect to the
+  length scales compute the factor that does not depend on the dimension
+  once, where they computed it again for each dimension. With its
+  gradient, the rational-quadratic kernel takes about a third less time at
+  10 dimensions and 150 inputs and a quarter less at 6 dimensions and 110
+  inputs, and the Matern kernels 15 to 40% less at those sizes, which
+  speeds up :meth:`gpyreg.GP.fit` with them. Every value is unchanged, to
+  the last bit.
+* Installing gpyreg no longer installs pytest, pytest-rerunfailures and
+  numdifftools, which only its tests use. The extra ``test`` installs them
+  (``pip install "gpyreg[test]"``), and the extra ``dev`` includes them.
+  **Upgrading:** an environment that runs gpyreg's tests, or that relied on
+  gpyreg to install one of these packages, installs the extra ``test`` or
+  the packages themselves.
 
 1.3.3 (2026-09-24)
 ------------------

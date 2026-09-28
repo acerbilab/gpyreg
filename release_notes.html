@@ -438,6 +438,8 @@
 <h1>Release notes<a class="headerlink" href="#release-notes" title="Link to this heading">#</a></h1>
 <section id="unreleased">
 <h2>1.3.4 (unreleased)<a class="headerlink" href="#unreleased" title="Link to this heading">#</a></h2>
+<p>A point marked <strong>Upgrading</strong> says what a script written for 1.3.3, or the
+environment it runs in, may have to change.</p>
 <ul class="simple">
 <li><p>The warning with which a single-point <a class="reference internal" href="gaussian_process.html#gpyreg.GP.update" title="gpyreg.GP.update"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.update()</span></code></a> falls
 back to a full recomputation of a posterior names the line that called
@@ -473,6 +475,21 @@ zero values, to infinity. Where the mass underflows to zero its log is
 taken in log space, and a draw that would be infinite comes from the
 prior truncated to the bounds; every other computation is unchanged, to
 the last bit.</p></li>
+<li><p>The gradients of <a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD" title="gpyreg.covariance_functions.RationalQuadraticARD"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.RationalQuadraticARD</span></code></a>
+and <a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.Matern" title="gpyreg.covariance_functions.Matern"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.Matern</span></code></a> with respect to the
+length scales compute the factor that does not depend on the dimension
+once, where they computed it again for each dimension. With its
+gradient, the rational-quadratic kernel takes about a third less time at
+10 dimensions and 150 inputs and a quarter less at 6 dimensions and 110
+inputs, and the Matern kernels 15 to 40% less at those sizes, which
+speeds up <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> with them. Every value is unchanged, to
+the last bit.</p></li>
+<li><p>Installing gpyreg no longer installs pytest, pytest-rerunfailures and
+numdifftools, which only its tests use. The extra <code class="docutils literal notranslate"><span class="pre">test</span></code> installs them
+(<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">&quot;gpyreg[test]&quot;</span></code>), and the extra <code class="docutils literal notranslate"><span class="pre">dev</span></code> includes them.
+<strong>Upgrading:</strong> an environment that runs gpyreg’s tests, or that relied on
+gpyreg to install one of these packages, installs the extra <code class="docutils literal notranslate"><span class="pre">test</span></code> or
+the packages themselves.</p></li>
 </ul>
 </section>
 <section id="id1">
