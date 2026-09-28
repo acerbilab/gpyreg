@@ -1,15 +1,17 @@
 ## What this is
 
-GPyReg is a lightweight Gaussian process regression library (NumPy/SciPy, no autodiff framework). It is a Python port of the MATLAB toolbox `gplite` kept under `matlab/gplite/` for reference, and it is the GP backend of PyVBMC and PyBADS, so its public API and numerical behavior are downstream-visible. PyVBMC requires the latest gpyreg release, and moves its minimum gpyreg version and its CI pin to each one. PyBADS requires `gpyreg >= 0.1.0`; its GPs can reach the low-noise representation (below), as the lower bound of their noise at its default options is a variance of about 1.4e-7. Code must stay Python 3.9 compatible (CI tests 3.9–3.11 on Linux, Windows, macOS).
+GPyReg is a lightweight Gaussian process regression library (NumPy/SciPy, no autodiff framework). It is a Python port of the MATLAB toolbox `gplite` kept under `matlab/gplite/` for reference, and it is the GP backend of PyVBMC and PyBADS, so its public API and numerical behavior are downstream-visible. PyVBMC requires the latest gpyreg release, and moves its minimum gpyreg version and its CI pin to each one. PyBADS's minimum gpyreg names one release and its CI runs at that release's tagged commit; it moves both to a new release only after comparing its benchmark runs under that release with its reference runs, and its scheduled CI (the 13th and 28th of each month) runs against gpyreg's `main`, so a change merged to `main` reaches PyBADS's tests before any release. PyBADS's GPs can reach the low-noise representation (below), as the lower bound of their noise at its default options is a variance of about 1.4e-7. Code must stay Python 3.9 compatible (CI tests 3.9–3.11 on Linux, Windows, macOS).
 
 ## Commands
 
-Install for development (the runtime dependency list already includes `pytest`, `pytest-rerunfailures`, and `numdifftools`, so tests run without extras):
+Install for development:
 
 ```console
-python -m pip install -e .
-python -m pip install -e .[dev]   # adds sphinx, numpydoc, build for docs/packaging
+python -m pip install -e ".[test]"   # pytest, pytest-rerunfailures, numdifftools
+python -m pip install -e ".[dev]"    # the same, plus sphinx, numpydoc, build for docs/packaging
 ```
+
+The runtime dependencies are NumPy, SciPy and matplotlib. What the tests need is the `test` extra, which CI installs and `dev` repeats. No module outside `gpyreg/testing/` imports pytest or numdifftools; `import gpyreg.testing` needs the extra, since `gpyreg/testing/__init__.py` imports a test module.
 
 Tests live inside the package at `gpyreg/testing/` (not a top-level `tests/`). There is no pytest config file, so run from the repo root:
 
@@ -30,7 +32,7 @@ pre-commit run --all-files
 
 Docs are Sphinx with numpydoc. Build locally with `make html` in `docsrc/` (output in `docsrc/_build/html`). `make github` additionally copies the result into a gitignored `docs/` at the repo root; the docs workflow does this on every push to `main` and commits it to the `gh-pages` branch. On Windows, `docsrc\make.bat` accepts the same targets, including `github`.
 
-Packaging: `python -m build .`. The version comes from git tags through setuptools_scm, which writes the gitignored `gpyreg/_version.py`. Creating a GitHub release triggers the PyPI upload workflow. Release notes go in `docsrc/source/release_notes.rst` under a `<version> (<YYYY-MM-DD>)` heading.
+Packaging: `python -m build .`. The version comes from git tags through setuptools_scm, which writes the gitignored `gpyreg/_version.py`. Creating a GitHub release triggers the PyPI upload workflow. conda-forge's `gpyreg-feedstock` lists the run requirements by hand in `recipe/meta.yaml`, and its bot merges its own version-update PRs once their CI passes (`automerge` in the feedstock's `conda-forge.yml`), a CI that only imports gpyreg and runs `pip check`: a release that changes the runtime dependencies has the recipe's list changed in its update PR before that PR merges. Release notes go in `docsrc/source/release_notes.rst` under a `<version> (<YYYY-MM-DD>)` heading.
 
 The PR test workflow only runs when files under `gpyreg/`, `pyproject.toml`, or `setup.py` change. Commit messages follow Conventional Commits (`feat:`, `fix:`, `perf:`, `docs:`, `chore:`); work happens on topic branches merged into `main` by PR.
 
