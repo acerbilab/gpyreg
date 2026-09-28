@@ -68,7 +68,7 @@ jobs:
       - name: Install GPyReg
         run: |
           cd ./gpyreg
-          python -m pip install -e .
+          python -m pip install -e ".[test]"
 
       - name: Run tests
         run: |

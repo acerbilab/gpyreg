@@ -26,6 +26,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install GPyReg
         run: |
-          python -m pip install -e .
+          python -m pip install -e ".[test]"
       - name: Run tests
         run: python -m pytest --reruns=5 -x -vv

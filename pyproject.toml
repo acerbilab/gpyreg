@@ -9,9 +9,6 @@ license = { file = "LICENSE" }
 dependencies = [
     "matplotlib >= 3.5.1",
     "numpy >= 1.22.1",
-    "numdifftools >= 0.9.41",
-    "pytest >= 6.2.5",
-    "pytest-rerunfailures >= 10.2",
     "scipy >= 1.7.3",
 ]
 requires-python = ">=3.9"
@@ -23,7 +20,16 @@ packages = ["gpyreg", "gpyreg.examples"]
 package-dir = { "gpyreg.examples" = "examples" }
 
 [project.optional-dependencies]
+# What the test suite needs (`pytest --pyargs gpyreg`); CI installs it.
+test = [
+    "numdifftools >= 0.9.41",
+    "pytest >= 6.2.5",
+    "pytest-rerunfailures >= 10.2",
+]
 dev = [
+    "numdifftools >= 0.9.41",
+    "pytest >= 6.2.5",
+    "pytest-rerunfailures >= 10.2",
     "sphinx >= 4.3.2",
     "sphinx-book-theme>=0.2.0",
     "build >= 0.9.0",

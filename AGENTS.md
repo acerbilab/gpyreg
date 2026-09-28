@@ -4,12 +4,14 @@ GPyReg is a lightweight Gaussian process regression library (NumPy/SciPy, no aut
 
 ## Commands
 
-Install for development (the runtime dependency list already includes `pytest`, `pytest-rerunfailures`, and `numdifftools`, so tests run without extras):
+Install for development:
 
 ```console
-python -m pip install -e .
-python -m pip install -e .[dev]   # adds sphinx, numpydoc, build for docs/packaging
+python -m pip install -e ".[test]"   # pytest, pytest-rerunfailures, numdifftools
+python -m pip install -e ".[dev]"    # the same, plus sphinx, numpydoc, build for docs/packaging
 ```
+
+The runtime dependencies are NumPy, SciPy and matplotlib. What the tests need is the `test` extra, which CI installs and `dev` repeats; no package module imports pytest or numdifftools.
 
 Tests live inside the package at `gpyreg/testing/` (not a top-level `tests/`). There is no pytest config file, so run from the repo root:
 
