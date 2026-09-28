@@ -1,6 +1,6 @@
 ## What this is
 
-GPyReg is a lightweight Gaussian process regression library (NumPy/SciPy, no autodiff framework). It is a Python port of the MATLAB toolbox `gplite` kept under `matlab/gplite/` for reference, and it is the GP backend of PyVBMC and PyBADS, so its public API and numerical behavior are downstream-visible. PyVBMC requires the latest gpyreg release, and moves its minimum gpyreg version and its CI pin to each one. PyBADS requires `gpyreg >= 0.1.0`; its GPs can reach the low-noise representation (below), as the lower bound of their noise at its default options is a variance of about 1.4e-7. Code must stay Python 3.9 compatible (CI tests 3.9–3.11 on Linux, Windows, macOS).
+GPyReg is a lightweight Gaussian process regression library (NumPy/SciPy, no autodiff framework). It is a Python port of the MATLAB toolbox `gplite` kept under `matlab/gplite/` for reference, and it is the GP backend of PyVBMC and PyBADS, so its public API and numerical behavior are downstream-visible. PyVBMC requires the latest gpyreg release, and moves its minimum gpyreg version and its CI pin to each one. PyBADS requires `gpyreg >= 1.3.3` and runs its CI at that release's tagged commit, and moves both to a new release only after comparing its benchmark runs under it with its reference runs. Its GPs can reach the low-noise representation (below), as the lower bound of their noise at its default options is a variance of about 1.4e-7. Code must stay Python 3.9 compatible (CI tests 3.9–3.11 on Linux, Windows, macOS).
 
 ## Commands
 
