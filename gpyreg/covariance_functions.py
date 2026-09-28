@@ -332,6 +332,10 @@ class Matern(AbstractKernel):
                     "X_star should be None when compute_grad is True."
                 )
             dK = np.zeros((cov_N, N, N))
+            # The factor of the length scales' gradients that does not
+            # depend on the dimension.
+            with np.errstate(all="ignore"):
+                dK_factor = sf2 * (self.df(tmp) * np.exp(-tmp))
             for i in range(0, D):
                 Ki = squareform(
                     pdist(
@@ -348,11 +352,7 @@ class Matern(AbstractKernel):
                 # marginal likelihood through the whole diagonal, so the
                 # product is taken as the zero it is.
                 with np.errstate(all="ignore"):
-                    dK[i, :, :] = np.where(
-                        Ki > 0,
-                        sf2 * (self.df(tmp) * np.exp(-tmp)) * Ki,
-                        0.0,
-                    )
+                    dK[i, :, :] = np.where(Ki > 0, dK_factor * Ki, 0.0)
             # Gradient of cov output scale
             dK[D, :, :] = 2 * K
             return K, dK.transpose(1, 2, 0)
@@ -426,7 +426,10 @@ class RationalQuadraticARD(AbstractKernel):
                 )
             dK = np.zeros((cov_N, N, N))
 
-            # Gradient respect of lenght scale.
+            # Gradient respect of lenght scale, whose factor
+            # sf2 * M ** (-alpha - 1) does not depend on the dimension.
+            with np.errstate(all="ignore"):
+                dK_factor = sf2 * M ** (-alpha - 1)
             for i in range(0, D):
                 Ki = squareform(
                     pdist(
@@ -435,7 +438,7 @@ class RationalQuadraticARD(AbstractKernel):
                     )
                 )
                 with np.errstate(all="ignore"):
-                    dK[i, :, :] = sf2 * M ** (-alpha - 1) * Ki
+                    dK[i, :, :] = dK_factor * Ki
 
             # Gradient of cov output scale.
             dK[D, :, :] = 2 * K

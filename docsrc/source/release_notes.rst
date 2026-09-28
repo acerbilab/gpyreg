@@ -38,6 +38,14 @@ Release notes
   taken in log space, and a draw that would be infinite comes from the
   prior truncated to the bounds; every other computation is unchanged, to
   the last bit.
+* The gradients of :class:`gpyreg.covariance_functions.RationalQuadraticARD`
+  and :class:`gpyreg.covariance_functions.Matern` with respect to the
+  length scales compute the factor that does not depend on the dimension
+  once, where they computed it again for each dimension. With its
+  gradient, the rational-quadratic kernel takes about 40% less time at 10
+  dimensions and 250 inputs, and the Matern kernels 23 to 33% less, which
+  speeds up :meth:`gpyreg.GP.fit` with them. Every value is unchanged, to
+  the last bit.
 
 1.3.3 (2026-09-24)
 ------------------

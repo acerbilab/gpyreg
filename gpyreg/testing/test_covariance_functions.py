@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from scipy.spatial.distance import pdist, squareform
 
 from gpyreg.covariance_functions import (
     AbstractKernel,
@@ -243,6 +244,56 @@ def test_rational_quad_ard_plausible_upper_bounds():
     assert np.all(np.isfinite(info["PUB"]))
     assert info["PUB"][D] == np.log(np.max(y) - np.min(y))
     assert info["PUB"][D + 1] == 5.0
+
+
+@pytest.mark.parametrize(
+    "kernel",
+    [RationalQuadraticARD(), Matern(1), Matern(3), Matern(5)],
+    ids=lambda kernel: type(kernel).__name__
+    + str(getattr(kernel, "degree", "")),
+)
+@pytest.mark.parametrize("D", [1, 4])
+def test_length_scale_gradients_equal_their_per_dimension_formula(kernel, D):
+    """The factor of the length scales' gradients that does not depend on
+    the dimension is computed once, and each gradient equals, to the last
+    bit, the product computed dimension by dimension. Two inputs share a
+    coordinate, where Matern's gradient takes the value 0."""
+    rng = np.random.default_rng(D)
+    N = 30
+    X = rng.normal(size=(N, D))
+    X[1, 0] = X[0, 0]
+    hyp = rng.normal(scale=0.5, size=kernel.hyperparameter_count(D))
+    ell = np.exp(hyp[0:D])
+    sf2 = np.exp(2 * hyp[D])
+
+    _, dK = kernel.compute(hyp, X, compute_grad=True)
+
+    with np.errstate(all="ignore"):
+        for i in range(D):
+            if isinstance(kernel, RationalQuadraticARD):
+                alpha = np.exp(hyp[D + 1])
+                tmp = squareform(pdist(X @ np.diag(1.0 / ell), "sqeuclidean"))
+                M = 1 + 0.5 * tmp / alpha
+                Ki = squareform(
+                    pdist(
+                        np.reshape(1.0 / ell[i] * X[:, i], (-1, 1)),
+                        "sqeuclidean",
+                    )
+                )
+                expected = sf2 * M ** (-alpha - 1) * Ki
+            else:
+                scale = np.sqrt(kernel.degree)
+                tmp = squareform(pdist(X @ np.diag(scale / ell)))
+                Ki = squareform(
+                    pdist(
+                        np.reshape(scale / ell[i] * X[:, i], (-1, 1)),
+                        "sqeuclidean",
+                    )
+                )
+                expected = np.where(
+                    Ki > 0, sf2 * (kernel.df(tmp) * np.exp(-tmp)) * Ki, 0.0
+                )
+            assert np.array_equal(dK[:, :, i], expected)
 
 
 @pytest.mark.parametrize(
