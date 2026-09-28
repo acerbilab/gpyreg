@@ -20,7 +20,8 @@ packages = ["gpyreg", "gpyreg.examples"]
 package-dir = { "gpyreg.examples" = "examples" }
 
 [project.optional-dependencies]
-# What the test suite needs (`pytest --pyargs gpyreg`); CI installs it.
+# What the test suite needs, run as CI runs it (`pytest --reruns=5`);
+# CI installs it.
 test = [
     "numdifftools >= 0.9.41",
     "pytest >= 6.2.5",

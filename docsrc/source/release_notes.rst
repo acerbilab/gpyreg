@@ -4,8 +4,8 @@ Release notes
 1.3.4 (unreleased)
 ------------------
 
-A point marked **Upgrading** says what a script written for 1.3.3 may have
-to change.
+A point marked **Upgrading** says what a script written for 1.3.3, or the
+environment it runs in, may have to change.
 
 * The warning with which a single-point :meth:`gpyreg.GP.update` falls
   back to a full recomputation of a posterior names the line that called
@@ -53,9 +53,9 @@ to change.
 * Installing gpyreg no longer installs pytest, pytest-rerunfailures and
   numdifftools, which only its tests use. The extra ``test`` installs them
   (``pip install "gpyreg[test]"``), and the extra ``dev`` includes them.
-  **Upgrading:** an environment that runs gpyreg's tests, or that took one
-  of these packages from gpyreg's requirements, installs the extra or the
-  packages.
+  **Upgrading:** an environment that runs gpyreg's tests, or that relied on
+  gpyreg to install one of these packages, installs the extra ``test`` or
+  the packages themselves.
 
 1.3.3 (2026-09-24)
 ------------------
