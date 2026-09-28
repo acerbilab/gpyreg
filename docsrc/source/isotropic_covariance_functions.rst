@@ -4,7 +4,7 @@ Isotropic covariance functions
 ``gpyreg.isotropic_covariance_functions``
 ------------------------------------------
 
-The isotropic kernels use a single length scale for every input dimension, so they have two hyperparameters whatever the dimensionality. Each is implemented as a subclass of :ref:`\`\`AbstractIsotropicKernel\`\``, which fixes those two hyperparameters and the bounds recommended for them (``hyperparameter_count``, ``hyperparameter_info`` and ``get_bounds_info``), and of the kernel of the same family in :ref:`\`\`gpyreg.covariance_functions\`\``, from which it inherits the rest, such as the degree of the Matern kernel; each defines its own ``compute``. An instance is passed to ``gpyreg.GP`` at initialization in the same way as an anisotropic one.
+The isotropic kernels use a single length scale for every input dimension, so they have two hyperparameters whatever the dimensionality. Each is implemented as a subclass of :ref:`\`\`AbstractIsotropicKernel\`\``, which fixes those two hyperparameters and the bounds recommended for them (``hyperparameter_count``, ``hyperparameter_info`` and ``get_bounds_info``), and of the kernel of the same family in :ref:`\`\`gpyreg.covariance_functions\`\``, from which it inherits the rest, such as the degree of the Matern kernel; each defines its own ``compute``. An isotropic kernel is not periodic: given the ``periods`` that the kernels of :ref:`\`\`gpyreg.covariance_functions\`\`` take, its constructor raises ``ValueError``. An instance is passed to ``gpyreg.GP`` at initialization in the same way as an anisotropic one.
 
 ``AbstractIsotropicKernel``
 ---------------------------
@@ -15,14 +15,14 @@ The isotropic kernels use a single length scale for every input dimension, so th
 
 ``MaternIsotropic``
 -------------------
-.. autoclass:: gpyreg.isotropic_covariance_functions.MaternIsotropic
+.. autoclass:: gpyreg.isotropic_covariance_functions.MaternIsotropic(degree: int)
     :members:
     :undoc-members:
     :show-inheritance:
 
 ``SquaredExponentialIsotropic``
 -------------------------------
-.. autoclass:: gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic
+.. autoclass:: gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic()
     :members:
     :undoc-members:
     :show-inheritance:

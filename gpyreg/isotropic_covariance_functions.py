@@ -13,8 +13,23 @@ class AbstractIsotropicKernel(AbstractKernel):
     """Abstract base class for isotropic kernel functions.
 
     The two default hyperparameters are the log-lengthscale and
-    log-outputscale.
+    log-outputscale. An isotropic kernel is not periodic: the ``periods``
+    that its anisotropic parent takes raise ``ValueError``.
     """
+
+    def __init__(self, *args, periods=None, **kwargs):
+        refusal = (
+            f"{type(self).__name__} is isotropic and takes no periods; the "
+            "kernels of gpyreg.covariance_functions do."
+        )
+        if periods is not None:
+            raise ValueError(refusal)
+        # The constructor of the anisotropic parent comes next in the
+        # method resolution order (Matern's for MaternIsotropic), and
+        # stores periods passed to it positionally.
+        super().__init__(*args, **kwargs)
+        if self.periods is not None:
+            raise ValueError(refusal)
 
     def hyperparameter_count(self, D: int):
         """

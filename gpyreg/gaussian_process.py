@@ -253,6 +253,12 @@ class GP:
         choice as its attribute ``raise_on_cholesky_failure``, which a copy
         or a pickle of the GP keeps; a GP unpickled from gpyreg 1.3.3 or
         earlier has no such attribute and inflates the noise.
+
+    Raises
+    ======
+    ValueError
+        Raised when the covariance function has periods (its attribute
+        ``periods``) and their number is not ``D``.
     """
 
     def __init__(
@@ -263,6 +269,14 @@ class GP:
         noise: object,
         raise_on_cholesky_failure: bool = False,
     ):
+        if isinstance(covariance, gpyreg.covariance_functions.AbstractKernel):
+            periods = covariance.periods
+            if periods is not None and np.size(periods) != D:
+                raise ValueError(
+                    f"The covariance function has {np.size(periods)} "
+                    "periods, one per input dimension, but the GP has "
+                    f"{D} dimensions."
+                )
         self.D = D
         self.covariance = covariance
         self.mean = mean
@@ -3049,8 +3063,8 @@ class GP:
         ------
         ValueError
             Raised when the method is called and the covariance of the GP is
-            not squared exponential, or the mean function is none of the
-            zero, constant and negative quadratic means.
+            not squared exponential or has periods, or the mean function is
+            none of the zero, constant and negative quadratic means.
         ValueError
             Raised when the GP has no training data or no posterior
             factors, or when ``mu`` does not have one column per input
@@ -3072,6 +3086,12 @@ class GP:
             raise ValueError(
                 "Bayesian quadrature only supports the squared exponential "
                 "kernel."
+            )
+        if self.covariance.periods is not None:
+            raise ValueError(
+                "Bayesian quadrature does not support a periodic kernel: "
+                "its Gaussian integrals assume the non-periodic squared "
+                "exponential kernel."
             )
         if not isinstance(
             self.mean,

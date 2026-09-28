@@ -50,8 +50,150 @@ def _target_spread(y: np.ndarray):
     )
 
 
+def _validate_periods(periods):
+    """Return the periods given to a kernel as a float array, or ``None``.
+
+    Parameters
+    ----------
+    periods : array_like or None
+        One period per input dimension: a positive number, or ``np.inf``
+        for a dimension that is not periodic.
+
+    Returns
+    -------
+    periods : ndarray or None
+        A float copy of the periods, or ``None`` where none was given or
+        every period is infinite, so that no dimension is periodic.
+
+    Raises
+    ------
+    ValueError
+        Raised when the periods are not a one-dimensional array with at
+        least one entry, or when one of them is NaN, zero or negative.
+    """
+    if periods is None:
+        return None
+    periods = np.array(periods, dtype=float)
+    if periods.ndim != 1 or periods.size == 0:
+        raise ValueError(
+            "The periods must be a one-dimensional array with one entry "
+            "per input dimension."
+        )
+    if np.any(np.isnan(periods)) or np.any(periods <= 0):
+        raise ValueError(
+            "Each period must be a positive number, or np.inf for a "
+            "dimension that is not periodic."
+        )
+    if np.all(np.isinf(periods)):
+        return None
+    return periods
+
+
+def _check_periods_match(periods, D):
+    """Raise ``ValueError`` when a kernel's periods are not one per input
+    dimension."""
+    if periods is not None and periods.size != D:
+        raise ValueError(
+            f"The covariance function has {periods.size} periods, one per "
+            f"input dimension, but the inputs have {D} dimensions."
+        )
+
+
+def _scaled_sq_diff(x, x_star, scale, period):
+    """Return the scaled squared differences along one input dimension.
+
+    The term of one dimension in the squared distance of an ARD kernel is
+    ``scale**2 * delta**2``, where ``delta`` is the difference of the two
+    coordinates. Along a dimension with a finite period ``p``, ``delta**2``
+    is replaced by the squared chord ``(p / pi)**2 * sin(pi * delta / p)**2``,
+    the squared distance between the two points mapped onto a circle of
+    circumference ``p``. The difference is first wrapped, exactly, to the
+    distance along the circle, in ``[0, p / 2]``, so that the sine keeps
+    its relative precision and is zero at every multiple of the period.
+
+    Parameters
+    ----------
+    x : ndarray, shape (N,)
+        The coordinates of the first set of points.
+    x_star : ndarray, shape (M,), optional
+        The coordinates of the second set of points; ``x`` again when
+        ``None``.
+    scale : float
+        The scale of the dimension, the inverse of its length scale times
+        any factor of the kernel.
+    period : float
+        The period of the dimension, or ``np.inf``.
+
+    Returns
+    -------
+    sq_diff : ndarray, shape (N, M)
+        The scaled squared differences, exactly symmetric with zeros on
+        the diagonal where ``x_star`` is ``None``.
+    """
+    if not np.isfinite(period):
+        a = np.reshape(scale * x, (-1, 1))
+        b = a if x_star is None else np.reshape(scale * x_star, (-1, 1))
+        return cdist(a, b, "sqeuclidean")
+    if x_star is None:
+        x_star = x
+    # |a - b| is exactly |b - a|, fmod is exact, and so is p - delta for
+    # delta in [p / 2, p].
+    delta = np.fmod(np.abs(x[:, None] - x_star[None, :]), period)
+    delta = np.minimum(delta, period - delta)
+    return (scale * period / np.pi * np.sin(np.pi / period * delta)) ** 2
+
+
+def _scaled_sq_dist(X, X_star, scale, periods):
+    """Return the scaled squared distances of an ARD kernel with periods.
+
+    The distance is the sum over the input dimensions of
+    ``scale[d]**2 * delta[d]**2``, with the squared chord of
+    :func:`_scaled_sq_diff` in place of ``delta[d]**2`` along a dimension
+    with a finite period.
+
+    Parameters
+    ----------
+    X : ndarray, shape (N, D)
+        The first set of points.
+    X_star : ndarray, shape (M, D), optional
+        The second set of points; ``X`` again when ``None``.
+    scale : ndarray, shape (D,)
+        The scale of each dimension.
+    periods : ndarray, shape (D,)
+        The period of each dimension, or ``np.inf``.
+
+    Returns
+    -------
+    sq_dist : ndarray, shape (N, M)
+        The scaled squared distances, exactly symmetric with zeros on the
+        diagonal where ``X_star`` is ``None``.
+    """
+    periodic = np.isfinite(periods)
+    other = np.logical_not(periodic)
+    M = X.shape[0] if X_star is None else X_star.shape[0]
+    if np.any(other):
+        a = X[:, other] * scale[other]
+        b = a if X_star is None else X_star[:, other] * scale[other]
+        sq_dist = cdist(a, b, "sqeuclidean")
+    else:
+        sq_dist = np.zeros((X.shape[0], M))
+    for d in np.flatnonzero(periodic):
+        sq_dist += _scaled_sq_diff(
+            X[:, d],
+            None if X_star is None else X_star[:, d],
+            scale[d],
+            periods[d],
+        )
+    return sq_dist
+
+
 class AbstractKernel(ABC):
     """Abstract base class for covariance kernels."""
+
+    #: The period of each input dimension, ``np.inf`` for a dimension that
+    #: is not periodic, or ``None`` for a kernel that is not periodic along
+    #: any dimension.
+    periods = None
 
     @abstractmethod
     def compute(
@@ -101,6 +243,9 @@ class AbstractKernel(ABC):
         ValueError
             Raised when `compute_diag` and `compute_grad` are both True:
             the gradient is available for the full covariance matrix only.
+        ValueError
+            Raised when the kernel has periods and their number differs
+            from the number of columns of `X`.
         """
 
     def hyperparameter_count(self, D: int):
@@ -176,7 +321,29 @@ class AbstractKernel(ABC):
 
 
 class SquaredExponential(AbstractKernel):
-    """Squared exponential kernel."""
+    """
+    Squared exponential kernel.
+
+    Parameters
+    ----------
+    periods : array_like, shape (D,), optional
+        The period of each input dimension along which the kernel is
+        periodic, and ``np.inf`` for each dimension along which it is not.
+        Along a dimension of period ``p``, the squared difference
+        ``delta**2`` of two coordinates is replaced by the squared chord
+        ``(p / pi)**2 * sin(pi * delta / p)**2``, the squared distance
+        between the two points mapped onto a circle of circumference
+        ``p``. It is zero at every multiple of the period and equals
+        ``delta**2`` to second order in ``delta``, so that the length scale
+        keeps the units of the input. The periods are fixed constants, not
+        hyperparameters. ``None``, the default, or periods that are all
+        infinite give the non-periodic kernel. A period that is NaN, zero
+        or negative, or periods that are not a one-dimensional array, raise
+        ``ValueError``.
+    """
+
+    def __init__(self, periods: np.ndarray = None):
+        self.periods = _validate_periods(periods)
 
     # Overriding abstract method
     def compute(
@@ -208,6 +375,8 @@ class SquaredExponential(AbstractKernel):
                 "only."
             )
 
+        _check_periods_match(self.periods, D)
+
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
 
@@ -218,6 +387,8 @@ class SquaredExponential(AbstractKernel):
         if X_star is None:
             if compute_diag:
                 tmp = np.zeros((N, 1))
+            elif self.periods is not None:
+                tmp = _scaled_sq_dist(X, None, 1.0 / ell, self.periods)
             else:
                 # cdist(Xs, Xs) equals squareform(pdist(Xs)) bit for bit
                 # (the same per-dimension differences summed in the same
@@ -225,6 +396,8 @@ class SquaredExponential(AbstractKernel):
                 # and skips pdist's wrapper and the squareform pass.
                 Xs = X / ell
                 tmp = cdist(Xs, Xs, "sqeuclidean")
+        elif self.periods is not None:
+            tmp = _scaled_sq_dist(X, X_star, 1.0 / ell, self.periods)
         else:
             tmp = cdist(X / ell, X_star / ell, "sqeuclidean")
 
@@ -238,9 +411,17 @@ class SquaredExponential(AbstractKernel):
             dK = np.zeros((cov_N, N, N))
             for i in range(0, D):
                 # Gradient of cov length scales
-                dK[i, :, :] = K * squareform(
-                    pdist(np.reshape(X[:, i] / ell[i], (-1, 1)), "sqeuclidean")
-                )
+                if self.periods is not None:
+                    dK[i, :, :] = K * _scaled_sq_diff(
+                        X[:, i], None, 1.0 / ell[i], self.periods[i]
+                    )
+                else:
+                    dK[i, :, :] = K * squareform(
+                        pdist(
+                            np.reshape(X[:, i] / ell[i], (-1, 1)),
+                            "sqeuclidean",
+                        )
+                    )
             # Gradient of cov output scale.
             dK[D, :, :] = 2 * K
             return K, dK.transpose(1, 2, 0)
@@ -259,9 +440,23 @@ class Matern(AbstractKernel):
 
         Currently the only supported degrees are 1, 3, 5, and if
         some other degree is provided a ``ValueError`` exception is raised.
+    periods : array_like, shape (D,), optional
+        The period of each input dimension along which the kernel is
+        periodic, and ``np.inf`` for each dimension along which it is not.
+        Along a dimension of period ``p``, the squared difference
+        ``delta**2`` of two coordinates is replaced by the squared chord
+        ``(p / pi)**2 * sin(pi * delta / p)**2``, the squared distance
+        between the two points mapped onto a circle of circumference
+        ``p``. It is zero at every multiple of the period and equals
+        ``delta**2`` to second order in ``delta``, so that the length scale
+        keeps the units of the input. The periods are fixed constants, not
+        hyperparameters. ``None``, the default, or periods that are all
+        infinite give the non-periodic kernel. A period that is NaN, zero
+        or negative, or periods that are not a one-dimensional array, raise
+        ``ValueError``.
     """
 
-    def __init__(self, degree: int):
+    def __init__(self, degree: int, periods: np.ndarray = None):
         if degree not in (1, 3, 5):
             raise ValueError(
                 "Only degrees 1, 3 and 5 are supported for the "
@@ -278,6 +473,7 @@ class Matern(AbstractKernel):
         else:
             self.f = lambda t: 1 + t * (1 + t / 3)
             self.df = lambda t: (1 + t) / 3
+        self.periods = _validate_periods(periods)
 
     # Overriding abstract method
     def compute(
@@ -309,16 +505,30 @@ class Matern(AbstractKernel):
                 "only."
             )
 
+        _check_periods_match(self.periods, D)
+
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
 
         if X_star is None:
             if compute_diag:
                 tmp = np.zeros((N, 1))
+            elif self.periods is not None:
+                tmp = np.sqrt(
+                    _scaled_sq_dist(
+                        X, None, np.sqrt(self.degree) / ell, self.periods
+                    )
+                )
             else:
                 tmp = squareform(
                     pdist(X @ np.diag(np.sqrt(self.degree) / ell))
                 )
+        elif self.periods is not None:
+            tmp = np.sqrt(
+                _scaled_sq_dist(
+                    X, X_star, np.sqrt(self.degree) / ell, self.periods
+                )
+            )
         else:
             a = X @ np.diag(np.sqrt(self.degree) / ell)
             b = X_star @ np.diag(np.sqrt(self.degree) / ell)
@@ -338,18 +548,28 @@ class Matern(AbstractKernel):
             with np.errstate(all="ignore"):
                 dK_factor = sf2 * (self.df(tmp) * np.exp(-tmp))
             for i in range(0, D):
-                Ki = squareform(
-                    pdist(
-                        np.reshape(
-                            np.sqrt(self.degree) / ell[i] * X[:, i], (-1, 1)
-                        ),
-                        "sqeuclidean",
+                if self.periods is not None:
+                    Ki = _scaled_sq_diff(
+                        X[:, i],
+                        None,
+                        np.sqrt(self.degree) / ell[i],
+                        self.periods[i],
                     )
-                )
-                # Where two inputs share the i-th coordinate the kernel
-                # does not depend on that length scale, so the derivative
-                # is zero. Where they coincide, the d=1 factor is infinite
-                # and inf * 0 = NaN, which would poison the gradient of the
+                else:
+                    Ki = squareform(
+                        pdist(
+                            np.reshape(
+                                np.sqrt(self.degree) / ell[i] * X[:, i],
+                                (-1, 1),
+                            ),
+                            "sqeuclidean",
+                        )
+                    )
+                # Where two inputs share the i-th coordinate, or lie a
+                # multiple of its period apart, the kernel does not depend
+                # on that length scale, so the derivative is zero. Where
+                # they coincide, the d=1 factor is infinite and
+                # inf * 0 = NaN, which would poison the gradient of the
                 # marginal likelihood through the whole diagonal, so the
                 # product is taken as the zero it is.
                 with np.errstate(all="ignore"):
@@ -362,7 +582,29 @@ class Matern(AbstractKernel):
 
 
 class RationalQuadraticARD(AbstractKernel):
-    """Rational Quadratic ARD kernel"""
+    """
+    Rational Quadratic ARD kernel.
+
+    Parameters
+    ----------
+    periods : array_like, shape (D,), optional
+        The period of each input dimension along which the kernel is
+        periodic, and ``np.inf`` for each dimension along which it is not.
+        Along a dimension of period ``p``, the squared difference
+        ``delta**2`` of two coordinates is replaced by the squared chord
+        ``(p / pi)**2 * sin(pi * delta / p)**2``, the squared distance
+        between the two points mapped onto a circle of circumference
+        ``p``. It is zero at every multiple of the period and equals
+        ``delta**2`` to second order in ``delta``, so that the length scale
+        keeps the units of the input. The periods are fixed constants, not
+        hyperparameters. ``None``, the default, or periods that are all
+        infinite give the non-periodic kernel. A period that is NaN, zero
+        or negative, or periods that are not a one-dimensional array, raise
+        ``ValueError``.
+    """
+
+    def __init__(self, periods: np.ndarray = None):
+        self.periods = _validate_periods(periods)
 
     def hyperparameter_count(self, D: int):
         return D + 2
@@ -403,6 +645,8 @@ class RationalQuadraticARD(AbstractKernel):
                 "only."
             )
 
+        _check_periods_match(self.periods, D)
+
         ell = np.exp(hyp[0:D])
         sf2 = np.exp(2 * hyp[D])
         alpha = np.exp(hyp[D + 1])
@@ -410,8 +654,12 @@ class RationalQuadraticARD(AbstractKernel):
         if X_star is None:
             if compute_diag:
                 tmp = np.zeros((N, 1))
+            elif self.periods is not None:
+                tmp = _scaled_sq_dist(X, None, 1.0 / ell, self.periods)
             else:
                 tmp = squareform(pdist(X @ np.diag(1.0 / ell), "sqeuclidean"))
+        elif self.periods is not None:
+            tmp = _scaled_sq_dist(X, X_star, 1.0 / ell, self.periods)
         else:
             a = X @ np.diag(1.0 / ell)
             b = X_star @ np.diag(1.0 / ell)
@@ -432,12 +680,17 @@ class RationalQuadraticARD(AbstractKernel):
             with np.errstate(all="ignore"):
                 dK_factor = sf2 * M ** (-alpha - 1)
             for i in range(0, D):
-                Ki = squareform(
-                    pdist(
-                        np.reshape(1.0 / ell[i] * X[:, i], (-1, 1)),
-                        "sqeuclidean",
+                if self.periods is not None:
+                    Ki = _scaled_sq_diff(
+                        X[:, i], None, 1.0 / ell[i], self.periods[i]
                     )
-                )
+                else:
+                    Ki = squareform(
+                        pdist(
+                            np.reshape(1.0 / ell[i] * X[:, i], (-1, 1)),
+                            "sqeuclidean",
+                        )
+                    )
                 with np.errstate(all="ignore"):
                     dK[i, :, :] = dK_factor * Ki
 

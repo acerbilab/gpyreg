@@ -294,3 +294,36 @@ def test_isotropic_kernel_refuses_a_gradient_of_the_diagonal(kernel):
     with pytest.raises(ValueError) as execinfo:
         kernel.compute(hyp, X, compute_diag=True, compute_grad=True)
     assert "cannot both be True" in execinfo.value.args[0]
+
+
+@pytest.mark.parametrize(
+    "make_kernel",
+    [
+        lambda *args, **kwargs: MaternIsotropic(3, *args, **kwargs),
+        lambda *args, **kwargs: SquaredExponentialIsotropic(*args, **kwargs),
+    ],
+    ids=["MaternIsotropic", "SquaredExponentialIsotropic"],
+)
+def test_isotropic_kernel_refuses_periods(make_kernel):
+    """An isotropic kernel is not periodic. The periods that its anisotropic
+    parent takes are refused, by keyword, whatever their values, and when
+    passed positionally to the parent's constructor, rather than ignored by
+    the isotropic ``compute``."""
+    for kwargs in ({"periods": [2.0, np.inf]}, {"periods": [np.inf]}):
+        with pytest.raises(ValueError) as execinfo:
+            make_kernel(**kwargs)
+        assert "takes no periods" in execinfo.value.args[0]
+    with pytest.raises(ValueError) as execinfo:
+        make_kernel([2.0, np.inf])
+    assert "takes no periods" in execinfo.value.args[0]
+
+    kernel = make_kernel()
+    assert kernel.periods is None
+    assert kernel.hyperparameter_count(3) == 2
+
+
+def test_matern_isotropic_takes_its_degree_by_position_or_keyword():
+    """The constructor of the isotropic kernels passes its arguments on to
+    that of the anisotropic parent."""
+    assert MaternIsotropic(5).degree == 5
+    assert MaternIsotropic(degree=1).degree == 1

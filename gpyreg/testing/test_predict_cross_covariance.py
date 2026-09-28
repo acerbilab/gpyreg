@@ -105,6 +105,9 @@ def test_predict_cross_covariance_return_combinations(
         gpr.covariance_functions.RationalQuadraticARD(),
         MaternIsotropic(3),
         SquaredExponentialIsotropic(),
+        gpr.covariance_functions.SquaredExponential(periods=[2.0, np.inf]),
+        gpr.covariance_functions.Matern(3, periods=[np.inf, 1.5]),
+        gpr.covariance_functions.RationalQuadraticARD(periods=[2.0, 1.5]),
     ],
 )
 def test_bundled_covariances_are_zero_copy_eligible(covariance):
@@ -119,6 +122,8 @@ def test_bundled_covariances_are_zero_copy_eligible(covariance):
             gp.posteriors[sample].hyp[:cov_N], gp.X, _X_STAR
         )
         assert np.array_equal(matrix, expected)
+        # A fresh matrix, which owns its memory.
+        assert matrix.base is None
 
 
 def test_zero_copy_path_returns_the_matrix_used_by_prediction(monkeypatch):
