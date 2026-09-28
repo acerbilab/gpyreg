@@ -1510,6 +1510,36 @@ def test_periodic_gp_predictions_repeat_with_the_period(make_covariance):
     assert np.max(np.abs(f_mu - (np.sin(x) + 0.5 * np.cos(2 * x)))) < 0.2
 
 
+@pytest.mark.parametrize(
+    "make_covariance",
+    [
+        gpr.covariance_functions.SquaredExponential,
+        gpr.covariance_functions.RationalQuadraticARD,
+    ],
+    ids=["SquaredExponential", "RQARD"],
+)
+def test_copy_and_pickle_keep_the_periods(make_covariance):
+    """A copy and a pickle of a GP with a periodic kernel keep its periods
+    and predict as it does. (A Matern kernel holds lambdas and cannot be
+    pickled, with or without periods.)"""
+    rng = np.random.default_rng(0)
+    X = rng.uniform(0.0, 4.0, size=(15, 2))
+    y = np.sin(np.pi / 2 * X[:, :1]) + X[:, 1:] ** 2
+    gp = gpr.GP(
+        D=2,
+        covariance=make_covariance([4.0, np.inf]),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.fit(X=X, y=y, options={"n_samples": 0}, rng=np.random.default_rng(1))
+    x = rng.uniform(0.0, 4.0, size=(5, 2))
+    f_mu, f_s2 = gp.predict(x)
+    for other in (copy.deepcopy(gp), pickle.loads(pickle.dumps(gp))):
+        np.testing.assert_array_equal(other.covariance.periods, [4.0, np.inf])
+        o_mu, o_s2 = other.predict(x)
+        assert np.array_equal(o_mu, f_mu) and np.array_equal(o_s2, f_s2)
+
+
 def test_predict_lpd():
     D = 3
     gp = gpr.GP(

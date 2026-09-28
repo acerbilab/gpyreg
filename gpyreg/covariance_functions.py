@@ -140,7 +140,9 @@ def _scaled_sq_diff(x, x_star, scale, period):
     # delta in [p / 2, p].
     delta = np.fmod(np.abs(x[:, None] - x_star[None, :]), period)
     delta = np.minimum(delta, period - delta)
-    return (scale * period / np.pi * np.sin(np.pi / period * delta)) ** 2
+    # The chord first, which is at most delta: scale * period alone can
+    # overflow for a large period, and its product with a zero sine is NaN
+    return (scale * (period / np.pi * np.sin(np.pi / period * delta))) ** 2
 
 
 def _scaled_sq_dist(X, X_star, scale, periods):

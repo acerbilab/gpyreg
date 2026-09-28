@@ -447,6 +447,22 @@ def test_large_periods_approach_the_kernel_without_periods(make_kernel):
 
 
 @_each_ard_kernel
+def test_huge_periods_stay_finite(make_kernel):
+    """A period near the largest float, far beyond any length scale, gives
+    finite values, the kernel's variance on the diagonal among them: the
+    chord is formed before it is scaled, so that no product of the period
+    and the scale overflows."""
+    rng = np.random.default_rng(6)
+    X = rng.normal(size=(5, 2))
+    kernel = make_kernel([1e308, np.inf])
+    hyp = _hyperparameters(kernel, 2, D=2)
+    hyp[0] = -5.0  # a length scale of e^-5
+    K, dK = kernel.compute(hyp, X, compute_grad=True)
+    assert np.all(np.isfinite(K)) and np.all(np.isfinite(dK))
+    assert np.allclose(np.diag(K), np.exp(2 * hyp[2]), rtol=1e-12, atol=0)
+
+
+@_each_ard_kernel
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_periodic_kernel_gradient(make_kernel, seed):
     """The analytic gradient matches a numerical one, with periodic and
