@@ -87,12 +87,12 @@ environment it runs in, may have to change.
   from them, take the standard normal's functions from ``scipy.special``
   rather than through ``scipy.stats``. With one BLAS thread, at 3 to 10
   dimensions and 50 to 150 inputs, the kernels with their gradient take
-  40 to 65% less time, the squared exponential and rational-quadratic
-  kernels between the inputs and 2048 test points 50 to 65% less (14% at
-  the smallest size, for the rational-quadratic kernel), ``predict`` at
-  2048 test points 30 to 35% less, ``fit`` 13 to 25% less, and
-  :meth:`gpyreg.GP.set_bounds`, which computes those masses, a fifteenth
-  to a twentieth of the time. Every value is unchanged, to the last bit,
+  35 to 55% less time, the squared exponential kernel between the inputs
+  and 2048 test points 55 to 70% less and the rational-quadratic one 40
+  to 50% less (12% at the smallest size), ``predict`` at 2048 test points
+  15 to 35% less, ``fit`` 15 to 30% less, and
+  :meth:`gpyreg.GP.set_bounds`, which computes those masses, a twelfth to
+  a sixteenth of the time. Every value is unchanged, to the last bit,
   for inputs of any floating type, infinite coordinates included.
 * gpyreg imports the modules of SciPy that it uses, ``scipy.stats`` among
   them. With SciPy older than 1.9, which loads a module only where it is
