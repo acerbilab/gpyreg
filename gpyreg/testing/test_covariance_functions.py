@@ -11,6 +11,7 @@ from gpyreg.covariance_functions import (
     Matern,
     RationalQuadraticARD,
     SquaredExponential,
+    _scaled_sq_dist,
 )
 
 
@@ -497,6 +498,33 @@ def test_periodic_kernel_diagonal_and_cross_covariance(make_kernel):
     )
     assert np.allclose(
         kernel.compute(hyp, X, X_star), K[0:N, N:], rtol=1e-14, atol=0.0
+    )
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_periodic_distance_is_the_squared_chord(seed):
+    """Along a periodic dimension the scaled squared distance is the
+    squared chord ``(p / pi)**2 * sin(pi * delta / p)**2`` of the difference
+    ``delta``, for inputs spread over several periods, and the squared
+    difference along the other dimensions."""
+    rng = np.random.default_rng(seed)
+    X = rng.uniform(-4.0, 4.0, size=(20, 3))
+    X_star = rng.uniform(-4.0, 4.0, size=(7, 3))
+    scale = np.exp(rng.normal(size=3))
+
+    delta = X[:, None, :] - X_star[None, :, :]
+    terms = (scale * delta) ** 2
+    for d in (0, 2):
+        p = _PERIODS[d]
+        chord = p / np.pi * np.sin(np.pi / p * delta[:, :, d])
+        terms[:, :, d] = (scale[d] * chord) ** 2
+    expected = np.sum(terms, axis=2)
+
+    assert np.allclose(
+        _scaled_sq_dist(X, X_star, scale, _PERIODS),
+        expected,
+        rtol=1e-12,
+        atol=1e-14 * np.max(expected),
     )
 
 

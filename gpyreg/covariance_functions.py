@@ -99,7 +99,81 @@ def _check_periods_match(periods, D):
         )
 
 
-def _scaled_sq_diff(x, x_star, scale, period):
+def _on_circle(x, period):
+    """Return the coordinates along a periodic dimension mapped onto a
+    circle of circumference ``period``.
+
+    The squared Euclidean distance between two mapped points is the squared
+    chord ``(p / pi)**2 * sin(pi * delta / p)**2`` of the difference
+    ``delta`` of their coordinates, for a period ``p``. Each coordinate is
+    first wrapped, exactly, into ``(-p / 2, p / 2]``: ``fmod`` is exact,
+    and so is the shift by one period that follows it, of a value at least
+    half a period from zero (Sterbenz's lemma). Coordinates a whole number
+    of periods apart are therefore mapped to the same point, whose squared
+    distance is exactly zero. Where the half angle ``phi = pi * x / p`` is
+    small, the second coordinate is ``x`` to second order, with its
+    relative precision, and the first one is of order ``x**2 / p``, so
+    that a period far beyond the spread of the inputs leaves their
+    differences as they are.
+
+    Parameters
+    ----------
+    x : ndarray, shape (N,)
+        The coordinates along the dimension.
+    period : float
+        The finite period of the dimension.
+
+    Returns
+    -------
+    circle : ndarray, shape (N, 2)
+        ``(p / pi) * (sin(phi)**2, sin(phi) * cos(phi))``, the point of
+        angle ``2 * phi`` on the circle of radius ``p / (2 * pi)``, shifted
+        so that the angle zero lies at the origin.
+    """
+    half = period / 2
+    r = np.fmod(x, period)
+    r = np.where(r > half, r - period, r)
+    r = np.where(r <= -half, r + period, r)
+    phi = np.pi / period * r
+    s = np.sin(phi)
+    # The radius first, then the unit-circle terms: p / pi alone stays
+    # finite for any finite period, where its product with a scale could
+    # overflow.
+    radius = period / np.pi
+    return np.stack((radius * (s * s), radius * (s * np.cos(phi))), axis=1)
+
+
+def _scaled_coordinates(X, scale, periods):
+    """Return coordinates whose squared Euclidean distances are the scaled
+    squared distances of an ARD kernel with periods.
+
+    A dimension without a period gives its scaled coordinate, a periodic
+    one the two scaled coordinates of :func:`_on_circle`.
+
+    Parameters
+    ----------
+    X : ndarray, shape (N, D)
+        The points.
+    scale : ndarray, shape (D,)
+        The scale of each dimension.
+    periods : ndarray, shape (D,)
+        The period of each dimension, or ``np.inf``.
+
+    Returns
+    -------
+    coordinates : ndarray, shape (N, D + P)
+        The coordinates of the dimensions without a period, in their order,
+        followed by those of the ``P`` periodic ones.
+    """
+    periodic = np.isfinite(periods)
+    other = np.logical_not(periodic)
+    columns = [X[:, other] * scale[other]]
+    for d in np.flatnonzero(periodic):
+        columns.append(scale[d] * _on_circle(X[:, d], periods[d]))
+    return np.hstack(columns)
+
+
+def _scaled_sq_diff(x, scale, period):
     """Return the scaled squared differences along one input dimension.
 
     The term of one dimension in the squared distance of an ARD kernel is
@@ -107,17 +181,13 @@ def _scaled_sq_diff(x, x_star, scale, period):
     coordinates. Along a dimension with a finite period ``p``, ``delta**2``
     is replaced by the squared chord ``(p / pi)**2 * sin(pi * delta / p)**2``,
     the squared distance between the two points mapped onto a circle of
-    circumference ``p``. The difference is first wrapped, exactly, to the
-    distance along the circle, in ``[0, p / 2]``, so that the sine keeps
-    its relative precision and is zero at every multiple of the period.
+    circumference ``p`` by :func:`_on_circle`, zero at every multiple of the
+    period.
 
     Parameters
     ----------
     x : ndarray, shape (N,)
-        The coordinates of the first set of points.
-    x_star : ndarray, shape (M,), optional
-        The coordinates of the second set of points; ``x`` again when
-        ``None``.
+        The coordinates of the points.
     scale : float
         The scale of the dimension, the inverse of its length scale times
         any factor of the kernel.
@@ -126,23 +196,15 @@ def _scaled_sq_diff(x, x_star, scale, period):
 
     Returns
     -------
-    sq_diff : ndarray, shape (N, M)
+    sq_diff : ndarray, shape (N, N)
         The scaled squared differences, exactly symmetric with zeros on
-        the diagonal where ``x_star`` is ``None``.
+        the diagonal.
     """
     if not np.isfinite(period):
         a = np.reshape(scale * x, (-1, 1))
-        b = a if x_star is None else np.reshape(scale * x_star, (-1, 1))
-        return cdist(a, b, "sqeuclidean")
-    if x_star is None:
-        x_star = x
-    # |a - b| is exactly |b - a|, fmod is exact, and so is p - delta for
-    # delta in [p / 2, p].
-    delta = np.fmod(np.abs(x[:, None] - x_star[None, :]), period)
-    delta = np.minimum(delta, period - delta)
-    # The chord first, which is at most delta: scale * period alone can
-    # overflow for a large period, and its product with a zero sine is NaN
-    return (scale * (period / np.pi * np.sin(np.pi / period * delta))) ** 2
+    else:
+        a = scale * _on_circle(x, period)
+    return cdist(a, a, "sqeuclidean")
 
 
 def _scaled_sq_dist(X, X_star, scale, periods):
@@ -151,7 +213,9 @@ def _scaled_sq_dist(X, X_star, scale, periods):
     The distance is the sum over the input dimensions of
     ``scale[d]**2 * delta[d]**2``, with the squared chord of
     :func:`_scaled_sq_diff` in place of ``delta[d]**2`` along a dimension
-    with a finite period.
+    with a finite period. It is computed as one squared Euclidean distance
+    between the points' :func:`_scaled_coordinates`, whose trigonometric
+    functions take one evaluation per point and periodic dimension.
 
     Parameters
     ----------
@@ -170,23 +234,9 @@ def _scaled_sq_dist(X, X_star, scale, periods):
         The scaled squared distances, exactly symmetric with zeros on the
         diagonal where ``X_star`` is ``None``.
     """
-    periodic = np.isfinite(periods)
-    other = np.logical_not(periodic)
-    M = X.shape[0] if X_star is None else X_star.shape[0]
-    if np.any(other):
-        a = X[:, other] * scale[other]
-        b = a if X_star is None else X_star[:, other] * scale[other]
-        sq_dist = cdist(a, b, "sqeuclidean")
-    else:
-        sq_dist = np.zeros((X.shape[0], M))
-    for d in np.flatnonzero(periodic):
-        sq_dist += _scaled_sq_diff(
-            X[:, d],
-            None if X_star is None else X_star[:, d],
-            scale[d],
-            periods[d],
-        )
-    return sq_dist
+    a = _scaled_coordinates(X, scale, periods)
+    b = a if X_star is None else _scaled_coordinates(X_star, scale, periods)
+    return cdist(a, b, "sqeuclidean")
 
 
 class AbstractKernel(ABC):
@@ -415,7 +465,7 @@ class SquaredExponential(AbstractKernel):
                 # Gradient of cov length scales
                 if self.periods is not None:
                     dK[i, :, :] = K * _scaled_sq_diff(
-                        X[:, i], None, 1.0 / ell[i], self.periods[i]
+                        X[:, i], 1.0 / ell[i], self.periods[i]
                     )
                 else:
                     dK[i, :, :] = K * squareform(
@@ -553,7 +603,6 @@ class Matern(AbstractKernel):
                 if self.periods is not None:
                     Ki = _scaled_sq_diff(
                         X[:, i],
-                        None,
                         np.sqrt(self.degree) / ell[i],
                         self.periods[i],
                     )
@@ -684,7 +733,7 @@ class RationalQuadraticARD(AbstractKernel):
             for i in range(0, D):
                 if self.periods is not None:
                     Ki = _scaled_sq_diff(
-                        X[:, i], None, 1.0 / ell[i], self.periods[i]
+                        X[:, i], 1.0 / ell[i], self.periods[i]
                     )
                 else:
                     Ki = squareform(
