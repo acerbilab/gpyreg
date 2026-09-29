@@ -721,11 +721,22 @@ def _same(value, expected):
     )
 
 
+# NumPy's long double is double itself where it takes 8 bytes (Windows,
+# macOS on arm64): there a long-double input adds nothing to a float64 one,
+# and on Windows SciPy's distance functions, which the kernels call, corrupt
+# the heap on it (SciPy 1.17.1).
+_LONG_DOUBLE_IS_WIDER = (
+    np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
+)
+
+
 @_each_ard_kernel
 @pytest.mark.parametrize("periodic", [False, True])
 @pytest.mark.parametrize("unit_shape", [False, True])
 @pytest.mark.parametrize(
-    "inputs", ["float64", "float32", "longdouble", "infinite"]
+    "inputs",
+    ["float64", "float32", "infinite"]
+    + (["longdouble"] if _LONG_DOUBLE_IS_WIDER else []),
 )
 def test_kernel_equals_its_direct_formulas(
     make_kernel, periodic, unit_shape, inputs
@@ -738,9 +749,10 @@ def test_kernel_equals_its_direct_formulas(
     The inputs include a repeated point, a shared coordinate and a
     Fortran-ordered array; a rational-quadratic shape of exactly 1 makes
     NumPy take ``M ** -1`` as a reciprocal. Inputs of another type than
-    float64, whose scaled coordinates NumPy 1.x keeps in that type, and an
-    infinite coordinate, which makes the differences NaN on the diagonal
-    that ``squareform`` sets to zero, give the formulas' values too."""
+    float64 (float32, whose scaled coordinates NumPy 1.x keeps in float32,
+    and long double where it is wider than double), and an infinite
+    coordinate, which makes the differences NaN on the diagonal that
+    ``squareform`` sets to zero, give the formulas' values too."""
     kernel = make_kernel(_PERIODS if periodic else None)
     rng = np.random.default_rng(17)
     X = np.asfortranarray(rng.normal(size=(40, 3)))
