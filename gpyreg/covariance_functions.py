@@ -126,9 +126,10 @@ def _on_circle(x, period):
     Returns
     -------
     circle : ndarray, shape (N, 2)
-        ``(p / pi) * (sin(phi)**2, sin(phi) * cos(phi))``, the point of
-        angle ``2 * phi`` on the circle of radius ``p / (2 * pi)``, shifted
-        so that the angle zero lies at the origin.
+        ``R * (1 - cos(2 * phi), sin(2 * phi))`` with ``R = p / (2 * pi)``,
+        computed as ``(p / pi) * (sin(phi)**2, sin(phi) * cos(phi))``: a
+        point of the circle of radius ``R`` through the origin, at the
+        origin for the angle zero.
     """
     half = period / 2
     r = np.fmod(x, period)
@@ -136,9 +137,10 @@ def _on_circle(x, period):
     r = np.where(r <= -half, r + period, r)
     phi = np.pi / period * r
     s = np.sin(phi)
-    # The radius first, then the unit-circle terms: p / pi alone stays
-    # finite for any finite period, where its product with a scale could
-    # overflow.
+    # The radius multiplies the unit-circle terms here, and the caller's
+    # scale multiplies the result: p / pi stays finite for any finite
+    # period, where the product of p and a scale could overflow and give
+    # NaN against a zero sine.
     radius = period / np.pi
     return np.stack((radius * (s * s), radius * (s * np.cos(phi))), axis=1)
 
