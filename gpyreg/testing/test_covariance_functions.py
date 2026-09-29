@@ -1,3 +1,7 @@
+import copy
+import pickle
+
+import numdifftools as nd
 import numpy as np
 import pytest
 from scipy.spatial.distance import pdist, squareform
@@ -315,3 +319,267 @@ def test_kernel_refuses_a_gradient_of_the_diagonal(kernel):
     with pytest.raises(ValueError) as execinfo:
         kernel.compute(hyp, X, compute_diag=True, compute_grad=True)
     assert "cannot both be True" in execinfo.value.args[0]
+
+
+_ARD_KERNELS = {
+    "SquaredExponential": lambda periods: SquaredExponential(periods=periods),
+    "Matern1": lambda periods: Matern(1, periods=periods),
+    "Matern3": lambda periods: Matern(3, periods=periods),
+    "Matern5": lambda periods: Matern(5, periods=periods),
+    "RationalQuadraticARD": lambda periods: RationalQuadraticARD(
+        periods=periods
+    ),
+}
+
+_each_ard_kernel = pytest.mark.parametrize(
+    "make_kernel", list(_ARD_KERNELS.values()), ids=list(_ARD_KERNELS)
+)
+
+# Two periodic dimensions around a non-periodic one. The periods and the
+# first inputs are exact in binary: the second input lies exactly one
+# period from the first along each periodic dimension and shares its other
+# coordinate, and the fourth lies one period from the third along the
+# first dimension only.
+_PERIODS = np.array([1.5, np.inf, 0.75])
+
+
+def _periodic_inputs(seed, N=12):
+    rng = np.random.default_rng(seed)
+    X = rng.uniform(-1.0, 1.0, size=(N, 3))
+    X[0] = [0.25, 0.5, -0.125]
+    X[1] = [1.75, 0.5, -0.875]
+    X[2] = [-0.5, 0.25, 0.375]
+    X[3, 0] = 1.0
+    return X
+
+
+def _hyperparameters(kernel, seed, D=3):
+    rng = np.random.default_rng(seed)
+    return rng.normal(scale=0.5, size=kernel.hyperparameter_count(D))
+
+
+@_each_ard_kernel
+@pytest.mark.parametrize("d", [0, 2])
+@pytest.mark.parametrize("k", [1, -2, 5])
+def test_periodic_kernel_repeats_with_the_period(make_kernel, d, k):
+    """Shifting one set of inputs by a whole number of periods along a
+    periodic dimension leaves the kernel as it is."""
+    kernel = make_kernel(_PERIODS)
+    X = _periodic_inputs(0)
+    hyp = _hyperparameters(kernel, 1)
+    X_shifted = X.copy()
+    X_shifted[:, d] += k * _PERIODS[d]
+
+    K = kernel.compute(hyp, X, X)
+
+    assert np.allclose(
+        kernel.compute(hyp, X, X_shifted), K, rtol=1e-12, atol=1e-14
+    )
+
+
+@_each_ard_kernel
+def test_inputs_a_period_apart_are_the_same_input(make_kernel):
+    """Two inputs a whole number of periods apart along every periodic
+    dimension, and equal along the others, have the covariance of an input
+    with itself, and the gradient of the length scales is zero there."""
+    kernel = make_kernel(_PERIODS)
+    X = _periodic_inputs(1)
+    hyp = _hyperparameters(kernel, 2)
+
+    K, dK = kernel.compute(hyp, X, compute_grad=True)
+
+    assert K[0, 1] == K[0, 0]
+    assert np.all(dK[0, 1, 0:3] == 0.0)
+    assert dK[2, 3, 0] == 0.0
+
+
+@_each_ard_kernel
+def test_infinite_periods_give_the_kernel_without_periods(make_kernel):
+    """Periods that are all infinite leave no dimension periodic: the
+    kernel stores none, and computes what the kernel without periods
+    computes, to the last bit."""
+    kernel = make_kernel(np.full(3, np.inf))
+    reference = make_kernel(None)
+    X = _periodic_inputs(2)
+    X_star = np.random.default_rng(3).normal(size=(5, 3))
+    hyp = _hyperparameters(kernel, 4)
+
+    assert kernel.periods is None
+    K, dK = kernel.compute(hyp, X, compute_grad=True)
+    K_ref, dK_ref = reference.compute(hyp, X, compute_grad=True)
+    assert np.array_equal(K, K_ref)
+    assert np.array_equal(dK, dK_ref)
+    assert np.array_equal(
+        kernel.compute(hyp, X, X_star), reference.compute(hyp, X, X_star)
+    )
+    assert np.array_equal(
+        kernel.compute(hyp, X, compute_diag=True),
+        reference.compute(hyp, X, compute_diag=True),
+    )
+
+
+@_each_ard_kernel
+def test_large_periods_approach_the_kernel_without_periods(make_kernel):
+    """The squared chord tends to the squared difference as the period
+    grows: with periods a million times the spread of the inputs, the
+    kernel and its gradient are those without periods to about 1e-12."""
+    rng = np.random.default_rng(5)
+    X = rng.normal(size=(15, 3))
+    X_star = rng.normal(size=(6, 3))
+    spread = np.ptp(np.vstack((X, X_star)), axis=0)
+    kernel = make_kernel(1e6 * spread)
+    reference = make_kernel(None)
+    hyp = _hyperparameters(kernel, 6)
+
+    K, dK = kernel.compute(hyp, X, compute_grad=True)
+    K_ref, dK_ref = reference.compute(hyp, X, compute_grad=True)
+
+    assert np.allclose(K, K_ref, rtol=1e-9, atol=0.0)
+    assert np.allclose(
+        dK, dK_ref, rtol=1e-9, atol=1e-12 * np.max(np.abs(dK_ref))
+    )
+    assert np.allclose(
+        kernel.compute(hyp, X, X_star),
+        reference.compute(hyp, X, X_star),
+        rtol=1e-9,
+        atol=0.0,
+    )
+
+
+@_each_ard_kernel
+def test_huge_periods_stay_finite(make_kernel):
+    """A period near the largest float, far beyond any length scale, gives
+    finite values, the kernel's variance on the diagonal among them: the
+    chord is formed before it is scaled, so that no product of the period
+    and the scale overflows."""
+    rng = np.random.default_rng(6)
+    X = rng.normal(size=(5, 2))
+    kernel = make_kernel([1e308, np.inf])
+    hyp = _hyperparameters(kernel, 2, D=2)
+    hyp[0] = -5.0  # a length scale of e^-5
+    K, dK = kernel.compute(hyp, X, compute_grad=True)
+    assert np.all(np.isfinite(K)) and np.all(np.isfinite(dK))
+    assert np.allclose(np.diag(K), np.exp(2 * hyp[2]), rtol=1e-12, atol=0)
+
+
+@_each_ard_kernel
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_periodic_kernel_gradient(make_kernel, seed):
+    """The analytic gradient matches a numerical one, with periodic and
+    non-periodic dimensions, at inputs that include a pair exactly one
+    period apart, where Matern's d=1 factor is infinite."""
+    kernel = make_kernel(_PERIODS)
+    X = _periodic_inputs(seed)
+    hyp = _hyperparameters(kernel, seed + 10)
+
+    _, dK = kernel.compute(hyp, X, compute_grad=True)
+    numerical = nd.Jacobian(lambda h: kernel.compute(h, X).ravel())(hyp)
+
+    assert np.all(np.isfinite(dK))
+    assert np.allclose(dK, numerical.reshape(dK.shape), rtol=1e-6, atol=1e-8)
+
+
+@_each_ard_kernel
+def test_periodic_kernel_diagonal_and_cross_covariance(make_kernel):
+    """The diagonal and the cross-covariance are the corresponding parts
+    of the full covariance matrix, which is exactly symmetric."""
+    kernel = make_kernel(_PERIODS)
+    X = _periodic_inputs(7)
+    X_star = np.random.default_rng(8).uniform(-3.0, 3.0, size=(5, 3))
+    hyp = _hyperparameters(kernel, 9)
+    N = X.shape[0]
+
+    K = kernel.compute(hyp, np.vstack((X, X_star)))
+
+    assert np.array_equal(K, K.T)
+    assert np.array_equal(
+        kernel.compute(hyp, X, compute_diag=True), np.diag(K)[0:N, None]
+    )
+    assert np.allclose(
+        kernel.compute(hyp, X, X_star), K[0:N, N:], rtol=1e-14, atol=0.0
+    )
+
+
+@_each_ard_kernel
+@pytest.mark.parametrize(
+    "periods, message",
+    [
+        ([1.0, np.nan], "positive number"),
+        ([1.0, 0.0], "positive number"),
+        ([-1.0, np.inf], "positive number"),
+        ([1.0, -np.inf], "positive number"),
+        ([[1.0, 2.0]], "one-dimensional"),
+        (2.0, "one-dimensional"),
+        ([], "one-dimensional"),
+    ],
+)
+def test_kernel_refuses_invalid_periods(make_kernel, periods, message):
+    with pytest.raises(ValueError) as execinfo:
+        make_kernel(periods)
+    assert message in execinfo.value.args[0]
+
+
+@_each_ard_kernel
+def test_kernel_refuses_periods_of_another_dimension(make_kernel):
+    kernel = make_kernel([1.0, np.inf])
+    X = np.zeros((4, 3))
+    hyp = np.zeros(kernel.hyperparameter_count(3))
+
+    with pytest.raises(ValueError) as execinfo:
+        kernel.compute(hyp, X)
+    assert "has 2 periods" in execinfo.value.args[0]
+
+
+@_each_ard_kernel
+def test_periods_are_fixed_constants(make_kernel):
+    """The periods are stored as a float copy and add no hyperparameter."""
+    periods = np.array([3, 1])
+    kernel = make_kernel(periods)
+    reference = make_kernel(None)
+    X = np.array([[0.0, 1.0], [2.0, -1.0]])
+    y = np.array([[0.0], [1.0]])
+
+    periods[0] = 7
+    assert kernel.periods.dtype == float
+    assert np.array_equal(kernel.periods, [3.0, 1.0])
+    assert kernel.hyperparameter_count(2) == reference.hyperparameter_count(2)
+    assert kernel.hyperparameter_info(2) == reference.hyperparameter_info(2)
+    bounds, bounds_ref = (
+        kernel.get_bounds_info(X, y),
+        reference.get_bounds_info(X, y),
+    )
+    for key, value in bounds_ref.items():
+        assert np.array_equal(bounds[key], value)
+
+
+@_each_ard_kernel
+def test_kernel_without_a_periods_attribute_is_not_periodic(make_kernel):
+    """A kernel unpickled from gpyreg 1.3.3 or earlier has no ``periods``
+    of its own, and takes the class's ``None``."""
+    kernel = make_kernel(None)
+    del kernel.periods
+    reference = make_kernel(None)
+    X = _periodic_inputs(11)
+    hyp = _hyperparameters(kernel, 12)
+
+    assert kernel.periods is None
+    K, dK = kernel.compute(hyp, X, compute_grad=True)
+    K_ref, dK_ref = reference.compute(hyp, X, compute_grad=True)
+    assert np.array_equal(K, K_ref)
+    assert np.array_equal(dK, dK_ref)
+
+
+@_each_ard_kernel
+def test_a_copy_and_a_pickle_keep_the_periods(make_kernel):
+    """A copy of a periodic kernel keeps its periods, and so does a pickle
+    of the kernels that pickle (Matern's functions of its degree do not)."""
+    kernel = make_kernel(_PERIODS)
+    X = _periodic_inputs(13)
+    hyp = _hyperparameters(kernel, 14)
+    copies = [copy.deepcopy(kernel)]
+    if not isinstance(kernel, Matern):
+        copies.append(pickle.loads(pickle.dumps(kernel)))
+
+    for copied in copies:
+        assert np.array_equal(copied.periods, _PERIODS)
+        assert np.array_equal(copied.compute(hyp, X), kernel.compute(hyp, X))

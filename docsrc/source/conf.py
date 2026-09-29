@@ -72,7 +72,12 @@ def linkcode_resolve(domain, info):
         obj = getattr(obj, part)
 
     # unwrap to get rid of decorators.
-    file = Path(inspect.getsourcefile(inspect.unwrap(obj)))
+    try:
+        file = Path(inspect.getsourcefile(inspect.unwrap(obj)))
+    except TypeError:
+        # A data attribute, such as a class attribute holding None, has no
+        # source file of its own: link to its module's.
+        file = Path(inspect.getsourcefile(sys.modules[info["module"]]))
     filename = file.name
     return "https://github.com/acerbilab/gpyreg/tree/main/gpyreg/%s" % filename
 

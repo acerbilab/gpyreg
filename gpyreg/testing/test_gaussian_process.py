@@ -1440,6 +1440,106 @@ def test_quad_not_squared_exponential():
     )
 
 
+def test_quad_refuses_a_periodic_kernel():
+    """The Gaussian integrals of Bayesian quadrature assume the non-periodic
+    squared exponential kernel."""
+    D = 2
+    rng = np.random.default_rng(10)
+    X = rng.uniform(-2, 2, size=(12, D))
+    y = np.sin(X[:, 0:1]) + np.cos(X[:, 1:2])
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.SquaredExponential(
+            periods=[4.0, np.inf]
+        ),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.update(X_new=X, y_new=y, hyp=np.array([[0.0, 0.0, 0.0, -2.3, 0.0]]))
+
+    with pytest.raises(ValueError) as execinfo:
+        gp.quad(0.0, 1.0, compute_var=True)
+    assert "periodic kernel" in execinfo.value.args[0]
+
+
+def test_gp_refuses_periods_of_another_dimension():
+    with pytest.raises(ValueError) as execinfo:
+        gpr.GP(
+            D=3,
+            covariance=gpr.covariance_functions.Matern(3, periods=[1.0, 2.0]),
+            mean=gpr.mean_functions.ConstantMean(),
+            noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+        )
+    assert "has 2 periods" in execinfo.value.args[0]
+
+
+@pytest.mark.parametrize(
+    "make_covariance",
+    [
+        gpr.covariance_functions.SquaredExponential,
+        lambda periods: gpr.covariance_functions.Matern(1, periods),
+        lambda periods: gpr.covariance_functions.Matern(3, periods),
+        lambda periods: gpr.covariance_functions.Matern(5, periods),
+        gpr.covariance_functions.RationalQuadraticARD,
+    ],
+    ids=["SquaredExponential", "Matern1", "Matern3", "Matern5", "RQARD"],
+)
+def test_periodic_gp_predictions_repeat_with_the_period(make_covariance):
+    """A GP with a periodic kernel, fitted to periodic data, predicts the
+    same mean and variance at inputs whole periods apart, the two ends of a
+    period among them, and follows the function between its data."""
+    period = 2 * np.pi
+    rng = np.random.default_rng(0)
+    X = rng.uniform(0.0, period, size=(25, 1))
+    y = np.sin(X) + 0.5 * np.cos(2 * X) + 0.01 * rng.normal(size=(25, 1))
+    gp = gpr.GP(
+        D=1,
+        covariance=make_covariance([period]),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.fit(X=X, y=y, options={"n_samples": 0}, rng=np.random.default_rng(1))
+
+    x = np.linspace(0.0, period, 9)[:, None]
+    f_mu, f_s2 = gp.predict(x)
+    for shift in (period, -3 * period):
+        f_mu_shifted, f_s2_shifted = gp.predict(x + shift)
+        assert np.allclose(f_mu_shifted, f_mu, rtol=0.0, atol=1e-9)
+        assert np.allclose(f_s2_shifted, f_s2, rtol=1e-9, atol=1e-12)
+    assert np.isclose(f_mu[0, 0], f_mu[-1, 0], rtol=0.0, atol=1e-9)
+    assert np.max(np.abs(f_mu - (np.sin(x) + 0.5 * np.cos(2 * x)))) < 0.2
+
+
+@pytest.mark.parametrize(
+    "make_covariance",
+    [
+        gpr.covariance_functions.SquaredExponential,
+        gpr.covariance_functions.RationalQuadraticARD,
+    ],
+    ids=["SquaredExponential", "RQARD"],
+)
+def test_copy_and_pickle_keep_the_periods(make_covariance):
+    """A copy and a pickle of a GP with a periodic kernel keep its periods
+    and predict as it does. (A Matern kernel holds lambdas and cannot be
+    pickled, with or without periods.)"""
+    rng = np.random.default_rng(0)
+    X = rng.uniform(0.0, 4.0, size=(15, 2))
+    y = np.sin(np.pi / 2 * X[:, :1]) + X[:, 1:] ** 2
+    gp = gpr.GP(
+        D=2,
+        covariance=make_covariance([4.0, np.inf]),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    gp.fit(X=X, y=y, options={"n_samples": 0}, rng=np.random.default_rng(1))
+    x = rng.uniform(0.0, 4.0, size=(5, 2))
+    f_mu, f_s2 = gp.predict(x)
+    for other in (copy.deepcopy(gp), pickle.loads(pickle.dumps(gp))):
+        np.testing.assert_array_equal(other.covariance.periods, [4.0, np.inf])
+        o_mu, o_s2 = other.predict(x)
+        assert np.array_equal(o_mu, f_mu) and np.array_equal(o_s2, f_s2)
+
+
 def test_predict_lpd():
     D = 3
     gp = gpr.GP(
