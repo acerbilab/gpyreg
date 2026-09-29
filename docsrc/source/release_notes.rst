@@ -80,20 +80,20 @@ environment it runs in, may have to change.
   is periodic, and the squared exponential and rational-quadratic kernels
   compute their values the same way; :meth:`gpyreg.GP.predict` scales and
   squares its intermediate arrays in place; the objective of
-  :meth:`gpyreg.GP.fit` factorizes the
-  training covariance and solves its triangular systems by direct calls of
-  LAPACK, and sums its gradient in one array; and the masses of Gaussian
+  :meth:`gpyreg.GP.fit` solves its triangular systems by direct calls of
+  LAPACK and sums its gradient in one array; and the masses of Gaussian
   priors inside their bounds, and the starting points that ``fit`` draws
   from them, take the standard normal's functions from ``scipy.special``
   rather than through ``scipy.stats``. With one BLAS thread, at 3 to 10
-  dimensions and 50 to 150 inputs, the kernels with their gradient take
-  35 to 55% less time, the squared exponential kernel between the inputs
-  and 2048 test points 55 to 70% less and the rational-quadratic one 40
-  to 50% less (12% at the smallest size), ``predict`` at 2048 test points
-  15 to 35% less, ``fit`` 15 to 30% less, and
-  :meth:`gpyreg.GP.set_bounds`, which computes those masses, a twelfth to
-  a sixteenth of the time. Every value is unchanged, to the last bit,
-  for inputs of any floating type, infinite coordinates included.
+  dimensions and 50 to 150 inputs, with SciPy 1.17 and 1.18, the kernels
+  with their gradient take 35 to 55% less time, the squared exponential
+  kernel between the inputs and 2048 test points 55 to 65% less and the
+  rational-quadratic one 45 to 55% less (10 to 25% at the smallest size),
+  ``predict`` at 2048 test points 25 to 35% less (5 to 10% at 50 inputs),
+  ``fit`` 8 to 20% less, and :meth:`gpyreg.GP.set_bounds`, which computes
+  those masses, a fourteenth to a twentieth of the time. Every value is
+  unchanged, to the last bit, under any version of SciPy, for inputs of
+  any floating type, infinite coordinates included.
 * gpyreg imports the modules of SciPy that it uses, ``scipy.stats`` among
   them. With SciPy older than 1.9, which loads a module only where it is
   imported, the methods of :class:`gpyreg.GP` that use ``scipy.stats``,

@@ -1783,26 +1783,44 @@ def test_solve_triangular_matches_scipy(order, trans):
         _solve_triangular(np.zeros((3, 3)), np.ones((3, 1)))
 
 
-@pytest.mark.parametrize("order", ["C", "F"])
-def test_cholesky_matches_scipy(order):
-    """The direct LAPACK call is bit-identical to scipy's wrapper for both
-    memory layouts, and raises LinAlgError where scipy does."""
-    from gpyreg.gaussian_process import _cholesky
+@pytest.mark.parametrize("log_noise", [-1.0, -9.0])
+def test_training_factor_is_scipys_cholesky(log_noise):
+    """The factor of the training covariance is ``scipy.linalg.cholesky`` of
+    the matrix that the posterior factorizes, to the last bit, where the
+    first attempt succeeds: of ``K / sn2 + I`` in the high-noise
+    representation (``L``), and of ``K + sn2 I`` in the low-noise one
+    (``L_factor``). SciPy's upper factor is not LAPACK's upper
+    factorization in every version (from SciPy 1.18 it is the transpose of
+    the lower one), so gpyreg takes SciPy's rather than calling LAPACK
+    itself."""
+    rng = np.random.default_rng(3)
+    D, N = 3, 40
+    X = rng.normal(size=(N, D))
+    y = np.sin(np.sum(X, axis=1, keepdims=True))
+    gp = gpr.GP(
+        D=D,
+        covariance=gpr.covariance_functions.RationalQuadraticARD(),
+        mean=gpr.mean_functions.ConstantMean(),
+        noise=gpr.noise_functions.GaussianNoise(constant_add=True),
+    )
+    cov_N = gp.covariance.hyperparameter_count(D)
+    hyp = np.concatenate([np.full(D, -1.0), [0.0, 0.0], [log_noise, 0.0]])
+    gp.update(X_new=X, y_new=y, hyp=hyp[None, :])
+    posterior = gp.posteriors[0]
+    assert posterior.sn2_mult == 1
+    assert posterior.L_chol == (log_noise == -1.0)
 
-    rng = np.random.default_rng(1)
-    for N in (1, 5, 60, 200):
-        A = rng.standard_normal((N, N))
-        A = np.array(A @ A.T + 1e-3 * np.eye(N), order=order)
-        expected = scipy.linalg.cholesky(A, check_finite=False)
-        L = _cholesky(A)
-        assert np.array_equal(L, expected)
-        assert L.flags.f_contiguous == expected.flags.f_contiguous
-    A = np.ones((4, 4))
-    A[3, 3] = 0.5
-    with pytest.raises(scipy.linalg.LinAlgError):
-        scipy.linalg.cholesky(A, check_finite=False)
-    with pytest.raises(scipy.linalg.LinAlgError):
-        _cholesky(A)
+    K = gp.covariance.compute(hyp[0:cov_N], X)
+    sn2 = gp.noise.compute(hyp[cov_N : cov_N + 1], X, y, None)
+    if posterior.L_chol:
+        A = np.ascontiguousarray(K / sn2)
+        A.flat[:: N + 1] += 1.0
+        factor = posterior.L
+    else:
+        A = np.array(K, order="C")
+        A.flat[:: N + 1] += sn2
+        factor = posterior.L_factor
+    assert np.array_equal(factor, scipy.linalg.cholesky(A, check_finite=False))
 
 
 def test_standard_normal_functions_match_scipy_stats():
@@ -4183,24 +4201,14 @@ def test_a_fit_that_raises_leaves_the_gp_as_it_was(held, failure, monkeypatch):
         ),
     }[failure]
     if failure == "failed factorization":
-        # The training covariance is factorized by gpyreg's direct call of
-        # LAPACK, the other matrices by scipy's wrapper.
-        def refusing_nan(cholesky):
-            def cholesky_refusing_nan(a, *args, **kwargs):
-                if np.any(np.isnan(a)):
-                    raise scipy.linalg.LinAlgError("The matrix holds NaN.")
-                return cholesky(a, *args, **kwargs)
+        cholesky = scipy.linalg.cholesky
 
-            return cholesky_refusing_nan
+        def cholesky_refusing_nan(a, *args, **kwargs):
+            if np.any(np.isnan(a)):
+                raise scipy.linalg.LinAlgError("The matrix holds NaN.")
+            return cholesky(a, *args, **kwargs)
 
-        monkeypatch.setattr(
-            scipy.linalg, "cholesky", refusing_nan(scipy.linalg.cholesky)
-        )
-        monkeypatch.setattr(
-            gpr.gaussian_process,
-            "_cholesky",
-            refusing_nan(gpr.gaussian_process._cholesky),
-        )
+        monkeypatch.setattr(scipy.linalg, "cholesky", cholesky_refusing_nan)
     x_star = np.reshape(np.linspace(-1.5, 1.5, 7), (-1, 1))
     if held == "other data":
         prediction = gp.predict(x_star)
@@ -4403,28 +4411,18 @@ def test_an_update_that_raises_leaves_the_gp_as_it_was(failure, monkeypatch):
     posteriors = list(gp.posteriors)
     posterior_attributes = [dict(vars(p)) for p in posteriors]
 
+    cholesky = scipy.linalg.cholesky
     count = {"succeeded": 0}
 
-    # The training covariance is factorized by gpyreg's direct call of
-    # LAPACK, the other matrices by scipy's wrapper: both count, and fail
-    # alike.
-    def failing(cholesky):
-        def cholesky_failing(a, *args, **kwargs):
-            if np.shape(a)[0] >= rows:
-                if count["succeeded"] >= succeeding:
-                    raise scipy.linalg.LinAlgError("The planted failure.")
-                count["succeeded"] += 1
-            return cholesky(a, *args, **kwargs)
-
-        return cholesky_failing
+    def cholesky_failing(a, *args, **kwargs):
+        if np.shape(a)[0] >= rows:
+            if count["succeeded"] >= succeeding:
+                raise scipy.linalg.LinAlgError("The planted failure.")
+            count["succeeded"] += 1
+        return cholesky(a, *args, **kwargs)
 
     with monkeypatch.context() as patch:
-        patch.setattr(scipy.linalg, "cholesky", failing(scipy.linalg.cholesky))
-        patch.setattr(
-            gpr.gaussian_process,
-            "_cholesky",
-            failing(gpr.gaussian_process._cholesky),
-        )
+        patch.setattr(scipy.linalg, "cholesky", cholesky_failing)
         with pytest.raises(scipy.linalg.LinAlgError, match="Cholesky"):
             call(gp, x + 0.1, hyp[::-1] + 0.05)
     assert count["succeeded"] == succeeding

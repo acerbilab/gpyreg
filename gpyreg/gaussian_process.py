@@ -99,33 +99,6 @@ def _solve_triangular(a, b, trans=0, lower=False):
     raise ValueError(f"illegal value in {-info}-th argument of internal trtrs")
 
 
-def _cholesky(a):
-    """``scipy.linalg.cholesky(a, check_finite=False)``, the upper factor,
-    without scipy's Python layers.
-
-    Calls the same LAPACK routine (``?potrf``, with ``lower=False``,
-    ``overwrite_a=False`` and ``clean=True``) on the same array, so the
-    factor is bit-identical to scipy's, and raises the same
-    ``LinAlgError`` where the matrix is not positive definite; the per-call
-    cost drops by 3 to 11 us at sizes of 5 to 150 (one BLAS thread), which
-    matters where the factorization is one of thousands of small ones (the
-    objective of ``fit``, whose factorizations are retried with a larger
-    noise where they fail). ``a`` is a square, non-empty float array.
-    """
-    (potrf,) = sp.linalg.get_lapack_funcs(("potrf",), (a,))
-    c, info = potrf(a, lower=False, overwrite_a=False, clean=True)
-    if info > 0:
-        raise sp.linalg.LinAlgError(
-            f"{info}-th leading minor of the array is not positive definite"
-        )
-    if info < 0:
-        raise ValueError(
-            f"LAPACK reported an illegal value in {-info}-th argument "
-            'on entry to "POTRF".'
-        )
-    return c
-
-
 def _log_gaussian_mass(lower, upper, mu, sigma):
     """The log of the mass of the Gaussian of centre ``mu`` and scale
     ``sigma`` between ``lower`` and ``upper``, taken in log space, for a
@@ -3876,7 +3849,7 @@ class GP:
                         K / (sn2_div * sn2_mult), dtype=np.float64
                     )
                     A.flat[:: N + 1] += sn2_diag
-                    L = _cholesky(A)
+                    L = sp.linalg.cholesky(A, check_finite=False)
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
@@ -3889,7 +3862,7 @@ class GP:
                 try:
                     A = np.array(K, dtype=np.float64, order="C")
                     A.flat[:: N + 1] += sn2_mult * sn2_diag
-                    L = _cholesky(A)
+                    L = sp.linalg.cholesky(A, check_finite=False)
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
