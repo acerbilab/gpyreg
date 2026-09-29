@@ -3831,11 +3831,8 @@ class GP:
         # a copy gives the entries of `K / sl + diag(...)` exactly
         # (adding 0.0 off the diagonal leaves an entry unchanged)
         # without forming and adding an N x N identity on every
-        # evaluation. The copy is made C-contiguous, the layout the
-        # old sum with a C-ordered identity produced (the factorization
-        # scipy computes depends on the layout at rounding level).
-        # Use float64 so custom float32 kernels do not lose small
-        # diagonal noise that the old sum with an identity preserved.
+        # evaluation. The copy is float64, so that a float32 kernel
+        # does not lose a small diagonal noise.
         if L_chol:
             if np.isscalar(sn2):
                 sn2_div = sn2
