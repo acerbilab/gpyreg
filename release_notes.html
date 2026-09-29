@@ -506,6 +506,33 @@ gradient, the rational-quadratic kernel takes about a third less time at
 inputs, and the Matern kernels 15 to 40% less at those sizes, which
 speeds up <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> with them. Every value is unchanged, to
 the last bit.</p></li>
+<li><p>The ARD kernels (<a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.SquaredExponential" title="gpyreg.covariance_functions.SquaredExponential"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.SquaredExponential</span></code></a>,
+<a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.Matern" title="gpyreg.covariance_functions.Matern"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.Matern</span></code></a> and
+<a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD" title="gpyreg.covariance_functions.RationalQuadraticARD"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.RationalQuadraticARD</span></code></a>) compute their
+gradient without a new array for each intermediate result, with the
+squared differences of every dimension taken at once where no dimension
+is periodic, and the squared exponential and rational-quadratic kernels
+compute their values the same way; <a class="reference internal" href="gaussian_process.html#gpyreg.GP.predict" title="gpyreg.GP.predict"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.predict()</span></code></a> scales and
+squares its intermediate arrays in place; the objective of
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> factorizes the
+training covariance and solves its triangular systems by direct calls of
+LAPACK, and sums its gradient in one array; and the masses of Gaussian
+priors inside their bounds, and the starting points that <code class="docutils literal notranslate"><span class="pre">fit</span></code> draws
+from them, take the standard normal’s functions from <code class="docutils literal notranslate"><span class="pre">scipy.special</span></code>
+rather than through <code class="docutils literal notranslate"><span class="pre">scipy.stats</span></code>. With one BLAS thread, at 3 to 10
+dimensions and 50 to 150 inputs, the kernels with their gradient take
+35 to 55% less time, the squared exponential kernel between the inputs
+and 2048 test points 55 to 70% less and the rational-quadratic one 40
+to 50% less (12% at the smallest size), <code class="docutils literal notranslate"><span class="pre">predict</span></code> at 2048 test points
+15 to 35% less, <code class="docutils literal notranslate"><span class="pre">fit</span></code> 15 to 30% less, and
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_bounds" title="gpyreg.GP.set_bounds"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_bounds()</span></code></a>, which computes those masses, a twelfth to
+a sixteenth of the time. Every value is unchanged, to the last bit,
+for inputs of any floating type, infinite coordinates included.</p></li>
+<li><p>gpyreg imports the modules of SciPy that it uses, <code class="docutils literal notranslate"><span class="pre">scipy.stats</span></code> among
+them. With SciPy older than 1.9, which loads a module only where it is
+imported, the methods of <a class="reference internal" href="gaussian_process.html#gpyreg.GP" title="gpyreg.GP"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.GP</span></code></a> that use <code class="docutils literal notranslate"><span class="pre">scipy.stats</span></code>,
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> among them, and <code class="docutils literal notranslate"><span class="pre">gpyreg.f_min_fill</span></code> raised
+<code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> unless the caller had imported it.</p></li>
 <li><p>Installing gpyreg no longer installs pytest, pytest-rerunfailures and
 numdifftools, which only its tests use. The extra <code class="docutils literal notranslate"><span class="pre">test</span></code> installs them
 (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">&quot;gpyreg[test]&quot;</span></code>), and the extra <code class="docutils literal notranslate"><span class="pre">dev</span></code> includes them.
