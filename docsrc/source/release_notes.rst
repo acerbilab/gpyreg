@@ -76,10 +76,11 @@ environment it runs in, may have to change.
   :class:`gpyreg.covariance_functions.Matern` and
   :class:`gpyreg.covariance_functions.RationalQuadraticARD`) compute their
   gradient without a new array for each intermediate result, with the
-  squared differences of every dimension taken at once, and the squared
-  exponential and rational-quadratic kernels compute their values the same
-  way; :meth:`gpyreg.GP.predict` scales and squares its intermediate
-  arrays in place; the objective of :meth:`gpyreg.GP.fit` factorizes the
+  squared differences of every dimension taken at once where no dimension
+  is periodic, and the squared exponential and rational-quadratic kernels
+  compute their values the same way; :meth:`gpyreg.GP.predict` scales and
+  squares its intermediate arrays in place; the objective of
+  :meth:`gpyreg.GP.fit` factorizes the
   training covariance and solves its triangular systems by direct calls of
   LAPACK, and sums its gradient in one array; and the masses of Gaussian
   priors inside their bounds, and the starting points that ``fit`` draws
@@ -91,7 +92,8 @@ environment it runs in, may have to change.
   the smallest size, for the rational-quadratic kernel), ``predict`` at
   2048 test points 30 to 35% less, ``fit`` 13 to 25% less, and
   :meth:`gpyreg.GP.set_bounds`, which computes those masses, a fifteenth
-  to a twentieth of the time. Every value is unchanged, to the last bit.
+  to a twentieth of the time. Every value is unchanged, to the last bit,
+  for inputs of any floating type, infinite coordinates included.
 * Installing gpyreg no longer installs pytest, pytest-rerunfailures and
   numdifftools, which only its tests use. The extra ``test`` installs them
   (``pip install "gpyreg[test]"``), and the extra ``dev`` includes them.

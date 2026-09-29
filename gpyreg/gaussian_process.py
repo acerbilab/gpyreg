@@ -101,10 +101,10 @@ def _cholesky(a):
     ``overwrite_a=False`` and ``clean=True``) on the same array, so the
     factor is bit-identical to scipy's, and raises the same
     ``LinAlgError`` where the matrix is not positive definite; the per-call
-    cost drops by about 13 us, which matters where the factorization is
-    one of thousands of small ones (the objective of ``fit``, whose
-    factorizations are retried with a larger noise where they fail). ``a``
-    is a square, non-empty float array.
+    cost drops by 3 to 11 us at sizes of 5 to 150 (one BLAS thread), which
+    matters where the factorization is one of thousands of small ones (the
+    objective of ``fit``, whose factorizations are retried with a larger
+    noise where they fail). ``a`` is a square, non-empty float array.
     """
     (potrf,) = sp.linalg.get_lapack_funcs(("potrf",), (a,))
     c, info = potrf(a, lower=False, overwrite_a=False, clean=True)
