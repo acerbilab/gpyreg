@@ -1,7 +1,7 @@
 Release notes
 =============
 
-1.3.4 (unreleased)
+1.4.0 (unreleased)
 ------------------
 
 A point marked **Upgrading** says what a script written for 1.3.3, or the
