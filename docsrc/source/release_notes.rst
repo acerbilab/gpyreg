@@ -94,6 +94,11 @@ environment it runs in, may have to change.
   :meth:`gpyreg.GP.set_bounds`, which computes those masses, a fifteenth
   to a twentieth of the time. Every value is unchanged, to the last bit,
   for inputs of any floating type, infinite coordinates included.
+* gpyreg imports the modules of SciPy that it uses, ``scipy.stats`` among
+  them. With SciPy older than 1.9, which loads a module only where it is
+  imported, the methods of :class:`gpyreg.GP` that use ``scipy.stats``,
+  :meth:`gpyreg.GP.fit` among them, and ``gpyreg.f_min_fill`` raised
+  ``AttributeError`` unless the caller had imported it.
 * Installing gpyreg no longer installs pytest, pytest-rerunfailures and
   numdifftools, which only its tests use. The extra ``test`` installs them
   (``pip install "gpyreg[test]"``), and the extra ``dev`` includes them.

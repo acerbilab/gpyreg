@@ -7,6 +7,10 @@ import warnings
 import numpy as np
 import scipy as sp
 
+# SciPy before 1.9 loads a submodule only when it is imported.
+import scipy.special  # nopycln: import
+import scipy.stats  # nopycln: import
+
 from gpyreg.rng import resolve_rng
 
 

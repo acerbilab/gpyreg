@@ -11,6 +11,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 
+# SciPy before 1.9 loads a submodule only when it is imported.
+import scipy.linalg  # nopycln: import
+import scipy.optimize  # nopycln: import
+import scipy.special  # nopycln: import
+import scipy.stats  # nopycln: import
+
 import gpyreg.covariance_functions
 import gpyreg.isotropic_covariance_functions as isotropic_covariance
 import gpyreg.mean_functions
