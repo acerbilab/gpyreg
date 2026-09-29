@@ -89,10 +89,10 @@ environment it runs in, may have to change.
   with their gradient take 35 to 55% less time, the squared exponential
   kernel between the inputs and 2048 test points 55 to 65% less and the
   rational-quadratic one 45 to 55% less (10 to 25% at the smallest size),
-  ``predict`` at 2048 test points 25 to 35% less (5 to 10% at 50 inputs),
+  ``predict`` at 2048 test points 25 to 35% less (5 to 15% at 50 inputs),
   ``fit`` 8 to 20% less, and :meth:`gpyreg.GP.set_bounds`, which computes
   those masses, a fourteenth to a twentieth of the time. Every value is
-  unchanged, to the last bit, under any version of SciPy, for inputs of
+  unchanged, to the last bit, with any SciPy up to 1.18, for inputs of
   any floating type, infinite coordinates included.
 * gpyreg imports the modules of SciPy that it uses, ``scipy.stats`` among
   them. With SciPy older than 1.9, which loads a module only where it is
