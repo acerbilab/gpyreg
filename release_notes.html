@@ -523,10 +523,10 @@ dimensions and 50 to 150 inputs, with SciPy 1.17 and 1.18, the kernels
 with their gradient take 35 to 55% less time, the squared exponential
 kernel between the inputs and 2048 test points 55 to 65% less and the
 rational-quadratic one 45 to 55% less (10 to 25% at the smallest size),
-<code class="docutils literal notranslate"><span class="pre">predict</span></code> at 2048 test points 25 to 35% less (5 to 10% at 50 inputs),
+<code class="docutils literal notranslate"><span class="pre">predict</span></code> at 2048 test points 25 to 35% less (5 to 15% at 50 inputs),
 <code class="docutils literal notranslate"><span class="pre">fit</span></code> 8 to 20% less, and <a class="reference internal" href="gaussian_process.html#gpyreg.GP.set_bounds" title="gpyreg.GP.set_bounds"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.set_bounds()</span></code></a>, which computes
 those masses, a fourteenth to a twentieth of the time. Every value is
-unchanged, to the last bit, under any version of SciPy, for inputs of
+unchanged, to the last bit, with any SciPy up to 1.18, for inputs of
 any floating type, infinite coordinates included.</p></li>
 <li><p>gpyreg imports the modules of SciPy that it uses, <code class="docutils literal notranslate"><span class="pre">scipy.stats</span></code> among
 them. With SciPy older than 1.9, which loads a module only where it is
