@@ -50,6 +50,43 @@ def _target_spread(y: np.ndarray):
     )
 
 
+def _input_spread(X: np.ndarray):
+    """Return the width and the standard deviation of each column of the
+    training inputs.
+
+    The recommended bounds of a length scale, and of the scale of
+    :class:`gpyreg.mean_functions.NegativeQuadratic`, are built from the
+    logarithm of the width of a column, and their starting value from the
+    logarithm of its standard deviation. A column without spread, as every
+    column of a single input is, has a width of zero, whose logarithm is
+    ``-inf``: the bounds built from it are ``-inf``, which
+    :meth:`gpyreg.GP.get_recommended_bounds` refuses unless the caller
+    gives a finite lower bound, so the callers take these logarithms
+    without NumPy's warning on a logarithm of zero. The standard deviation
+    of such a column is zero where it holds two inputs or more; that of a
+    single input is NaN, returned here without NumPy's warnings on a
+    sample of one, and the starting value falls back to the middle of the
+    plausible bounds.
+
+    Parameters
+    ----------
+    X : ndarray, shape (N, D)
+        The training inputs.
+
+    Returns
+    -------
+    width : ndarray, shape (D,)
+        The range of each column.
+    x_std : ndarray, shape (D,)
+        The standard deviation of each column, or NaN in every column
+        where ``N`` is one.
+    """
+    width = np.max(X, axis=0) - np.min(X, axis=0)
+    if X.shape[0] > 1:
+        return width, np.std(X, axis=0, ddof=1)
+    return width, np.full(X.shape[1], np.nan)
+
+
 def _validate_periods(periods):
     """Return the periods given to a kernel as a float array, or ``None``.
 
@@ -883,16 +920,18 @@ def _bounds_info_helper(cov_N, X, y):
     plausible_upper_bounds = np.full((cov_N,), np.inf)
     plausible_x0 = np.full((cov_N,), np.nan)
 
-    width = np.max(X, axis=0) - np.min(X, axis=0)
+    width, x_std = _input_spread(X)
     if np.size(y) <= 1:
         y = np.array([0, 1])
     height, y_std = _target_spread(y)
 
-    lower_bounds[0:D] = np.log(width) + np.log(tol)
-    upper_bounds[0:D] = np.log(width * 10)
-    plausible_lower_bounds[0:D] = np.log(width) + 0.5 * np.log(tol)
-    plausible_upper_bounds[0:D] = np.log(width)
-    plausible_x0[0:D] = np.log(np.std(X, axis=0, ddof=1))
+    # A column without spread gives -inf (see _input_spread).
+    with np.errstate(divide="ignore"):
+        lower_bounds[0:D] = np.log(width) + np.log(tol)
+        upper_bounds[0:D] = np.log(width * 10)
+        plausible_lower_bounds[0:D] = np.log(width) + 0.5 * np.log(tol)
+        plausible_upper_bounds[0:D] = np.log(width)
+        plausible_x0[0:D] = np.log(x_std)
 
     lower_bounds[D] = np.log(height) + np.log(tol)
     upper_bounds[D] = np.log(height * 10)

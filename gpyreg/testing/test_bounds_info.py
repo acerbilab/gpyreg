@@ -13,6 +13,7 @@ from gpyreg.covariance_functions import (
     _target_spread,
 )
 from gpyreg.isotropic_covariance_functions import (
+    AbstractIsotropicKernel,
     MaternIsotropic,
     SquaredExponentialIsotropic,
 )
@@ -193,7 +194,42 @@ _WITHOUT_SPREAD = {
 }
 
 
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
+@pytest.mark.parametrize(
+    "component",
+    _KERNELS + [NegativeQuadratic()],
+    ids=lambda component: type(component).__name__,
+)
+def test_inputs_without_spread_give_infinite_bounds_silently(component, data):
+    """The bounds built from the width of a column without spread, and
+    the starting value built from its standard deviation, are ``-inf``,
+    which the recommendation refuses unless the caller gives a finite
+    lower bound; a single point has no standard deviation, and its
+    starting value falls back to the middle of the plausible bounds, also
+    ``-inf``. They are computed without NumPy's warnings on a logarithm of
+    zero and on a sample of one, and every other entry is finite."""
+    X, y, columns = _WITHOUT_SPREAD[data]
+    D = X.shape[1]
+    # The entries built from the spread of the columns without it: the
+    # length scales of those columns, the one length scale of an
+    # isotropic kernel, or the scales of the negative quadratic mean.
+    without_spread = np.zeros(component.hyperparameter_count(D), dtype=bool)
+    if isinstance(component, NegativeQuadratic):
+        without_spread[1 + D + np.array(columns)] = True
+    elif isinstance(component, AbstractIsotropicKernel):
+        without_spread[0] = True
+    else:
+        without_spread[columns] = True
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        info = component.get_bounds_info(X, y)
+
+    for key in ("LB", "UB", "PLB", "PUB", "x0"):
+        assert np.all(info[key][without_spread] == -np.inf), key
+        assert np.all(np.isfinite(info[key][~without_spread])), key
+
+
 @pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
 @pytest.mark.parametrize(
     "mean", [ConstantMean(), NegativeQuadratic()], ids=["const", "negquad"]
@@ -230,7 +266,6 @@ def test_inputs_without_spread_are_refused(kernel, mean, data):
         gp.get_recommended_bounds()
 
 
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize("n_samples", [0, 3])
 @pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
 @pytest.mark.parametrize(
@@ -302,7 +337,6 @@ def test_inputs_without_spread_fit_between_given_bounds(
             )
 
 
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize("n_samples", [0, 3])
 @pytest.mark.parametrize(
     "upper", [np.nan, np.inf], ids=["upper_unset", "upper_inf"]

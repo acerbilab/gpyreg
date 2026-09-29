@@ -5,6 +5,7 @@ from .covariance_functions import (
     AbstractKernel,
     Matern,
     SquaredExponential,
+    _input_spread,
     _target_spread,
 )
 
@@ -268,20 +269,22 @@ def _isotropic_bounds_info_helper(cov_N, X, y):
     plausible_upper_bounds = np.full((cov_N,), np.inf)
     plausible_x0 = np.full((cov_N,), np.nan)
 
-    width = np.max(X, axis=0) - np.min(X, axis=0)
+    width, x_std = _input_spread(X)
     if np.size(y) <= 1:
         y = np.array([0, 1])
     height, y_std = _target_spread(y)
 
     # One length scale for every dimension, so its bounds and its starting
     # value are the means of the per-dimension logs, as the isoflag branch
-    # of gplite_covfun.m has them.
-    mean_log_width = np.mean(np.log(width))
+    # of gplite_covfun.m has them. A column without spread gives -inf (see
+    # _input_spread).
+    with np.errstate(divide="ignore"):
+        mean_log_width = np.mean(np.log(width))
+        upper_bounds[0 : cov_N - 1] = np.mean(np.log(width * 10))
+        plausible_x0[0 : cov_N - 1] = np.mean(np.log(x_std))
     lower_bounds[0 : cov_N - 1] = mean_log_width + np.log(tol)
-    upper_bounds[0 : cov_N - 1] = np.mean(np.log(width * 10))
     plausible_lower_bounds[0 : cov_N - 1] = mean_log_width + 0.5 * np.log(tol)
     plausible_upper_bounds[0 : cov_N - 1] = mean_log_width
-    plausible_x0[0 : cov_N - 1] = np.mean(np.log(np.std(X, axis=0, ddof=1)))
 
     lower_bounds[cov_N - 1] = np.log(height) + np.log(tol)
     upper_bounds[cov_N - 1] = np.log(height * 10)
