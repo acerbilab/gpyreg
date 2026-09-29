@@ -4,7 +4,7 @@ import pickle
 import numdifftools as nd
 import numpy as np
 import pytest
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import cdist, pdist, squareform
 
 from gpyreg.covariance_functions import (
     AbstractKernel,
@@ -629,3 +629,159 @@ def test_a_copy_and_a_pickle_keep_the_periods(make_kernel):
     for copied in copies:
         assert np.array_equal(copied.periods, _PERIODS)
         assert np.array_equal(copied.compute(hyp, X), kernel.compute(hyp, X))
+
+
+def _columns(columns):
+    """The gradient's columns in a float64 array, as a kernel stores them."""
+    dK = np.zeros(columns[0].shape + (len(columns),))
+    for i, column in enumerate(columns):
+        dK[:, :, i] = column
+    return dK
+
+
+def _direct_formulas(kernel, hyp, X, X_star=None, compute_grad=False):
+    """The kernel, and its gradient, by the formulas of its definition, with
+    a new array for each intermediate result, as gpyreg 1.3.3 computed
+    them: ``pdist`` and ``squareform`` for the distances among the training
+    inputs (``cdist`` for the squared exponential kernel's), and the
+    periodic helpers along periodic dimensions."""
+    N, D = X.shape
+    ell = np.exp(hyp[0:D])
+    sf2 = np.exp(2 * hyp[D])
+    periods = kernel.periods
+    if isinstance(kernel, Matern):
+        scale = np.sqrt(kernel.degree) / ell
+    elif isinstance(kernel, RationalQuadraticARD):
+        scale = 1.0 / ell
+    else:
+        scale = None
+
+    def sq_dist():
+        if periods is not None:
+            s = 1.0 / ell if scale is None else scale
+            return _scaled_sq_dist(X, X_star, s, periods)
+        if X_star is None and scale is None:
+            return cdist(X / ell, X / ell, "sqeuclidean")
+        if X_star is None:
+            return squareform(pdist(X @ np.diag(scale), "sqeuclidean"))
+        if scale is None:
+            return cdist(X / ell, X_star / ell, "sqeuclidean")
+        return cdist(
+            X @ np.diag(scale), X_star @ np.diag(scale), "sqeuclidean"
+        )
+
+    def sq_diff(i):
+        if periods is not None:
+            s = 1.0 / ell[i] if scale is None else scale[i]
+            return _scaled_sq_diff(X[:, i], s, periods[i])
+        a = X[:, i] / ell[i] if scale is None else scale[i] * X[:, i]
+        return squareform(pdist(np.reshape(a, (-1, 1)), "sqeuclidean"))
+
+    if isinstance(kernel, Matern):
+        if periods is None and X_star is None:
+            tmp = squareform(pdist(X @ np.diag(scale)))
+        elif periods is None:
+            tmp = cdist(X @ np.diag(scale), X_star @ np.diag(scale))
+        else:
+            tmp = np.sqrt(sq_dist())
+        K = sf2 * kernel.f(tmp) * np.exp(-tmp)
+        if not compute_grad:
+            return K
+        with np.errstate(all="ignore"):
+            factor = sf2 * (kernel.df(tmp) * np.exp(-tmp))
+            dK = [
+                np.where(sq_diff(i) > 0, factor * sq_diff(i), 0.0)
+                for i in range(D)
+            ]
+        return K, _columns(dK + [2 * K])
+
+    tmp = sq_dist()
+    if isinstance(kernel, RationalQuadraticARD):
+        alpha = np.exp(hyp[D + 1])
+        M = 1 + 0.5 * tmp / alpha
+        K = sf2 * M ** (-alpha)
+        if not compute_grad:
+            return K
+        with np.errstate(all="ignore"):
+            factor = sf2 * M ** (-alpha - 1)
+            dK = [factor * sq_diff(i) for i in range(D)]
+        shape = K * (0.5 * tmp / M - alpha * np.log(M))
+        return K, _columns(dK + [2 * K, shape])
+
+    K = sf2 * np.exp(-tmp / 2)
+    if not compute_grad:
+        return K
+    return K, _columns([K * sq_diff(i) for i in range(D)] + [2 * K])
+
+
+def _same(value, expected):
+    """Equal values of the same type, NaN where the other is NaN."""
+    return value.dtype == expected.dtype and np.array_equal(
+        value, expected, equal_nan=True
+    )
+
+
+# NumPy's long double is double itself where it takes 8 bytes (Windows,
+# macOS on arm64): there a long-double input adds nothing to a float64 one,
+# and on Windows SciPy's distance functions, which the kernels call, corrupt
+# the heap on it (SciPy 1.17.1).
+_LONG_DOUBLE_IS_WIDER = (
+    np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
+)
+
+
+@_each_ard_kernel
+@pytest.mark.parametrize("periodic", [False, True])
+@pytest.mark.parametrize("unit_shape", [False, True])
+@pytest.mark.parametrize(
+    "inputs",
+    ["float64", "float32", "infinite"]
+    + (["longdouble"] if _LONG_DOUBLE_IS_WIDER else []),
+)
+def test_kernel_equals_its_direct_formulas(
+    make_kernel, periodic, unit_shape, inputs
+):
+    """The kernel, its cross-covariance, its diagonal and every column of its
+    gradient equal, to the last bit, the formulas of the kernel's
+    definition computed with a new array for each intermediate result
+    (``_direct_formulas``), which the kernels compute in place and, for the
+    squared differences of the length scales' gradients, in one broadcast.
+    The inputs include a repeated point, a shared coordinate and a
+    Fortran-ordered array; a rational-quadratic shape of exactly 1 makes
+    NumPy take ``M ** -1`` as a reciprocal. Inputs of another type than
+    float64 (float32, whose scaled coordinates NumPy 1.x keeps in float32,
+    and long double where it is wider than double), and an infinite
+    coordinate, which makes the differences NaN on the diagonal that
+    ``squareform`` sets to zero, give the formulas' values too."""
+    kernel = make_kernel(_PERIODS if periodic else None)
+    rng = np.random.default_rng(17)
+    X = np.asfortranarray(rng.normal(size=(40, 3)))
+    X[1] = X[0]
+    X[3, 0] = X[2, 0]
+    if inputs == "infinite":
+        X[5, 1] = np.inf
+    elif inputs != "float64":
+        X = X.astype(inputs)
+    X_star = rng.normal(size=(9, 3))
+    for seed in range(3):
+        hyp = _hyperparameters(kernel, seed)
+        if unit_shape and isinstance(kernel, RationalQuadraticARD):
+            hyp[-1] = 0.0
+
+        with np.errstate(all="ignore"):
+            K, dK = kernel.compute(hyp, X, compute_grad=True)
+            K_ref, dK_ref = _direct_formulas(kernel, hyp, X, compute_grad=True)
+            assert _same(K, K_ref)
+            assert _same(dK, dK_ref)
+            assert _same(kernel.compute(hyp, X), K_ref)
+            assert _same(
+                kernel.compute(hyp, X, X_star),
+                _direct_formulas(kernel, hyp, X, X_star),
+            )
+            # The diagonal is float64 whatever the inputs, and sf2 where an
+            # infinite coordinate makes the kernel's own diagonal NaN.
+            if inputs in ("float64", "float32"):
+                assert _same(
+                    kernel.compute(hyp, X, compute_diag=True)[:, 0],
+                    np.diag(K_ref),
+                )

@@ -72,6 +72,33 @@ environment it runs in, may have to change.
   inputs, and the Matern kernels 15 to 40% less at those sizes, which
   speeds up :meth:`gpyreg.GP.fit` with them. Every value is unchanged, to
   the last bit.
+* The ARD kernels (:class:`gpyreg.covariance_functions.SquaredExponential`,
+  :class:`gpyreg.covariance_functions.Matern` and
+  :class:`gpyreg.covariance_functions.RationalQuadraticARD`) compute their
+  gradient without a new array for each intermediate result, with the
+  squared differences of every dimension taken at once where no dimension
+  is periodic, and the squared exponential and rational-quadratic kernels
+  compute their values the same way; :meth:`gpyreg.GP.predict` scales and
+  squares its intermediate arrays in place; the objective of
+  :meth:`gpyreg.GP.fit` factorizes the
+  training covariance and solves its triangular systems by direct calls of
+  LAPACK, and sums its gradient in one array; and the masses of Gaussian
+  priors inside their bounds, and the starting points that ``fit`` draws
+  from them, take the standard normal's functions from ``scipy.special``
+  rather than through ``scipy.stats``. With one BLAS thread, at 3 to 10
+  dimensions and 50 to 150 inputs, the kernels with their gradient take
+  35 to 55% less time, the squared exponential kernel between the inputs
+  and 2048 test points 55 to 70% less and the rational-quadratic one 40
+  to 50% less (12% at the smallest size), ``predict`` at 2048 test points
+  15 to 35% less, ``fit`` 15 to 30% less, and
+  :meth:`gpyreg.GP.set_bounds`, which computes those masses, a twelfth to
+  a sixteenth of the time. Every value is unchanged, to the last bit,
+  for inputs of any floating type, infinite coordinates included.
+* gpyreg imports the modules of SciPy that it uses, ``scipy.stats`` among
+  them. With SciPy older than 1.9, which loads a module only where it is
+  imported, the methods of :class:`gpyreg.GP` that use ``scipy.stats``,
+  :meth:`gpyreg.GP.fit` among them, and ``gpyreg.f_min_fill`` raised
+  ``AttributeError`` unless the caller had imported it.
 * Installing gpyreg no longer installs pytest, pytest-rerunfailures and
   numdifftools, which only its tests use. The extra ``test`` installs them
   (``pip install "gpyreg[test]"``), and the extra ``dev`` includes them.

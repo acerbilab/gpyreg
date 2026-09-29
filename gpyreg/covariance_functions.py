@@ -241,6 +241,70 @@ def _scaled_sq_dist(X, X_star, scale, periods):
     return cdist(a, b, "sqeuclidean")
 
 
+def _pairwise(a, metric):
+    """Return ``squareform(pdist(a, metric))``, bit for bit: the distances
+    among the scaled training inputs of an ARD kernel without periods.
+
+    For float64 coordinates it is ``cdist(a, a, metric)``, which sums the
+    same differences in the same order and skips ``pdist``'s wrapper and the
+    ``squareform`` pass, with its diagonal set to zero, as ``squareform``
+    sets it (``cdist``'s is NaN at an infinite coordinate). Coordinates of
+    another type take ``pdist`` itself, whose arithmetic for them depends on
+    the SciPy version.
+    """
+    if a.dtype != np.float64:
+        return squareform(pdist(a, metric))
+    d = cdist(a, a, metric)
+    np.fill_diagonal(d, 0.0)
+    return d
+
+
+def _sq_diff(x):
+    """Return ``squareform(pdist(x[:, None], "sqeuclidean"))``: the squared
+    differences of the coordinates ``x`` of one dimension."""
+    return squareform(pdist(np.reshape(x, (-1, 1)), "sqeuclidean"))
+
+
+def _sq_diffs(rows, out):
+    """Write :func:`_sq_diff` of each dimension into ``out``, bit for bit,
+    for the gradients of an ARD kernel without periods, where it can.
+
+    The squared Euclidean distance of one coordinate is the square of its
+    one difference, and a difference and its negative have the same square:
+    for float64 coordinates, one broadcast computes every dimension, without
+    the calls and the copies of ``pdist`` and ``squareform`` for each, and
+    the diagonal is set to zero, as ``squareform`` sets it (the difference
+    is NaN at an infinite coordinate). Coordinates of another type are left
+    to :func:`_sq_diff`, whose arithmetic for them depends on the SciPy
+    version.
+
+    Parameters
+    ----------
+    rows : list of ndarray, shape (N,)
+        The scaled coordinates of each dimension, as the kernel's formula
+        computes them.
+    out : ndarray, shape (D, N, N)
+        The float64 array that receives the squared differences.
+
+    Returns
+    -------
+    written : bool
+        Whether ``out`` holds the squared differences, with
+        ``out[d, i, j] = (rows[d][i] - rows[d][j])**2``: ``False``, and
+        ``out`` untouched, for coordinates other than float64.
+    """
+    if rows[0].dtype != np.float64:
+        return False
+    a = np.stack(rows)
+    # pdist, which computes in C, warns of no overflow.
+    with np.errstate(all="ignore"):
+        np.subtract(a[:, :, None], a[:, None, :], out=out)
+        np.multiply(out, out, out=out)
+    diagonal = np.arange(a.shape[1])
+    out[:, diagonal, diagonal] = 0.0
+    return True
+
+
 class AbstractKernel(ABC):
     """Abstract base class for covariance kernels."""
 
@@ -455,29 +519,36 @@ class SquaredExponential(AbstractKernel):
         else:
             tmp = cdist(X / ell, X_star / ell, "sqeuclidean")
 
-        K = sf2 * np.exp(-tmp / 2)
+        # K = sf2 * exp(-tmp / 2), computed in tmp, a fresh array: the
+        # operations of the expression, in its order, without its
+        # temporaries.
+        K = np.negative(tmp, out=tmp)
+        K /= 2
+        np.exp(K, out=K)
+        K *= sf2
 
         if compute_grad:
             if X_star is not None:
                 raise ValueError(
                     "X_star should be None when compute_grad is True."
                 )
-            dK = np.zeros((cov_N, N, N))
-            for i in range(0, D):
-                # Gradient of cov length scales
-                if self.periods is not None:
+            # Every entry of dK is written below.
+            dK = np.empty((cov_N, N, N))
+            # Gradient of cov length scales
+            if self.periods is not None:
+                for i in range(0, D):
                     dK[i, :, :] = K * _scaled_sq_diff(
                         X[:, i], 1.0 / ell[i], self.periods[i]
                     )
+            else:
+                rows = [X[:, i] / ell[i] for i in range(0, D)]
+                if _sq_diffs(rows, out=dK[0:D]):
+                    np.multiply(K, dK[0:D], out=dK[0:D])
                 else:
-                    dK[i, :, :] = K * squareform(
-                        pdist(
-                            np.reshape(X[:, i] / ell[i], (-1, 1)),
-                            "sqeuclidean",
-                        )
-                    )
+                    for i in range(0, D):
+                        dK[i, :, :] = K * _sq_diff(rows[i])
             # Gradient of cov output scale.
-            dK[D, :, :] = 2 * K
+            np.multiply(2, K, out=dK[D])
             return K, dK.transpose(1, 2, 0)
 
         return K
@@ -574,8 +645,8 @@ class Matern(AbstractKernel):
                     )
                 )
             else:
-                tmp = squareform(
-                    pdist(X @ np.diag(np.sqrt(self.degree) / ell))
+                tmp = _pairwise(
+                    X @ np.diag(np.sqrt(self.degree) / ell), "euclidean"
                 )
         elif self.periods is not None:
             tmp = np.sqrt(
@@ -595,40 +666,49 @@ class Matern(AbstractKernel):
                 raise ValueError(
                     "X_star should be None when compute_grad is True."
                 )
-            dK = np.zeros((cov_N, N, N))
+            # Every entry of dK is written below.
+            dK = np.empty((cov_N, N, N))
             # The factor of the length scales' gradients that is the same
             # for every dimension. At d=1 it is infinite where two inputs
             # coincide, the diagonal among them, since df(0) = 1 / 0.
             with np.errstate(all="ignore"):
                 dK_factor = sf2 * (self.df(tmp) * np.exp(-tmp))
-            for i in range(0, D):
-                if self.periods is not None:
+            # Where two inputs share the i-th coordinate, or lie a multiple
+            # of its period apart, the kernel does not depend on that
+            # length scale, so the derivative is zero. Where they coincide,
+            # the d=1 factor is infinite and inf * 0 = NaN, which would
+            # poison the gradient of the marginal likelihood through the
+            # whole diagonal, so the product is taken as the zero it is.
+            if self.periods is not None:
+                for i in range(0, D):
                     Ki = _scaled_sq_diff(
                         X[:, i],
                         np.sqrt(self.degree) / ell[i],
                         self.periods[i],
                     )
+                    with np.errstate(all="ignore"):
+                        dK[i, :, :] = np.where(Ki > 0, dK_factor * Ki, 0.0)
+            else:
+                rows = [
+                    np.sqrt(self.degree) / ell[i] * X[:, i]
+                    for i in range(0, D)
+                ]
+                Ks = dK[0:D]
+                if _sq_diffs(rows, out=Ks):
+                    # np.where(Ki > 0, dK_factor * Ki, 0.0) for every
+                    # dimension at once, in place.
+                    positive = Ks > 0
+                    with np.errstate(all="ignore"):
+                        np.multiply(dK_factor, Ks, out=Ks, where=positive)
+                    np.logical_not(positive, out=positive)
+                    Ks[positive] = 0.0
                 else:
-                    Ki = squareform(
-                        pdist(
-                            np.reshape(
-                                np.sqrt(self.degree) / ell[i] * X[:, i],
-                                (-1, 1),
-                            ),
-                            "sqeuclidean",
-                        )
-                    )
-                # Where two inputs share the i-th coordinate, or lie a
-                # multiple of its period apart, the kernel does not depend
-                # on that length scale, so the derivative is zero. Where
-                # they coincide, the d=1 factor is infinite and
-                # inf * 0 = NaN, which would poison the gradient of the
-                # marginal likelihood through the whole diagonal, so the
-                # product is taken as the zero it is.
-                with np.errstate(all="ignore"):
-                    dK[i, :, :] = np.where(Ki > 0, dK_factor * Ki, 0.0)
+                    for i in range(0, D):
+                        Ki = _sq_diff(rows[i])
+                        with np.errstate(all="ignore"):
+                            dK[i, :, :] = np.where(Ki > 0, dK_factor * Ki, 0.0)
             # Gradient of cov output scale
-            dK[D, :, :] = 2 * K
+            np.multiply(2, K, out=dK[D])
             return K, dK.transpose(1, 2, 0)
 
         return K
@@ -710,7 +790,7 @@ class RationalQuadraticARD(AbstractKernel):
             elif self.periods is not None:
                 tmp = _scaled_sq_dist(X, None, 1.0 / ell, self.periods)
             else:
-                tmp = squareform(pdist(X @ np.diag(1.0 / ell), "sqeuclidean"))
+                tmp = _pairwise(X @ np.diag(1.0 / ell), "sqeuclidean")
         elif self.periods is not None:
             tmp = _scaled_sq_dist(X, X_star, 1.0 / ell, self.periods)
         else:
@@ -718,44 +798,69 @@ class RationalQuadraticARD(AbstractKernel):
             b = X_star @ np.diag(1.0 / ell)
             tmp = cdist(a, b, "sqeuclidean")
 
-        M = 1 + 0.5 * tmp / alpha
-        K = sf2 * M ** (-alpha)
+        # The kernel and its gradient are computed in tmp, a fresh array,
+        # and in arrays of their own: the operations of the expressions in
+        # the comments, in their order, without their temporaries. The
+        # powers take the operator, as the expressions do, since NumPy
+        # takes an exponent of -1 (alpha = 1) as a reciprocal.
+        if not compute_grad:
+            # K = sf2 * (1 + 0.5 * tmp / alpha) ** (-alpha)
+            tmp *= 0.5
+            tmp /= alpha
+            tmp += 1
+            tmp **= -alpha
+            tmp *= sf2
+            return tmp
 
-        if compute_grad:
-            if X_star is not None:
-                raise ValueError(
-                    "X_star should be None when compute_grad is True."
-                )
-            dK = np.zeros((cov_N, N, N))
+        if X_star is not None:
+            raise ValueError(
+                "X_star should be None when compute_grad is True."
+            )
 
-            # Gradient with respect to the length scales, whose factor
-            # sf2 * M ** (-alpha - 1) is the same for every dimension.
-            with np.errstate(all="ignore"):
-                dK_factor = sf2 * M ** (-alpha - 1)
+        # M = 1 + 0.5 * tmp / alpha, K = sf2 * M ** (-alpha); tmp is kept
+        # for the gradient of the shape.
+        M = np.multiply(0.5, tmp)
+        M /= alpha
+        M += 1
+        K = M ** (-alpha)
+        K *= sf2
+
+        # Every entry of dK is written below.
+        dK = np.empty((cov_N, N, N))
+
+        # Gradient with respect to the length scales, whose factor
+        # sf2 * M ** (-alpha - 1) is the same for every dimension.
+        with np.errstate(all="ignore"):
+            dK_factor = M ** (-alpha - 1)
+            dK_factor *= sf2
+        if self.periods is not None:
             for i in range(0, D):
-                if self.periods is not None:
-                    Ki = _scaled_sq_diff(
-                        X[:, i], 1.0 / ell[i], self.periods[i]
-                    )
-                else:
-                    Ki = squareform(
-                        pdist(
-                            np.reshape(1.0 / ell[i] * X[:, i], (-1, 1)),
-                            "sqeuclidean",
-                        )
-                    )
+                Ki = _scaled_sq_diff(X[:, i], 1.0 / ell[i], self.periods[i])
                 with np.errstate(all="ignore"):
                     dK[i, :, :] = dK_factor * Ki
+        else:
+            rows = [1.0 / ell[i] * X[:, i] for i in range(0, D)]
+            if _sq_diffs(rows, out=dK[0:D]):
+                with np.errstate(all="ignore"):
+                    np.multiply(dK_factor, dK[0:D], out=dK[0:D])
+            else:
+                for i in range(0, D):
+                    Ki = _sq_diff(rows[i])
+                    with np.errstate(all="ignore"):
+                        dK[i, :, :] = dK_factor * Ki
 
-            # Gradient of cov output scale.
-            dK[D, :, :] = 2 * K
+        # Gradient of cov output scale: 2 * K.
+        np.multiply(2, K, out=dK[D])
 
-            # Gradient respect of alpha.
-            dK[D + 1, :, :] = K * (0.5 * tmp / M - alpha * np.log(M))
+        # Gradient respect of alpha: K * (0.5 * tmp / M - alpha * log(M)).
+        tmp *= 0.5
+        tmp /= M
+        log_M = np.log(M, out=dK_factor)
+        log_M *= alpha
+        tmp -= log_M
+        np.multiply(K, tmp, out=dK[D + 1])
 
-            return K, dK.transpose(1, 2, 0)
-
-        return K
+        return K, dK.transpose(1, 2, 0)
 
     def get_bounds_info(self, X: np.ndarray, y: np.ndarray):
         # The length scales and the output scale have the bounds of the

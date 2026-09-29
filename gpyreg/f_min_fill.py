@@ -7,6 +7,10 @@ import warnings
 import numpy as np
 import scipy as sp
 
+# SciPy before 1.9 loads a submodule only when it is imported.
+import scipy.special  # nopycln: import
+import scipy.stats  # nopycln: import
+
 from gpyreg.rng import resolve_rng
 
 
@@ -202,19 +206,25 @@ def f_min_fill(
                     df = 3
                 df = np.minimum(df, 3)
                 upper_half = LB[i] > mu
+                # A Gaussian prior (df == 0) takes the standard normal's
+                # cdf, sf, ppf and isf of scipy.stats.norm without their
+                # layers, which cost some 50 us a call: ndtr(x), ndtr(-x),
+                # ndtri(q) and -ndtri(q), the values scipy computes, with
+                # its final `* 1 + 0` as `+ 0.0`, which turns -0.0 into 0.0
+                # as it does.
                 if LB[i] == UB[i]:
                     # Fixed dimension, as above.
                     sX[:, i] = LB[i]
                 elif df == 0 and upper_half:
-                    sf_lb = sp.stats.norm.sf((LB[i] - mu) / sigma)
-                    sf_ub = sp.stats.norm.sf((UB[i] - mu) / sigma)
+                    sf_lb = sp.special.ndtr(-((LB[i] - mu) / sigma))
+                    sf_ub = sp.special.ndtr(-((UB[i] - mu) / sigma))
                     S_scaled = sf_lb - (sf_lb - sf_ub) * S[:, i]
-                    sX[:, i] = sp.stats.norm.isf(S_scaled) * sigma + mu
+                    sX[:, i] = (-sp.special.ndtri(S_scaled) + 0.0) * sigma + mu
                 elif df == 0:
-                    cdf_lb = sp.stats.norm.cdf((LB[i] - mu) / sigma)
-                    cdf_ub = sp.stats.norm.cdf((UB[i] - mu) / sigma)
+                    cdf_lb = sp.special.ndtr((LB[i] - mu) / sigma)
+                    cdf_ub = sp.special.ndtr((UB[i] - mu) / sigma)
                     S_scaled = cdf_lb + (cdf_ub - cdf_lb) * S[:, i]
-                    sX[:, i] = sp.stats.norm.ppf(S_scaled) * sigma + mu
+                    sX[:, i] = (sp.special.ndtri(S_scaled) + 0.0) * sigma + mu
                 elif upper_half:
                     tsf_lb = sp.stats.t.sf((LB[i] - mu) / sigma, df)
                     tsf_ub = sp.stats.t.sf((UB[i] - mu) / sigma, df)
