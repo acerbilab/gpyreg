@@ -487,7 +487,6 @@ def _bounds_info_helper(mean_N, X, y, idx):
     PUB = np.full((mean_N,), np.inf)
     x0 = np.full((mean_N,), np.nan)
 
-    w, x_std = _input_spread(X)
     if np.size(y) <= 1:
         y = np.array([0, 1])
     h, _ = _target_spread(y)
@@ -503,6 +502,9 @@ def _bounds_info_helper(mean_N, X, y, idx):
         PUB[0] = np.quantile(y, 0.9)
         x0[0] = np.median(y)
     else:
+        # Only this mean takes the spread of the inputs.
+        w, x_std = _input_spread(X)
+
         LB[0] = np.min(y)
         UB[0] = np.max(y) + h
         PLB[0] = np.median(y)

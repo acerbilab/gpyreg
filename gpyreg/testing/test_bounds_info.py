@@ -192,9 +192,27 @@ _WITHOUT_SPREAD = {
         [1],
     ),
 }
+# The same at D = 1, where every column of the inputs is the only one.
+_WITHOUT_SPREAD_D1 = {
+    "one_point_D1": (np.array([[0.3]]), np.array([[1.0]]), [0]),
+    "equal_points_D1": (
+        np.array([[0.3], [0.3]]),
+        np.array([[1.0], [2.0]]),
+        [0],
+    ),
+}
+# A fit computes the recommended bounds whatever bounds it is given, so
+# that on inputs without spread NumPy's warnings on them would reach every
+# fit: they are errors in the fits below.
+_HELPERS_SILENT = pytest.mark.filterwarnings(
+    "error:divide by zero encountered in log:RuntimeWarning",
+    "error:Degrees of freedom <= 0:RuntimeWarning",
+)
 
 
-@pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
+@pytest.mark.parametrize(
+    "data", list(_WITHOUT_SPREAD) + list(_WITHOUT_SPREAD_D1)
+)
 @pytest.mark.parametrize(
     "component",
     _KERNELS + [NegativeQuadratic()],
@@ -208,7 +226,7 @@ def test_inputs_without_spread_give_infinite_bounds_silently(component, data):
     starting value falls back to the middle of the plausible bounds, also
     ``-inf``. They are computed without NumPy's warnings on a logarithm of
     zero and on a sample of one, and every other entry is finite."""
-    X, y, columns = _WITHOUT_SPREAD[data]
+    X, y, columns = {**_WITHOUT_SPREAD, **_WITHOUT_SPREAD_D1}[data]
     D = X.shape[1]
     # The entries built from the spread of the columns without it: the
     # length scales of those columns, the one length scale of an
@@ -230,6 +248,7 @@ def test_inputs_without_spread_give_infinite_bounds_silently(component, data):
         assert np.all(np.isfinite(info[key][~without_spread])), key
 
 
+@_HELPERS_SILENT
 @pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
 @pytest.mark.parametrize(
     "mean", [ConstantMean(), NegativeQuadratic()], ids=["const", "negquad"]
@@ -266,6 +285,7 @@ def test_inputs_without_spread_are_refused(kernel, mean, data):
         gp.get_recommended_bounds()
 
 
+@_HELPERS_SILENT
 @pytest.mark.parametrize("n_samples", [0, 3])
 @pytest.mark.parametrize("data", list(_WITHOUT_SPREAD))
 @pytest.mark.parametrize(
@@ -337,6 +357,7 @@ def test_inputs_without_spread_fit_between_given_bounds(
             )
 
 
+@_HELPERS_SILENT
 @pytest.mark.parametrize("n_samples", [0, 3])
 @pytest.mark.parametrize(
     "upper", [np.nan, np.inf], ids=["upper_unset", "upper_inf"]

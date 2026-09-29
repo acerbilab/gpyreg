@@ -63,10 +63,10 @@ def _input_spread(X: np.ndarray):
     :meth:`gpyreg.GP.get_recommended_bounds` refuses unless the caller
     gives a finite lower bound, so the callers take these logarithms
     without NumPy's warning on a logarithm of zero. The standard deviation
-    of such a column is zero where it holds two inputs or more; that of a
-    single input is NaN, returned here without NumPy's warnings on a
-    sample of one, and the starting value falls back to the middle of the
-    plausible bounds.
+    is the sample one (``ddof=1``): zero for such a column of two inputs
+    or more, and NaN for a single input. The NaN is returned here without
+    NumPy's warnings on a sample of one, and the starting value built from
+    it falls back to the middle of the plausible bounds.
 
     Parameters
     ----------
@@ -78,8 +78,8 @@ def _input_spread(X: np.ndarray):
     width : ndarray, shape (D,)
         The range of each column.
     x_std : ndarray, shape (D,)
-        The standard deviation of each column, or NaN in every column
-        where ``N`` is one.
+        The sample standard deviation of each column, NaN in every column
+        when ``N`` is one.
     """
     width = np.max(X, axis=0) - np.min(X, axis=0)
     if X.shape[0] > 1:
