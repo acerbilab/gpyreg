@@ -4,7 +4,7 @@ import pickle
 import numdifftools as nd
 import numpy as np
 import pytest
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import cdist, pdist, squareform
 
 from gpyreg.covariance_functions import (
     AbstractKernel,
@@ -629,3 +629,113 @@ def test_a_copy_and_a_pickle_keep_the_periods(make_kernel):
     for copied in copies:
         assert np.array_equal(copied.periods, _PERIODS)
         assert np.array_equal(copied.compute(hyp, X), kernel.compute(hyp, X))
+
+
+def _direct_formulas(kernel, hyp, X, X_star=None, compute_grad=False):
+    """The kernel, and its gradient, by the formulas of its definition, with
+    ``pdist`` and ``squareform`` for the distances among the training
+    inputs and a new array for each intermediate result, as gpyreg 1.3.3
+    computed them, and the periodic helpers along periodic dimensions."""
+    N, D = X.shape
+    ell = np.exp(hyp[0:D])
+    sf2 = np.exp(2 * hyp[D])
+    periods = kernel.periods
+    if isinstance(kernel, Matern):
+        scale = np.sqrt(kernel.degree) / ell
+    elif isinstance(kernel, RationalQuadraticARD):
+        scale = 1.0 / ell
+    else:
+        scale = None
+
+    def sq_dist():
+        if periods is not None:
+            s = 1.0 / ell if scale is None else scale
+            return _scaled_sq_dist(X, X_star, s, periods)
+        if X_star is None:
+            a = X / ell if scale is None else X @ np.diag(scale)
+            return squareform(pdist(a, "sqeuclidean"))
+        if scale is None:
+            return cdist(X / ell, X_star / ell, "sqeuclidean")
+        return cdist(
+            X @ np.diag(scale), X_star @ np.diag(scale), "sqeuclidean"
+        )
+
+    def sq_diff(i):
+        if periods is not None:
+            s = 1.0 / ell[i] if scale is None else scale[i]
+            return _scaled_sq_diff(X[:, i], s, periods[i])
+        a = X[:, i] / ell[i] if scale is None else scale[i] * X[:, i]
+        return squareform(pdist(np.reshape(a, (-1, 1)), "sqeuclidean"))
+
+    if isinstance(kernel, Matern):
+        if periods is None and X_star is None:
+            tmp = squareform(pdist(X @ np.diag(scale)))
+        elif periods is None:
+            tmp = cdist(X @ np.diag(scale), X_star @ np.diag(scale))
+        else:
+            tmp = np.sqrt(sq_dist())
+        K = sf2 * kernel.f(tmp) * np.exp(-tmp)
+        if not compute_grad:
+            return K
+        with np.errstate(all="ignore"):
+            factor = sf2 * (kernel.df(tmp) * np.exp(-tmp))
+            dK = [
+                np.where(sq_diff(i) > 0, factor * sq_diff(i), 0.0)
+                for i in range(D)
+            ]
+        return K, np.stack(dK + [2 * K], axis=2)
+
+    tmp = sq_dist()
+    if isinstance(kernel, RationalQuadraticARD):
+        alpha = np.exp(hyp[D + 1])
+        M = 1 + 0.5 * tmp / alpha
+        K = sf2 * M ** (-alpha)
+        if not compute_grad:
+            return K
+        with np.errstate(all="ignore"):
+            factor = sf2 * M ** (-alpha - 1)
+            dK = [factor * sq_diff(i) for i in range(D)]
+        shape = K * (0.5 * tmp / M - alpha * np.log(M))
+        return K, np.stack(dK + [2 * K, shape], axis=2)
+
+    K = sf2 * np.exp(-tmp / 2)
+    if not compute_grad:
+        return K
+    return K, np.stack([K * sq_diff(i) for i in range(D)] + [2 * K], axis=2)
+
+
+@_each_ard_kernel
+@pytest.mark.parametrize("periodic", [False, True])
+@pytest.mark.parametrize("unit_shape", [False, True])
+def test_kernel_equals_its_direct_formulas(make_kernel, periodic, unit_shape):
+    """The kernel, its cross-covariance, its diagonal and every column of its
+    gradient equal, to the last bit, the formulas of the kernel's
+    definition computed with a new array for each intermediate result
+    (``_direct_formulas``), which the kernels compute in place and, for the
+    squared differences of the length scales' gradients, in one broadcast.
+    The inputs include a repeated point, a shared coordinate and a
+    Fortran-ordered array; a rational-quadratic shape of exactly 1 makes
+    NumPy take ``M ** -1`` as a reciprocal."""
+    kernel = make_kernel(_PERIODS if periodic else None)
+    rng = np.random.default_rng(17)
+    X = np.asfortranarray(rng.normal(size=(40, 3)))
+    X[1] = X[0]
+    X[3, 0] = X[2, 0]
+    X_star = rng.normal(size=(9, 3))
+    for seed in range(3):
+        hyp = _hyperparameters(kernel, seed)
+        if unit_shape and isinstance(kernel, RationalQuadraticARD):
+            hyp[-1] = 0.0
+
+        K, dK = kernel.compute(hyp, X, compute_grad=True)
+        K_ref, dK_ref = _direct_formulas(kernel, hyp, X, compute_grad=True)
+        assert np.array_equal(K, K_ref)
+        assert np.array_equal(dK, dK_ref)
+        assert np.array_equal(kernel.compute(hyp, X), K_ref)
+        assert np.array_equal(
+            kernel.compute(hyp, X, X_star),
+            _direct_formulas(kernel, hyp, X, X_star),
+        )
+        assert np.array_equal(
+            kernel.compute(hyp, X, compute_diag=True)[:, 0], np.diag(K_ref)
+        )

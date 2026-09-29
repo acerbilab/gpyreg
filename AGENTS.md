@@ -73,9 +73,12 @@ Hyperparameters are a single flat float vector ordered **covariance, then noise,
 Several performance shortcuts are asserted **bit-identical** by tests using `np.array_equal`, so changes near them must not reorder floating-point operations:
 
 - Module-level `_REUSE_CHOLESKY` lets `fit` reuse the factorization across consecutive objective evaluations that differ only in mean hyperparameters.
-- `_solve_triangular` calls LAPACK directly and must match `scipy.linalg.solve_triangular` exactly.
+- `_solve_triangular` and `_cholesky` call LAPACK directly and must match `scipy.linalg.solve_triangular` and `scipy.linalg.cholesky` exactly.
 - `_prior_cache` (built by `__prior_masks`) must be invalidated by anything that changes priors or bounds.
-- `_ZERO_COPY_CROSS_COVARIANCE_COMPUTES` whitelists the bundled kernels whose `compute` returns a fresh matrix, so `predict(..., return_cross_covariance=True)` can hand those matrices out without copying; treat returned cross-covariances as read-only. A user subclass or override falls back to a defensive copy.
+- `_ZERO_COPY_CROSS_COVARIANCE_COMPUTES` whitelists the bundled kernels whose `compute` returns a fresh matrix, so `predict(..., return_cross_covariance=True)` can hand those matrices out without copying; treat returned cross-covariances as read-only. A user subclass or override falls back to a defensive copy. When the cross-covariance is not returned, `predict` scales a whitelisted kernel's matrix by `sW` in place, and never a matrix of another kernel, which may be the kernel's own buffer.
+- The ARD kernels compute `K` and `dK` in place, in the fresh distance array and in arrays of their own, with the operations of the expressions of their definition in the same order (swapping the two operands of a product or a sum changes no bit); the squared differences of the length scales' gradients come from one broadcast (`_sq_diffs`), equal to `squareform(pdist(...))` of each dimension. `test_kernel_equals_its_direct_formulas` compares every output with those expressions. The powers keep the `**` operator, since NumPy takes an exponent of -1 as a reciprocal.
+- The Gaussian priors' masses (`__recompute_normalization_constants`) and the design of `f_min_fill` take `scipy.special.ndtr` and `ndtri`, which equal `scipy.stats.norm`'s functions for a positive scale (`test_standard_normal_functions_match_scipy_stats`).
+- The gradient of the objective sums each `Q * dK[:, :, i]` in the array that the first product allocates, whose layout NumPy chooses for the operands, with `np.add.reduce`, the reduction and the order of `np.sum` of the product. No test compares it with `np.sum(Q * dK[:, :, i])`, so a change to it is checked by comparing fits before and after it, bit for bit.
 
 Shapes: `X` is `(N, D)`, `y` and `s2` are `(N, 1)`; `_convert_shapes` reshapes inputs and broadcasts a scalar `s2`. Prediction outputs averaged across samples are `(M, 1)`.
 

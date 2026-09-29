@@ -318,6 +318,40 @@ def test_custom_scratch_kernel_is_snapshotted_without_recomputation():
     assert not np.shares_memory(cross_covariance[0], cross_covariance[1])
 
 
+@pytest.mark.parametrize("noise_std", [1e-2, 1e-4])
+def test_only_a_fresh_cross_covariance_is_scaled_in_place(noise_std):
+    """A bundled kernel's cross-covariance that ``predict`` does not return
+    is scaled in place for the variance: the predictions equal, to the last
+    bit, those of a call that returns it, which scales a copy. A custom
+    kernel's matrix, here the kernel's own buffer, is left as the kernel
+    returned it."""
+    gp = _make_gp(
+        gpr.covariance_functions.SquaredExponential(),
+        noise_std=noise_std,
+        sample_count=3,
+    )
+    plain = gp.predict(_X_STAR, separate_samples=True, add_noise=True)
+    *returned, cross_covariance = gp.predict(
+        _X_STAR,
+        separate_samples=True,
+        add_noise=True,
+        return_cross_covariance=True,
+    )
+    for value, expected in zip(plain, returned):
+        assert np.array_equal(value, expected)
+    for matrix, posterior in zip(cross_covariance, gp.posteriors):
+        cov_N = gp.covariance.hyperparameter_count(2)
+        assert np.array_equal(
+            matrix,
+            gp.covariance.compute(posterior.hyp[0:cov_N], gp.X, _X_STAR),
+        )
+
+    covariance = _ScratchKernel()
+    gp = _make_gp(covariance, noise_std=noise_std)
+    gp.predict(_X_STAR)
+    assert np.array_equal(covariance.scratch, covariance.cross_values[-1])
+
+
 @pytest.mark.parametrize("override_scope", ["instance", "class"])
 def test_overridden_bundled_compute_is_snapshotted(
     monkeypatch, override_scope

@@ -1783,6 +1783,61 @@ def test_solve_triangular_matches_scipy(order, trans):
         _solve_triangular(np.zeros((3, 3)), np.ones((3, 1)))
 
 
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_cholesky_matches_scipy(order):
+    """The direct LAPACK call is bit-identical to scipy's wrapper for both
+    memory layouts, and raises LinAlgError where scipy does."""
+    from gpyreg.gaussian_process import _cholesky
+
+    rng = np.random.default_rng(1)
+    for N in (1, 5, 60, 200):
+        A = rng.standard_normal((N, N))
+        A = np.array(A @ A.T + 1e-3 * np.eye(N), order=order)
+        expected = scipy.linalg.cholesky(A, check_finite=False)
+        L = _cholesky(A)
+        assert np.array_equal(L, expected)
+        assert L.flags.f_contiguous == expected.flags.f_contiguous
+    A = np.ones((4, 4))
+    A[3, 3] = 0.5
+    with pytest.raises(scipy.linalg.LinAlgError):
+        scipy.linalg.cholesky(A, check_finite=False)
+    with pytest.raises(scipy.linalg.LinAlgError):
+        _cholesky(A)
+
+
+def test_standard_normal_functions_match_scipy_stats():
+    """The standard normal's cdf, sf, ppf and isf, which the normalization
+    constants of the priors and the space-filling design of ``fit`` take
+    from ``scipy.special``, equal those of ``scipy.stats.norm`` to the last
+    bit, in the tails, at zero and at the ends of their domains: ndtr(x),
+    ndtr(-x), ndtri(q) + 0.0 and -ndtri(q) + 0.0, and the cdf and sf of a
+    Gaussian of centre mu and scale sigma, ndtr((x - mu) / sigma) and
+    ndtr(-((x - mu) / sigma))."""
+    rng = np.random.default_rng(2)
+    x = np.concatenate(
+        [
+            [-np.inf, -40.0, -8.3, -0.0, 0.0, 1e-300, 8.3, 40.0, np.inf],
+            rng.normal(scale=4.0, size=200),
+        ]
+    )
+    q = np.concatenate(
+        [
+            [0.0, 5e-324, 1e-300, 1e-17, 0.5, 1 - 1e-16, 1.0],
+            rng.uniform(size=200),
+        ]
+    )
+    norm = scipy.stats.norm
+    ndtr, ndtri = scipy.special.ndtr, scipy.special.ndtri
+    assert np.array_equal(ndtr(x), norm.cdf(x))
+    assert np.array_equal(ndtr(-x), norm.sf(x))
+    assert np.array_equal(ndtri(q) + 0.0, norm.ppf(q))
+    assert np.array_equal(-ndtri(q) + 0.0, norm.isf(q))
+    for mu, sigma in ((0.3, 1.7), (-2.0, 0.01), (5.0, 30.0)):
+        z = (x - mu) / sigma
+        assert np.array_equal(ndtr(z), norm.cdf(x, loc=mu, scale=sigma))
+        assert np.array_equal(ndtr(-z), norm.sf(x, loc=mu, scale=sigma))
+
+
 def test_predict_mean_fallback_without_batched_method():
     """A mean function without ``compute_batched`` (a user-defined or an
     unpickled old one) takes the per-sample loop and gives the same
@@ -4128,14 +4183,24 @@ def test_a_fit_that_raises_leaves_the_gp_as_it_was(held, failure, monkeypatch):
         ),
     }[failure]
     if failure == "failed factorization":
-        cholesky = scipy.linalg.cholesky
+        # The training covariance is factorized by gpyreg's direct call of
+        # LAPACK, the other matrices by scipy's wrapper.
+        def refusing_nan(cholesky):
+            def cholesky_refusing_nan(a, *args, **kwargs):
+                if np.any(np.isnan(a)):
+                    raise scipy.linalg.LinAlgError("The matrix holds NaN.")
+                return cholesky(a, *args, **kwargs)
 
-        def cholesky_refusing_nan(a, *args, **kwargs):
-            if np.any(np.isnan(a)):
-                raise scipy.linalg.LinAlgError("The matrix holds NaN.")
-            return cholesky(a, *args, **kwargs)
+            return cholesky_refusing_nan
 
-        monkeypatch.setattr(scipy.linalg, "cholesky", cholesky_refusing_nan)
+        monkeypatch.setattr(
+            scipy.linalg, "cholesky", refusing_nan(scipy.linalg.cholesky)
+        )
+        monkeypatch.setattr(
+            gpr.gaussian_process,
+            "_cholesky",
+            refusing_nan(gpr.gaussian_process._cholesky),
+        )
     x_star = np.reshape(np.linspace(-1.5, 1.5, 7), (-1, 1))
     if held == "other data":
         prediction = gp.predict(x_star)
@@ -4338,18 +4403,28 @@ def test_an_update_that_raises_leaves_the_gp_as_it_was(failure, monkeypatch):
     posteriors = list(gp.posteriors)
     posterior_attributes = [dict(vars(p)) for p in posteriors]
 
-    cholesky = scipy.linalg.cholesky
     count = {"succeeded": 0}
 
-    def cholesky_failing(a, *args, **kwargs):
-        if np.shape(a)[0] >= rows:
-            if count["succeeded"] >= succeeding:
-                raise scipy.linalg.LinAlgError("The planted failure.")
-            count["succeeded"] += 1
-        return cholesky(a, *args, **kwargs)
+    # The training covariance is factorized by gpyreg's direct call of
+    # LAPACK, the other matrices by scipy's wrapper: both count, and fail
+    # alike.
+    def failing(cholesky):
+        def cholesky_failing(a, *args, **kwargs):
+            if np.shape(a)[0] >= rows:
+                if count["succeeded"] >= succeeding:
+                    raise scipy.linalg.LinAlgError("The planted failure.")
+                count["succeeded"] += 1
+            return cholesky(a, *args, **kwargs)
+
+        return cholesky_failing
 
     with monkeypatch.context() as patch:
-        patch.setattr(scipy.linalg, "cholesky", cholesky_failing)
+        patch.setattr(scipy.linalg, "cholesky", failing(scipy.linalg.cholesky))
+        patch.setattr(
+            gpr.gaussian_process,
+            "_cholesky",
+            failing(gpr.gaussian_process._cholesky),
+        )
         with pytest.raises(scipy.linalg.LinAlgError, match="Cholesky"):
             call(gp, x + 0.1, hyp[::-1] + 0.05)
     assert count["succeeded"] == succeeding

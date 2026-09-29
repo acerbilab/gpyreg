@@ -93,6 +93,33 @@ def _solve_triangular(a, b, trans=0, lower=False):
     raise ValueError(f"illegal value in {-info}-th argument of internal trtrs")
 
 
+def _cholesky(a):
+    """``scipy.linalg.cholesky(a, check_finite=False)``, the upper factor,
+    without scipy's Python layers.
+
+    Calls the same LAPACK routine (``?potrf``, with ``lower=False``,
+    ``overwrite_a=False`` and ``clean=True``) on the same array, so the
+    factor is bit-identical to scipy's, and raises the same
+    ``LinAlgError`` where the matrix is not positive definite; the per-call
+    cost drops by about 13 us, which matters where the factorization is
+    one of thousands of small ones (the objective of ``fit``, whose
+    factorizations are retried with a larger noise where they fail). ``a``
+    is a square, non-empty float array.
+    """
+    (potrf,) = sp.linalg.get_lapack_funcs(("potrf",), (a,))
+    c, info = potrf(a, lower=False, overwrite_a=False, clean=True)
+    if info > 0:
+        raise sp.linalg.LinAlgError(
+            f"{info}-th leading minor of the array is not positive definite"
+        )
+    if info < 0:
+        raise ValueError(
+            f"LAPACK reported an illegal value in {-info}-th argument "
+            'on entry to "POTRF".'
+        )
+    return c
+
+
 def _log_gaussian_mass(lower, upper, mu, sigma):
     """The log of the mass of the Gaussian of centre ``mu`` and scale
     ``sigma`` between ``lower`` and ``upper``, taken in log space, for a
@@ -2206,9 +2233,24 @@ class GP:
                 upper_half = lb > mu
                 if df == 0 or not np.isfinite(df):
                     gaussian = True
-                    p = sp.stats.norm.sf if upper_half else sp.stats.norm.cdf
-                    p_lb = p(lb, loc=mu, scale=sigma)
-                    p_ub = p(ub, loc=mu, scale=sigma)
+                    # scipy.stats.norm's cdf(x, loc=mu, scale=sigma) and
+                    # sf, without its layers, which cost some 50 us a call:
+                    # for a positive scale, as set_priors requires, they
+                    # are ndtr((x - mu) / sigma) and ndtr of its negative.
+                    if not sigma > 0:
+                        p = (
+                            sp.stats.norm.sf
+                            if upper_half
+                            else sp.stats.norm.cdf
+                        )
+                        p_lb = p(lb, loc=mu, scale=sigma)
+                        p_ub = p(ub, loc=mu, scale=sigma)
+                    elif upper_half:
+                        p_lb = sp.special.ndtr(-((lb - mu) / sigma))
+                        p_ub = sp.special.ndtr(-((ub - mu) / sigma))
+                    else:
+                        p_lb = sp.special.ndtr((lb - mu) / sigma)
+                        p_ub = sp.special.ndtr((ub - mu) / sigma)
                 else:
                     p = sp.stats.t.sf if upper_half else sp.stats.t.cdf
                     p_lb = p(lb, df, loc=mu, scale=sigma)
@@ -2873,6 +2915,12 @@ class GP:
         cov_N = self.covariance.hyperparameter_count(D)
         mean_N = self.mean.hyperparameter_count(D)
         noise_N = self.noise.hyperparameter_count()
+        # The bundled kernels return a fresh cross-covariance, which the
+        # variance may scale in place unless it is returned.
+        scale_in_place = (
+            not return_cross_covariance
+            and _can_retain_cross_covariance(self.covariance)
+        )
 
         # Mean function at the test points for every hyperparameter sample
         # at once, (N_star, s_N); the per-sample values are those of
@@ -2943,8 +2991,12 @@ class GP:
                 if L_chol:
                     # sW is (N, 1): broadcasting over the columns of Ks
                     # gives the products a tiled sW gives, without the copy.
-                    V = _solve_triangular(L, sW * Ks, trans=1)
-                    s2[:, s] = kss - np.sum(V * V, 0)  # predictive variance
+                    # A fresh Ks that is not handed out is scaled in place.
+                    if scale_in_place:
+                        Ks *= sW
+                        V = _solve_triangular(L, Ks, trans=1)
+                    else:
+                        V = _solve_triangular(L, sW * Ks, trans=1)
                 else:
                     # From the Cholesky factor of the matrix whose negative
                     # inverse L is: formed from L (`gplite_pred.m:95-96`),
@@ -2953,7 +3005,9 @@ class GP:
                     V = _solve_triangular(
                         self.__low_noise_factor(s), Ks, trans=1
                     )
-                    s2[:, s] = kss - np.sum(V * V, 0)
+                # V is the solve's own array: squared in place.
+                V *= V
+                s2[:, s] = kss - np.sum(V, 0)  # predictive variance
             else:
                 if return_cross_covariance:
                     cross_covariance.append(None)
@@ -3816,7 +3870,7 @@ class GP:
                         K / (sn2_div * sn2_mult), dtype=np.float64
                     )
                     A.flat[:: N + 1] += sn2_diag
-                    L = sp.linalg.cholesky(A, check_finite=False)
+                    L = _cholesky(A)
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
@@ -3829,7 +3883,7 @@ class GP:
                 try:
                     A = np.array(K, dtype=np.float64, order="C")
                     A.flat[:: N + 1] += sn2_mult * sn2_diag
-                    L = sp.linalg.cholesky(A, check_finite=False)
+                    L = _cholesky(A)
                 except sp.linalg.LinAlgError:
                     sn2_mult *= 10
                     continue
@@ -3927,13 +3981,8 @@ class GP:
             if L_chol:
                 pL = L
             elif not compute_nlZ:
-                pL = sp.linalg.solve_triangular(
-                    -L,
-                    sp.linalg.solve_triangular(
-                        L, np.eye(N), trans=1.0, check_finite=False
-                    ),
-                    trans=0,
-                    check_finite=False,
+                pL = _solve_triangular(
+                    -L, _solve_triangular(L, np.eye(N), trans=1), trans=0
                 )
             logdet = None
 
@@ -3959,18 +4008,19 @@ class GP:
 
             if compute_nlZ_grad:
                 dnlZ = np.zeros(hyp.shape)
-                Q = sp.linalg.solve_triangular(
-                    L,
-                    sp.linalg.solve_triangular(
-                        L, np.eye(N), trans=1, check_finite=False
-                    ),
-                    trans=0,
-                    check_finite=False,
+                Q = _solve_triangular(
+                    L, _solve_triangular(L, np.eye(N), trans=1), trans=0
                 ) / sl - np.dot(alpha, alpha.T)
 
-                # Gradient of covariance hyperparameters.
+                # Gradient of covariance hyperparameters: the sum of
+                # Q * dK[:, :, i], each product written into the array that
+                # the first allocates, whose layout NumPy chooses for the
+                # operands' (the same for every i), and summed by the
+                # reduction that np.sum makes.
+                QdK = None
                 for i in range(0, cov_N):
-                    dnlZ[i] = np.sum(np.sum(Q * dK[:, :, i])) / 2
+                    QdK = np.multiply(Q, dK[:, :, i], out=QdK)
+                    dnlZ[i] = np.add.reduce(QdK, axis=None) / 2
 
                 # Gradient of GP likelihood
                 if np.isscalar(sn2):
