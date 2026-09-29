@@ -415,7 +415,7 @@
             </div>
             <nav aria-label="Page">
                 <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.3.4 (unreleased)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.4.0 (unreleased)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.3.3 (2026-09-24)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.3.2 (2026-09-24)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.3.1 (2026-09-23)</a></li>
@@ -437,7 +437,7 @@
   <section id="release-notes">
 <h1>Release notes<a class="headerlink" href="#release-notes" title="Link to this heading">#</a></h1>
 <section id="unreleased">
-<h2>1.3.4 (unreleased)<a class="headerlink" href="#unreleased" title="Link to this heading">#</a></h2>
+<h2>1.4.0 (unreleased)<a class="headerlink" href="#unreleased" title="Link to this heading">#</a></h2>
 <p>A point marked <strong>Upgrading</strong> says what a script written for 1.3.3, or the
 environment it runs in, may have to change.</p>
 <ul class="simple">
@@ -461,6 +461,28 @@ in the optimization, in the sampling or at the fitted
 hyperparameters raises from <code class="docutils literal notranslate"><span class="pre">fit</span></code>, which leaves the GP as it was. A
 copy or a pickle of the GP keeps the switch. Without it nothing changes,
 to the last bit.</p></li>
+<li><p><a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.SquaredExponential" title="gpyreg.covariance_functions.SquaredExponential"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.SquaredExponential</span></code></a>,
+<a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.Matern" title="gpyreg.covariance_functions.Matern"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.Matern</span></code></a> and
+<a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.RationalQuadraticARD" title="gpyreg.covariance_functions.RationalQuadraticARD"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.covariance_functions.RationalQuadraticARD</span></code></a> take the keyword
+<code class="docutils literal notranslate"><span class="pre">periods</span></code>: one period per input dimension, which makes the kernel
+periodic along that dimension, or <code class="docutils literal notranslate"><span class="pre">np.inf</span></code> for a dimension that is not
+periodic. Along a dimension of period <code class="docutils literal notranslate"><span class="pre">p</span></code>, the squared difference
+<code class="docutils literal notranslate"><span class="pre">delta**2</span></code> of two inputs is replaced by the squared chord
+<code class="docutils literal notranslate"><span class="pre">(p</span> <span class="pre">/</span> <span class="pre">pi)**2</span> <span class="pre">*</span> <span class="pre">sin(pi</span> <span class="pre">*</span> <span class="pre">delta</span> <span class="pre">/</span> <span class="pre">p)**2</span></code>, the squared distance between
+the two points mapped onto a circle of circumference <code class="docutils literal notranslate"><span class="pre">p</span></code>: to the
+kernel, coordinates a whole number of periods apart are the same, and
+the length scale keeps the units of the input. The periods are fixed
+constants, not hyperparameters, so the hyperparameters and their
+recommended bounds are those of the kernel without periods. A kernel
+without periods, as by default, or with periods that are all infinite,
+computes what it computed in 1.3.3, to the last bit. The isotropic
+kernels (<a class="reference internal" href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.MaternIsotropic" title="gpyreg.isotropic_covariance_functions.MaternIsotropic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions.MaternIsotropic</span></code></a>
+and
+<a class="reference internal" href="isotropic_covariance_functions.html#gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic" title="gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic</span></code></a>)
+refuse periods, and so does <a class="reference internal" href="gaussian_process.html#gpyreg.GP.quad" title="gpyreg.GP.quad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.quad()</span></code></a>, whose Gaussian
+integrals assume the non-periodic squared exponential kernel;
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP" title="gpyreg.GP"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.GP</span></code></a> refuses a covariance function whose number of periods
+is not the dimension of the GP.</p></li>
 <li><p>A Gaussian prior whose centre lies some 38 of its scales or more outside
 the bounds of its hyperparameter has a finite log prior, and the
 space-filling design of <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> draws finite values of
@@ -1302,7 +1324,7 @@ older sampler saves resume using the global stream.</p></li>
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.3.4 (unreleased)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">1.4.0 (unreleased)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">1.3.3 (2026-09-24)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">1.3.2 (2026-09-24)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">1.3.1 (2026-09-23)</a></li>

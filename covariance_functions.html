@@ -422,6 +422,7 @@
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.get_bounds_info"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.get_bounds_info()</span></code></a></li>
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.hyperparameter_count"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.hyperparameter_count()</span></code></a></li>
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.hyperparameter_info"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.hyperparameter_info()</span></code></a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.periods"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.periods</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -517,6 +518,9 @@ hyperparameters.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
 the gradient is available for the full covariance matrix only.</p>
 </dd>
+<dt>ValueError</dt><dd><p>Raised when the kernel has periods and their number differs
+from the number of columns of <cite>X</cite>.</p>
+</dd>
 </dl>
 </dd>
 </dl>
@@ -601,6 +605,14 @@ in the order they are in the hyperparameter array.</p>
 </dl>
 </dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gpyreg.covariance_functions.AbstractKernel.periods">
+<span class="sig-name descname"><span class="pre">periods</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.AbstractKernel.periods" title="Link to this definition">#</a></dt>
+<dd><p>The period of each input dimension, <code class="docutils literal notranslate"><span class="pre">np.inf</span></code> for a dimension that
+is not periodic, or <code class="docutils literal notranslate"><span class="pre">None</span></code> for a kernel that is not periodic along
+any dimension.</p>
+</dd></dl>
+
 </dd></dl>
 
 </section>
@@ -608,9 +620,29 @@ in the order they are in the hyperparameter array.</p>
 <h3><code class="docutils literal notranslate"><span class="pre">RationalQuadraticARD</span></code><a class="headerlink" href="#rationalquadraticard" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.RationalQuadraticARD">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.covariance_functions.</span></span><span class="sig-name descname"><span class="pre">RationalQuadraticARD</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.RationalQuadraticARD" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.covariance_functions.</span></span><span class="sig-name descname"><span class="pre">RationalQuadraticARD</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">periods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.RationalQuadraticARD" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#gpyreg.covariance_functions.AbstractKernel" title="gpyreg.covariance_functions.AbstractKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractKernel</span></code></a></p>
-<p>Rational Quadratic ARD kernel</p>
+<p>Rational Quadratic ARD kernel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>periods</strong><span class="classifier">array_like, shape (D,), optional</span></dt><dd><p>The period of each input dimension along which the kernel is
+periodic, and <code class="docutils literal notranslate"><span class="pre">np.inf</span></code> for each dimension along which it is not.
+Along a dimension of period <code class="docutils literal notranslate"><span class="pre">p</span></code>, the squared difference
+<code class="docutils literal notranslate"><span class="pre">delta**2</span></code> of two coordinates is replaced by the squared chord
+<code class="docutils literal notranslate"><span class="pre">(p</span> <span class="pre">/</span> <span class="pre">pi)**2</span> <span class="pre">*</span> <span class="pre">sin(pi</span> <span class="pre">*</span> <span class="pre">delta</span> <span class="pre">/</span> <span class="pre">p)**2</span></code>, the squared distance
+between the two points mapped onto a circle of circumference
+<code class="docutils literal notranslate"><span class="pre">p</span></code>. It is zero at every multiple of the period and equals
+<code class="docutils literal notranslate"><span class="pre">delta**2</span></code> to second order in <code class="docutils literal notranslate"><span class="pre">delta</span></code>, so that the length scale
+keeps the units of the input. The periods are fixed constants, not
+hyperparameters. <code class="docutils literal notranslate"><span class="pre">None</span></code>, the default, or periods that are all
+infinite give the non-periodic kernel. A period that is NaN, zero
+or negative, or periods that are not a one-dimensional array, raise
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
+</dd>
+</dl>
+</dd>
+</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.RationalQuadraticARD.compute">
 <span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_diag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.RationalQuadraticARD.compute" title="Link to this definition">#</a></dt>
@@ -653,6 +685,9 @@ hyperparameters.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
 the gradient is available for the full covariance matrix only.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the kernel has periods and their number differs
+from the number of columns of <cite>X</cite>.</p>
 </dd>
 </dl>
 </dd>
@@ -745,7 +780,7 @@ in the order they are in the hyperparameter array.</p>
 <h3><code class="docutils literal notranslate"><span class="pre">Matern</span></code><a class="headerlink" href="#matern" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.Matern">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.covariance_functions.</span></span><span class="sig-name descname"><span class="pre">Matern</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">degree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.Matern" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.covariance_functions.</span></span><span class="sig-name descname"><span class="pre">Matern</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">degree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">periods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.Matern" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#gpyreg.covariance_functions.AbstractKernel" title="gpyreg.covariance_functions.AbstractKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractKernel</span></code></a></p>
 <p>Matern kernel.</p>
 <dl class="field-list">
@@ -754,6 +789,20 @@ in the order they are in the hyperparameter array.</p>
 <dt><strong>degree</strong><span class="classifier">{1, 3, 5}</span></dt><dd><p>The degree of the Matern kernel.</p>
 <p>Currently the only supported degrees are 1, 3, 5, and if
 some other degree is provided a <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> exception is raised.</p>
+</dd>
+<dt><strong>periods</strong><span class="classifier">array_like, shape (D,), optional</span></dt><dd><p>The period of each input dimension along which the kernel is
+periodic, and <code class="docutils literal notranslate"><span class="pre">np.inf</span></code> for each dimension along which it is not.
+Along a dimension of period <code class="docutils literal notranslate"><span class="pre">p</span></code>, the squared difference
+<code class="docutils literal notranslate"><span class="pre">delta**2</span></code> of two coordinates is replaced by the squared chord
+<code class="docutils literal notranslate"><span class="pre">(p</span> <span class="pre">/</span> <span class="pre">pi)**2</span> <span class="pre">*</span> <span class="pre">sin(pi</span> <span class="pre">*</span> <span class="pre">delta</span> <span class="pre">/</span> <span class="pre">p)**2</span></code>, the squared distance
+between the two points mapped onto a circle of circumference
+<code class="docutils literal notranslate"><span class="pre">p</span></code>. It is zero at every multiple of the period and equals
+<code class="docutils literal notranslate"><span class="pre">delta**2</span></code> to second order in <code class="docutils literal notranslate"><span class="pre">delta</span></code>, so that the length scale
+keeps the units of the input. The periods are fixed constants, not
+hyperparameters. <code class="docutils literal notranslate"><span class="pre">None</span></code>, the default, or periods that are all
+infinite give the non-periodic kernel. A period that is NaN, zero
+or negative, or periods that are not a one-dimensional array, raise
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
 </dd>
 </dl>
 </dd>
@@ -801,6 +850,9 @@ hyperparameters.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
 the gradient is available for the full covariance matrix only.</p>
 </dd>
+<dt>ValueError</dt><dd><p>Raised when the kernel has periods and their number differs
+from the number of columns of <cite>X</cite>.</p>
+</dd>
 </dl>
 </dd>
 </dl>
@@ -813,9 +865,29 @@ the gradient is available for the full covariance matrix only.</p>
 <h3><code class="docutils literal notranslate"><span class="pre">SquaredExponential</span></code><a class="headerlink" href="#squaredexponential" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.SquaredExponential">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.covariance_functions.</span></span><span class="sig-name descname"><span class="pre">SquaredExponential</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.covariance_functions.</span></span><span class="sig-name descname"><span class="pre">SquaredExponential</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">periods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#gpyreg.covariance_functions.AbstractKernel" title="gpyreg.covariance_functions.AbstractKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractKernel</span></code></a></p>
 <p>Squared exponential kernel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>periods</strong><span class="classifier">array_like, shape (D,), optional</span></dt><dd><p>The period of each input dimension along which the kernel is
+periodic, and <code class="docutils literal notranslate"><span class="pre">np.inf</span></code> for each dimension along which it is not.
+Along a dimension of period <code class="docutils literal notranslate"><span class="pre">p</span></code>, the squared difference
+<code class="docutils literal notranslate"><span class="pre">delta**2</span></code> of two coordinates is replaced by the squared chord
+<code class="docutils literal notranslate"><span class="pre">(p</span> <span class="pre">/</span> <span class="pre">pi)**2</span> <span class="pre">*</span> <span class="pre">sin(pi</span> <span class="pre">*</span> <span class="pre">delta</span> <span class="pre">/</span> <span class="pre">p)**2</span></code>, the squared distance
+between the two points mapped onto a circle of circumference
+<code class="docutils literal notranslate"><span class="pre">p</span></code>. It is zero at every multiple of the period and equals
+<code class="docutils literal notranslate"><span class="pre">delta**2</span></code> to second order in <code class="docutils literal notranslate"><span class="pre">delta</span></code>, so that the length scale
+keeps the units of the input. The periods are fixed constants, not
+hyperparameters. <code class="docutils literal notranslate"><span class="pre">None</span></code>, the default, or periods that are all
+infinite give the non-periodic kernel. A period that is NaN, zero
+or negative, or periods that are not a one-dimensional array, raise
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
+</dd>
+</dl>
+</dd>
+</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.covariance_functions.SquaredExponential.compute">
 <span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hyp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X_star</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_diag</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compute_grad</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.covariance_functions.SquaredExponential.compute" title="Link to this definition">#</a></dt>
@@ -858,6 +930,9 @@ hyperparameters.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
 the gradient is available for the full covariance matrix only.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the kernel has periods and their number differs
+from the number of columns of <cite>X</cite>.</p>
 </dd>
 </dl>
 </dd>
@@ -924,6 +999,7 @@ the gradient is available for the full covariance matrix only.</p>
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.get_bounds_info"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.get_bounds_info()</span></code></a></li>
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.hyperparameter_count"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.hyperparameter_count()</span></code></a></li>
 <li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.hyperparameter_info"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.hyperparameter_info()</span></code></a></li>
+<li class="toc-h5 nav-item toc-entry"><a class="reference internal nav-link" href="#gpyreg.covariance_functions.AbstractKernel.periods"><code class="docutils literal notranslate"><span class="pre">AbstractKernel.periods</span></code></a></li>
 </ul>
 </li>
 </ul>

@@ -554,6 +554,13 @@ earlier has no such attribute and inflates the noise.</p>
 </dd>
 </dl>
 </dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>Raised when the covariance function has periods (its attribute
+<code class="docutils literal notranslate"><span class="pre">periods</span></code>) and their number is not <code class="docutils literal notranslate"><span class="pre">D</span></code>.</p>
+</dd>
+</dl>
+</dd>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.GP.bounds_to_dict">
@@ -1243,8 +1250,8 @@ shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <s
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><dl class="simple">
 <dt>ValueError</dt><dd><p>Raised when the method is called and the covariance of the GP is
-not squared exponential, or the mean function is none of the
-zero, constant and negative quadratic means.</p>
+not squared exponential or has periods, or the mean function is
+none of the zero, constant and negative quadratic means.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when the GP has no training data or no posterior
 factors, or when <code class="docutils literal notranslate"><span class="pre">mu</span></code> does not have one column per input

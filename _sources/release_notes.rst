@@ -1,7 +1,7 @@
 Release notes
 =============
 
-1.3.4 (unreleased)
+1.4.0 (unreleased)
 ------------------
 
 A point marked **Upgrading** says what a script written for 1.3.3, or the
@@ -27,6 +27,28 @@ environment it runs in, may have to change.
   hyperparameters raises from ``fit``, which leaves the GP as it was. A
   copy or a pickle of the GP keeps the switch. Without it nothing changes,
   to the last bit.
+* :class:`gpyreg.covariance_functions.SquaredExponential`,
+  :class:`gpyreg.covariance_functions.Matern` and
+  :class:`gpyreg.covariance_functions.RationalQuadraticARD` take the keyword
+  ``periods``: one period per input dimension, which makes the kernel
+  periodic along that dimension, or ``np.inf`` for a dimension that is not
+  periodic. Along a dimension of period ``p``, the squared difference
+  ``delta**2`` of two inputs is replaced by the squared chord
+  ``(p / pi)**2 * sin(pi * delta / p)**2``, the squared distance between
+  the two points mapped onto a circle of circumference ``p``: to the
+  kernel, coordinates a whole number of periods apart are the same, and
+  the length scale keeps the units of the input. The periods are fixed
+  constants, not hyperparameters, so the hyperparameters and their
+  recommended bounds are those of the kernel without periods. A kernel
+  without periods, as by default, or with periods that are all infinite,
+  computes what it computed in 1.3.3, to the last bit. The isotropic
+  kernels (:class:`gpyreg.isotropic_covariance_functions.MaternIsotropic`
+  and
+  :class:`gpyreg.isotropic_covariance_functions.SquaredExponentialIsotropic`)
+  refuse periods, and so does :meth:`gpyreg.GP.quad`, whose Gaussian
+  integrals assume the non-periodic squared exponential kernel;
+  :class:`gpyreg.GP` refuses a covariance function whose number of periods
+  is not the dimension of the GP.
 * A Gaussian prior whose centre lies some 38 of its scales or more outside
   the bounds of its hyperparameter has a finite log prior, and the
   space-filling design of :meth:`gpyreg.GP.fit` draws finite values of

@@ -456,16 +456,17 @@
 <h1>Isotropic covariance functions<a class="headerlink" href="#isotropic-covariance-functions" title="Link to this heading">#</a></h1>
 <section id="gpyreg-isotropic-covariance-functions">
 <h2><code class="docutils literal notranslate"><span class="pre">gpyreg.isotropic_covariance_functions</span></code><a class="headerlink" href="#gpyreg-isotropic-covariance-functions" title="Link to this heading">#</a></h2>
-<p>The isotropic kernels use a single length scale for every input dimension, so they have two hyperparameters whatever the dimensionality. Each is implemented as a subclass of <a class="reference internal" href="#abstractisotropickernel"><span class="std std-ref">AbstractIsotropicKernel</span></a>, which fixes those two hyperparameters and the bounds recommended for them (<code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>, <code class="docutils literal notranslate"><span class="pre">hyperparameter_info</span></code> and <code class="docutils literal notranslate"><span class="pre">get_bounds_info</span></code>), and of the kernel of the same family in <a class="reference internal" href="covariance_functions.html#gpyreg-covariance-functions"><span class="std std-ref">gpyreg.covariance_functions</span></a>, from which it inherits the rest, such as the degree of the Matern kernel; each defines its own <code class="docutils literal notranslate"><span class="pre">compute</span></code>. An instance is passed to <code class="docutils literal notranslate"><span class="pre">gpyreg.GP</span></code> at initialization in the same way as an anisotropic one.</p>
+<p>The isotropic kernels use a single length scale for every input dimension, so they have two hyperparameters whatever the dimensionality. Each is implemented as a subclass of <a class="reference internal" href="#abstractisotropickernel"><span class="std std-ref">AbstractIsotropicKernel</span></a>, which fixes those two hyperparameters and the bounds recommended for them (<code class="docutils literal notranslate"><span class="pre">hyperparameter_count</span></code>, <code class="docutils literal notranslate"><span class="pre">hyperparameter_info</span></code> and <code class="docutils literal notranslate"><span class="pre">get_bounds_info</span></code>), and of the kernel of the same family in <a class="reference internal" href="covariance_functions.html#gpyreg-covariance-functions"><span class="std std-ref">gpyreg.covariance_functions</span></a>, from which it inherits the rest, such as the degree of the Matern kernel; each defines its own <code class="docutils literal notranslate"><span class="pre">compute</span></code>. An isotropic kernel is not periodic: given the <code class="docutils literal notranslate"><span class="pre">periods</span></code> that the kernels of <a class="reference internal" href="covariance_functions.html#gpyreg-covariance-functions"><span class="std std-ref">gpyreg.covariance_functions</span></a> take, its constructor raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. An instance is passed to <code class="docutils literal notranslate"><span class="pre">gpyreg.GP</span></code> at initialization in the same way as an anisotropic one.</p>
 <section id="abstractisotropickernel">
 <h3><code class="docutils literal notranslate"><span class="pre">AbstractIsotropicKernel</span></code><a class="headerlink" href="#abstractisotropickernel" title="Link to this heading">#</a></h3>
 <dl class="py class">
 <dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.isotropic_covariance_functions.</span></span><span class="sig-name descname"><span class="pre">AbstractIsotropicKernel</span></span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel" title="Link to this definition">#</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">gpyreg.isotropic_covariance_functions.</span></span><span class="sig-name descname"><span class="pre">AbstractIsotropicKernel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">periods</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="covariance_functions.html#gpyreg.covariance_functions.AbstractKernel" title="gpyreg.covariance_functions.AbstractKernel"><code class="xref py py-class docutils literal notranslate"><span class="pre">AbstractKernel</span></code></a></p>
 <p>Abstract base class for isotropic kernel functions.</p>
 <p>The two default hyperparameters are the log-lengthscale and
-log-outputscale.</p>
+log-outputscale. An isotropic kernel is not periodic: the <code class="docutils literal notranslate"><span class="pre">periods</span></code>
+that its anisotropic parent takes raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.get_bounds_info">
 <span class="sig-name descname"><span class="pre">get_bounds_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/acerbilab/gpyreg/tree/main/gpyreg/isotropic_covariance_functions.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gpyreg.isotropic_covariance_functions.AbstractIsotropicKernel.get_bounds_info" title="Link to this definition">#</a></dt>
@@ -611,6 +612,9 @@ hyperparameters.</p>
 <dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
 the gradient is available for the full covariance matrix only.</p>
 </dd>
+<dt>ValueError</dt><dd><p>Raised when the kernel has periods and their number differs
+from the number of columns of <cite>X</cite>.</p>
+</dd>
 </dl>
 </dd>
 </dl>
@@ -671,6 +675,9 @@ hyperparameters.</p>
 </dd>
 <dt>ValueError</dt><dd><p>Raised when <cite>compute_diag</cite> and <cite>compute_grad</cite> are both True:
 the gradient is available for the full covariance matrix only.</p>
+</dd>
+<dt>ValueError</dt><dd><p>Raised when the kernel has periods and their number differs
+from the number of columns of <cite>X</cite>.</p>
 </dd>
 </dl>
 </dd>
