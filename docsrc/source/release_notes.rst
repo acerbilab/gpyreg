@@ -99,6 +99,18 @@ environment it runs in, may have to change.
   imported, the methods of :class:`gpyreg.GP` that use ``scipy.stats``,
   :meth:`gpyreg.GP.fit` among them, and ``gpyreg.f_min_fill`` raised
   ``AttributeError`` unless the caller had imported it.
+* The recommended bounds of the kernels and of
+  :class:`gpyreg.mean_functions.NegativeQuadratic` (their
+  ``get_bounds_info``) are computed without the warnings of NumPy
+  (``RuntimeWarning``) that they raised on training inputs with a column
+  without spread, as every column of a single input is: on a logarithm of
+  zero, and on the standard deviation of a single input.
+  :meth:`gpyreg.GP.fit` computes these bounds even where the caller gives
+  every bound, so that a fit on such inputs printed the warnings whatever
+  its bounds. Every value is unchanged, to the last bit: the bounds built
+  from a column without spread are ``-inf``, which
+  :meth:`gpyreg.GP.get_recommended_bounds` refuses unless the caller gives
+  a finite lower bound.
 * Installing gpyreg no longer installs pytest, pytest-rerunfailures and
   numdifftools, which only its tests use. The extra ``test`` installs them
   (``pip install "gpyreg[test]"``), and the extra ``dev`` includes them.
