@@ -533,6 +533,18 @@ them. With SciPy older than 1.9, which loads a module only where it is
 imported, the methods of <a class="reference internal" href="gaussian_process.html#gpyreg.GP" title="gpyreg.GP"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.GP</span></code></a> that use <code class="docutils literal notranslate"><span class="pre">scipy.stats</span></code>,
 <a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> among them, and <code class="docutils literal notranslate"><span class="pre">gpyreg.f_min_fill</span></code> raised
 <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> unless the caller had imported it.</p></li>
+<li><p>The recommended bounds of the kernels and of
+<a class="reference internal" href="mean_functions.html#gpyreg.mean_functions.NegativeQuadratic" title="gpyreg.mean_functions.NegativeQuadratic"><code class="xref py py-class docutils literal notranslate"><span class="pre">gpyreg.mean_functions.NegativeQuadratic</span></code></a> (their
+<code class="docutils literal notranslate"><span class="pre">get_bounds_info</span></code>) are computed without the warnings of NumPy
+(<code class="docutils literal notranslate"><span class="pre">RuntimeWarning</span></code>) that they raised on training inputs with a column
+without spread, as every column of a single input is: on a logarithm of
+zero, and on the standard deviation of a single input.
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.fit" title="gpyreg.GP.fit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.fit()</span></code></a> computes these bounds even where the caller gives
+every bound, so that a fit on such inputs printed the warnings whatever
+its bounds. Every value is unchanged, to the last bit: the bounds built
+from a column without spread are <code class="docutils literal notranslate"><span class="pre">-inf</span></code>, which
+<a class="reference internal" href="gaussian_process.html#gpyreg.GP.get_recommended_bounds" title="gpyreg.GP.get_recommended_bounds"><code class="xref py py-meth docutils literal notranslate"><span class="pre">gpyreg.GP.get_recommended_bounds()</span></code></a> refuses unless the caller gives
+a finite lower bound.</p></li>
 <li><p>Installing gpyreg no longer installs pytest, pytest-rerunfailures and
 numdifftools, which only its tests use. The extra <code class="docutils literal notranslate"><span class="pre">test</span></code> installs them
 (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">&quot;gpyreg[test]&quot;</span></code>), and the extra <code class="docutils literal notranslate"><span class="pre">dev</span></code> includes them.
