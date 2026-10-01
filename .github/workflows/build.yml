@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 0  # Required for setuptools_scm to access git tags
           fetch-tags: true  # Explicitly fetch tags
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         name: Install Python
         with:
           python-version: "3.9"
